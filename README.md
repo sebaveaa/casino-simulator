@@ -1,6 +1,9 @@
 # 🎰 Casino Cloud
 
 Plataforma web de casino con **dinero ficticio**, diseñada como proyecto integrador de *Computación en la Nube* (INFO-02028, UCAB).
+## Equipo : Sebastian Vera, Claudia Lopez, Santiago de Andrade, Juan Sebastian Zamora, Juan Quintana.
+ 
+
 
 > ⚠️ **Aviso:** este proyecto es académico. No procesa dinero real ni criptomonedas reales. Todos los saldos son una moneda ficticia (créditos) y no tienen valor monetario. El dominio funcional fue presentado al profesor para su aprobación, según la sección 1 de la guía del proyecto.
 
