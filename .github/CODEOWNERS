@@ -1,0 +1,18 @@
+# Each module's owner reviews changes to it.
+# Later rules override earlier ones, so the default owner goes first.
+# Fill in the module owners once the team assigns them (README §15).
+
+*              @sebaveaa
+
+# /backend/auth/      @owner
+# /backend/wallet/    @owner
+# /backend/games/     @owner
+# /backend/rng/       @owner
+# /backend/realtime/  @owner
+# /backend/payments/  @owner
+# /backend/worker/    @owner
+# /shared/            @owner
+# /frontend/          @owner
+# /infra/             @owner
+# /loadtests/         @owner
+# /.github/           @owner

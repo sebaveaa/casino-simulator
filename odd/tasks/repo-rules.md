@@ -24,6 +24,7 @@ Teammates will use different agents (unknown mix). Without shared rules each age
 - Language convention (assumption, confirm with team): code, identifiers, comments, commits, PR titles and agent-facing docs in English; `README.md` and `docs/` (course deliverables) in Spanish.
 - PR titles follow Conventional Commits and are enforced in CI, so squash merges keep `main` history conventional.
 - CI uses no third-party actions and passes the PR title through an env var (no script injection).
+- Required status check name for branch protection: `Conventional Commit title`.
 - TDD: not applicable — no source code or test runner in this feature (no project TDD config exists).
 - Delivery: forecast ~350 authored lines, single PR, strategy `ask-on-risk`.
 
@@ -33,7 +34,7 @@ Teammates will use different agents (unknown mix). Without shared rules each age
   - Route: inline — one non-trivial file, design already resolved from README read.
 - [x] **T2** GitHub templates: `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml`.
   - Route: delegated writer — multi-file, keeps parent thin (long-session backstop).
-- [ ] **T3** `.github/CODEOWNERS` + `.github/workflows/pr-title.yml`.
+- [x] **T3** `.github/CODEOWNERS` + `.github/workflows/pr-title.yml`.
   - Route: same delegated writer, after T2.
 
 ## Acceptance criteria
@@ -53,11 +54,12 @@ Teammates will use different agents (unknown mix). Without shared rules each age
 ## Progress and evidence
 
 - **T1** done: `AGENTS.md` (51 lines) and `CONTRIBUTING.md`. Readback: every README section it cites (§2.2, 2.3, 3.1–3.4, 4.1, 4.2, 5.3, 6, 7, 11, 12, 13, 15) exists. Commit `a128e73`. Review assessment: medium, `under_budget`; reviewed boundary stays at branch point `a63efdb`.
-- **T2** done: `.github/pull_request_template.md` (Definition of done checklist mirrors the six `AGENTS.md` items one-to-one), `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml` (`blank_issues_enabled: false`). Checks: `yaml.safe_load` over the three issue-template files printed `yaml ok`; form-structure script passed (task.yml ids: area, objective, context, scope, acceptance, dependencies, checks; bug.yml ids: area, actual, expected, steps, environment, logs; ids unique, every non-markdown item has `type` and `attributes.label`, all fields specified as required carry `validations.required: true`, the rest are optional). Structural readback of the PR template done.
+- **T2** done: `.github/pull_request_template.md` (Definition of done checklist mirrors the six `AGENTS.md` items one-to-one), `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml` (`blank_issues_enabled: false`). Checks: `yaml.safe_load` over the three issue-template files printed `yaml ok`; form-structure script passed (task.yml ids: area, objective, context, scope, acceptance, dependencies, checks; bug.yml ids: area, actual, expected, steps, environment, logs; ids unique, every non-markdown item has `type` and `attributes.label`, all fields specified as required carry `validations.required: true`, the rest are optional). Structural readback of the PR template done. Commit `d09fbca`.
+- **T3** done: `.github/CODEOWNERS` (default owner `@sebaveaa`, commented module placeholders) and `.github/workflows/pr-title.yml` (`permissions: {}`, title only via the `TITLE` env var, never echoed). Checks: `yaml.safe_load` over `task.yml`, `bug.yml`, `config.yml` and `pr-title.yml` printed `yaml ok`; the real `run` block extracted from `pr-title.yml` and executed with Git Bash once per title: exit 0 for `feat: add roulette`, `feat(wallet): add double-entry transfer`, `fix!: drop legacy endpoint`, `chore(repo-rules): add rules`, `ci: add pr title check`; exit 1 with `::error` for `Add stuff`, `feat:missing space`, `feature: add x`, `Feat: add x`, `feat(Wallet): add x`, `feat: ` (empty description), `feat(): add x`; 12 of 12 as expected. T2's commit is `d09fbca`.
 
 ## Next step
 
-T2 (delegated writer).
+Parent: review assessment for the slice, then pending user decisions.
 
 ## Pending user decisions (remote, not tasks)
 
