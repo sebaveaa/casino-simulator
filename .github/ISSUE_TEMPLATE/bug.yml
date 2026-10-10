@@ -1,0 +1,59 @@
+name: Bug
+description: Something behaves differently from what the design or README says.
+labels: ["type:bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: The part of the system where the bug shows up.
+      options:
+        - Auth & security
+        - Wallet / Ledger
+        - Games & RNG
+        - Worker & realtime
+        - Frontend & rendering
+        - Infra, CI/CD & observability
+        - Docs & repo
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The behavior you observed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence of steps that triggers the bug.
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where you observed it.
+      options:
+        - Local (Docker Compose)
+        - Deployed
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant log output or error messages. Remove secrets before pasting.
+      render: shell
+    validations:
+      required: false

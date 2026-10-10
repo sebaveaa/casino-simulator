@@ -31,7 +31,7 @@ Teammates will use different agents (unknown mix). Without shared rules each age
 
 - [x] **T1** `AGENTS.md` (invariants with README pointers, workflow, task-file convention, definition of done, language convention) + `CONTRIBUTING.md` pointer.
   - Route: inline — one non-trivial file, design already resolved from README read.
-- [ ] **T2** GitHub templates: `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml`.
+- [x] **T2** GitHub templates: `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml`.
   - Route: delegated writer — multi-file, keeps parent thin (long-session backstop).
 - [ ] **T3** `.github/CODEOWNERS` + `.github/workflows/pr-title.yml`.
   - Route: same delegated writer, after T2.
@@ -52,7 +52,8 @@ Teammates will use different agents (unknown mix). Without shared rules each age
 
 ## Progress and evidence
 
-- **T1** done: `AGENTS.md` (51 lines) and `CONTRIBUTING.md`. Readback: every README section it cites (§2.2, 2.3, 3.1–3.4, 4.1, 4.2, 5.3, 6, 7, 11, 12, 13, 15) exists. Commit: see `git log` for `docs: add AGENTS.md rulebook` (identity recorded with T2).
+- **T1** done: `AGENTS.md` (51 lines) and `CONTRIBUTING.md`. Readback: every README section it cites (§2.2, 2.3, 3.1–3.4, 4.1, 4.2, 5.3, 6, 7, 11, 12, 13, 15) exists. Commit `a128e73`. Review assessment: medium, `under_budget`; reviewed boundary stays at branch point `a63efdb`.
+- **T2** done: `.github/pull_request_template.md` (Definition of done checklist mirrors the six `AGENTS.md` items one-to-one), `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml` (`blank_issues_enabled: false`). Checks: `yaml.safe_load` over the three issue-template files printed `yaml ok`; form-structure script passed (task.yml ids: area, objective, context, scope, acceptance, dependencies, checks; bug.yml ids: area, actual, expected, steps, environment, logs; ids unique, every non-markdown item has `type` and `attributes.label`, all fields specified as required carry `validations.required: true`, the rest are optional). Structural readback of the PR template done.
 
 ## Next step
 
