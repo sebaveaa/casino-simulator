@@ -3,7 +3,7 @@
 - **Feature:** `repo-rules`
 - **Branch:** `chore/repo-rules`
 - **Engram mirror:** `odd/repo-rules/tasks` (project `casino-simulator`)
-- **Status:** in progress
+- **Status:** implemented locally; awaiting remote decisions
 
 ## Objective
 
@@ -57,13 +57,22 @@ Teammates will use different agents (unknown mix). Without shared rules each age
 - **T2** done: `.github/pull_request_template.md` (Definition of done checklist mirrors the six `AGENTS.md` items one-to-one), `.github/ISSUE_TEMPLATE/task.yml`, `bug.yml`, `config.yml` (`blank_issues_enabled: false`). Checks: `yaml.safe_load` over the three issue-template files printed `yaml ok`; form-structure script passed (task.yml ids: area, objective, context, scope, acceptance, dependencies, checks; bug.yml ids: area, actual, expected, steps, environment, logs; ids unique, every non-markdown item has `type` and `attributes.label`, all fields specified as required carry `validations.required: true`, the rest are optional). Structural readback of the PR template done. Commit `d09fbca`.
 - **T3** done: `.github/CODEOWNERS` (default owner `@sebaveaa`, commented module placeholders) and `.github/workflows/pr-title.yml` (`permissions: {}`, title only via the `TITLE` env var, never echoed). Checks: `yaml.safe_load` over `task.yml`, `bug.yml`, `config.yml` and `pr-title.yml` printed `yaml ok`; the real `run` block extracted from `pr-title.yml` and executed with Git Bash once per title: exit 0 for `feat: add roulette`, `feat(wallet): add double-entry transfer`, `fix!: drop legacy endpoint`, `chore(repo-rules): add rules`, `ci: add pr title check`; exit 1 with `::error` for `Add stuff`, `feat:missing space`, `feature: add x`, `Feat: add x`, `feat(Wallet): add x`, `feat: ` (empty description), `feat(): add x`; 12 of 12 as expected. T2's commit is `d09fbca`.
 
+- **Slice review:** `a63efdb..ec822b2` assessed high (`shell_source` in `pr-title.yml`), review due. Native review consent relayed; user chose **Skip this time** (`declined_this_candidate`, lineage `review-1dbba7c196799e68`). Reviewed boundary stays at `a63efdb`.
+- **Independent verification** (RDD off path for a high candidate): no blockers. Workflow and issue forms valid against the SchemaStore schemas with negative controls; GitHub's recommended env-var pattern confirmed; 49 tricky titles (command substitution, backticks, unicode, 100k chars) matched the contract on four bash setups with no injected execution; CODEOWNERS and PR template valid.
+  - Fixed: `scope` and `acceptance` in `task.yml` moved from prefilled `value` to `placeholder`, so `required` forces real content.
+  - Fixed: required check name in pending decisions below.
+  - Accepted as-is (nits): description guard allows tab/NBSP/trailing space; GitHub's Revert button title `Revert "…"` must be retitled `revert: …`; `edited` also re-runs on body edits.
+  - Pending (remote): labels `type:task` and `type:bug` do not exist yet, so the forms skip them until created.
+
 ## Next step
 
-Parent: review assessment for the slice, then pending user decisions.
+User decisions below.
 
 ## Pending user decisions (remote, not tasks)
 
-- Push `chore/repo-rules` and open the PR.
-- Protect `main`: require PR, require the `pr-title` check, optionally require code-owner review.
+- Push `chore/repo-rules` and open the PR (the PR-title check runs on its own PR).
+- Create labels `type:task`, `type:bug`, and area labels; create stage milestones.
+- Protect `main`: require a PR and the `Conventional Commit title` check (selectable after the workflow has run once). Leave "Require review from Code Owners" off until module owners exist: with `@sebaveaa` as sole owner, GitHub does not let authors approve their own PRs.
 - Merge settings: squash only, default commit message = PR title.
-- Invite the three missing teammates; create area labels and stage milestones.
+- Invite the three missing teammates.
+- Later, with the project bootstrap: `.gitattributes` with `eol=lf` for a mixed-OS team.

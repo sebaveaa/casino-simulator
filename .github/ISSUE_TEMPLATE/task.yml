@@ -40,9 +40,9 @@ body:
     attributes:
       label: Scope
       description: What is in scope and what is explicitly out of scope.
-      value: |
-        In scope:
-        Out of scope:
+      placeholder: |
+        In scope: ...
+        Out of scope: ...
     validations:
       required: true
   - type: textarea
@@ -50,7 +50,7 @@ body:
     attributes:
       label: Acceptance criteria
       description: Observable conditions that mean the task is done.
-      value: "- [ ] "
+      placeholder: "- [ ] ..."
     validations:
       required: true
   - type: textarea
