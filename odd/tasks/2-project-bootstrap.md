@@ -102,6 +102,8 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 - T4 done: `backend` workspace (Fastify 5, Zod env config, pg and ioredis factories with 1 s ping timeouts, `GET /health`, `PROCESS_ROLE` dispatch, worker stub). `npm install`, `npm ci`, lint, typecheck green; tests 13 passed (4 shared, 9 backend: config, health and CORS, dispatch). Review: skipped, user left candidate unreviewed.
 - T5 done: `docker-compose.yml` (postgres:17-alpine, redis:7-alpine, healthchecks, named volume), `.env.example`, AGENTS.md commands. Real stack with `.env` copied from `.env.example`: both containers healthy; `GET /health` 200 `ok`; with redis stopped 503 `redis: false` in 7 ms; after restart 200 again; `PROCESS_ROLE=worker` logged `worker started` and no HTTP listener; unset `DATABASE_URL` exit 1 naming `DATABASE_URL`. Caveat: a host Windows PostgreSQL service already owns port 5432 on this machine, so the Postgres leg was verified on a temporary 5433 mapping (not committed); on a clean machine 5432 applies. Review: skipped, user left candidate unreviewed.
 
+- T5 follow-up: the writer hit a host PostgreSQL on 5432 (`28P01` from the host server); the compose host port is now `${POSTGRES_PORT:-5432}`, documented in `docker-compose.yml` and `AGENTS.md`. Checks: `docker compose config` renders `5432` by default and `5433` with `POSTGRES_PORT=5433`.
+
 ## Next step
 
 Slice 2 ready; then T6–T7 on slice 3.
