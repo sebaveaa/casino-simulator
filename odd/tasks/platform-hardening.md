@@ -26,9 +26,9 @@ Out of scope: the other seven advisory findings (JWT placeholder in production, 
 
 ## Tasks
 
-- [ ] T1 Record the bootstrap delivery in `odd/tasks/2-project-bootstrap.md` (merges, review outcome, advisory findings).
+- [x] T1 Record the bootstrap delivery in `odd/tasks/2-project-bootstrap.md` (merges, review outcome, advisory findings).
   Route: inline. One mechanical doc edit.
-- [ ] T2 Compose: bind `postgres`, `redis` and `app` ports to `127.0.0.1`.
+- [x] T2 Compose: bind `postgres`, `redis` and `app` ports to `127.0.0.1`.
   Route: inline. One mechanical file.
 - [ ] T3 PostgreSQL: pool `'error'` listener that logs; health ping that releases or aborts its client on timeout; tests.
   Route: delegated. Writer trigger: 2+ non-trivial files (T3 and T4 share one writer).
@@ -67,6 +67,9 @@ Forecast: about 150 authored changed lines, under the 400-line budget. Strategy:
 
 - Bootstrap PR #3 merged to `main` as 9d3aeaf; issue #2 closed; tracker branch deleted locally and on the remote. Branch `fix/platform-hardening` created from 9d3aeaf.
 
+- T1 done: `2-project-bootstrap.md` records merges, review lineage, advisory findings and the #3 merge; structural readback of the diff. Commit 31b5557. Review: skipped, passive doc edit.
+- T2 done: compose publishes `postgres`, `redis` and `app` on `127.0.0.1`. Check: `docker compose --profile app config` shows `host_ip: 127.0.0.1` on all three ports. Review: skipped, user left candidate unreviewed.
+
 ## Next step
 
-T1.
+T3 and T4 (one delegated writer).
