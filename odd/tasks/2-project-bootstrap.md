@@ -43,7 +43,7 @@ Out of scope: DB schema and migrations, auth, Terraform, deploy.
   Route: delegated. Writer trigger: 2+ non-trivial files.
 - [x] T5 Local stack: `docker-compose.yml` (PostgreSQL, Redis) and `.env.example`.
   Route: delegated, same writer as T4.
-- [ ] T6 Frontend skeleton: Vite + React app with a smoke test.
+- [x] T6 Frontend skeleton: Vite + React app with a smoke test.
   Route: delegated. Writer trigger: 2+ non-trivial files.
 - [ ] T7 Root `Dockerfile` and `.dockerignore`; one image runs either role.
   Route: delegated, same writer as T6.
@@ -103,6 +103,7 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 - T5 done: `docker-compose.yml` (postgres:17-alpine, redis:7-alpine, healthchecks, named volume), `.env.example`, AGENTS.md commands. Real stack with `.env` copied from `.env.example`: both containers healthy; `GET /health` 200 `ok`; with redis stopped 503 `redis: false` in 7 ms; after restart 200 again; `PROCESS_ROLE=worker` logged `worker started` and no HTTP listener; unset `DATABASE_URL` exit 1 naming `DATABASE_URL`. Caveat: a host Windows PostgreSQL service already owns port 5432 on this machine, so the Postgres leg was verified on a temporary 5433 mapping (not committed); on a clean machine 5432 applies. Review: skipped, user left candidate unreviewed.
 
 - T5 follow-up: the writer hit a host PostgreSQL on 5432 (`28P01` from the host server); the compose host port is now `${POSTGRES_PORT:-5432}`, documented in `docker-compose.yml` and `AGENTS.md`. Checks: `docker compose config` renders `5432` by default and `5433` with `POSTGRES_PORT=5433`.
+- T6 done: `frontend` workspace (Vite 8.3, React 19.3, plugin-react 6.1, jsdom, Testing Library; vite 8 matches vitest 5's peer range and avoids a second vite copy). `npm install`, `npm ci`, lint (28 files), typecheck green; tests 18 passed (4 shared, 13 backend, 1 frontend); `npm run build` built the frontend (dist 220 kB). Dev server serves `<div id="root">` (checked at 127.0.0.1:5180: on this machine localhost:5173 binds IPv6 only and is unreachable). Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
