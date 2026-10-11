@@ -39,7 +39,7 @@ Out of scope: DB schema and migrations, auth, Terraform, deploy.
   Route: delegated. Writer trigger: 2+ non-trivial files.
 - [x] T3 CI workflow running lint, typecheck and tests; commands listed in `AGENTS.md`.
   Route: delegated, same writer as T2.
-- [ ] T4 Backend skeleton: env config with Zod, Fastify app with `GET /health`, `PROCESS_ROLE` entry, worker stub, tests.
+- [x] T4 Backend skeleton: env config with Zod, Fastify app with `GET /health`, `PROCESS_ROLE` entry, worker stub, tests.
   Route: delegated. Writer trigger: 2+ non-trivial files.
 - [ ] T5 Local stack: `docker-compose.yml` (PostgreSQL, Redis) and `.env.example`.
   Route: delegated, same writer as T4.
@@ -99,6 +99,7 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 - T1 done: structural readback of the `repo-rules.md` diff (status, T4 commit, delivery, applied remote state). Review: skipped, passive doc edit.
 - T2 done: `npm install`, `npm ci`, `npm run lint` (8 files clean), `npm run typecheck`, `npm test` (4 passed) all green. `git add --renormalize .` changed nothing; tracked blobs were already LF. Review: skipped, user left candidate unreviewed.
 - T3 done: `ci.yml` and AGENTS.md `## Commands` added. YAML parse OK; lint, typecheck and test re-run green (4 passed). Review: skipped, user left candidate unreviewed.
+- T4 done: `backend` workspace (Fastify 5, Zod env config, pg and ioredis factories with 1 s ping timeouts, `GET /health`, `PROCESS_ROLE` dispatch, worker stub). `npm install`, `npm ci`, lint, typecheck green; tests 13 passed (4 shared, 9 backend: config, health and CORS, dispatch). Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
