@@ -91,10 +91,11 @@ Strategy: `ask-on-risk`. Chain strategy: `stacked-to-main`, from the issue note 
 
 ## Progress
 
-- Branch `feat/8-core-01-shared` created from `main` at d1962e6 (PR #7 merged).
-- T2 done: `Money`, `amountSchema`/`positiveAmountSchema`/`signedAmountSchema`, `toAmount`/`parseAmount`/`formatCredits`, `NotImplementedError`, RNG contract (`Rng`, `SeedInput`, #11 stubs), `Game<Bet, Result>` and `GameId`, roulette selection/result schemas, with tests. Checks: lint clean, typecheck clean, npm test 41 passed (shared 21, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
-- T3 done: `shared/src/api/` with error body and codes, `apiPaths`, `Idempotency-Key` header and schema, auth, wallet (balance, deposit, transaction history) and roulette bet schemas, with tests. Checks: lint clean, typecheck clean, npm test 64 passed (shared 44, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
+- Branch `feat/8-core-01-shared` created from `main` at d1962e6 (PR #7 merged). T1 commit 0b0f80c.
+- T2 done (commit fea83f9): `Money`, `amountSchema`/`positiveAmountSchema`/`signedAmountSchema`, `toAmount`/`parseAmount`/`formatCredits`, `NotImplementedError`, RNG contract (`Rng`, `SeedInput`, #11 stubs), `Game<Bet, Result>` and `GameId`, roulette selection/result schemas, with tests. Checks: lint clean, typecheck clean, npm test 41 passed (shared 21, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
+- T3 done (commit 8f31f11): `shared/src/api/` with error body and codes, `apiPaths`, `Idempotency-Key` header and schema, auth, wallet (balance, deposit, transaction history) and roulette bet schemas, with tests. Checks: lint clean, typecheck clean, npm test 64 passed (shared 44, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
+- Slice 1 complete: 710 authored lines (forecast 450; schema tests account for most of the gap). Parent spot check: `npm test` 64 passed. Not pushed yet.
 
 ## Next step
 
-T4 (database).
+T4 (database) on `feat/8-core-02-database`.
