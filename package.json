@@ -6,7 +6,8 @@
     "node": ">=22"
   },
   "workspaces": [
-    "shared"
+    "shared",
+    "backend"
   ],
   "scripts": {
     "lint": "biome check .",

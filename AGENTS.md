@@ -28,6 +28,9 @@ Stack and folder layout: README §11 and §12.
 - `npm run format`: Biome check with fixes applied.
 - `npm run typecheck`: `tsc` in every workspace.
 - `npm test`: Vitest in every workspace.
+- `cp .env.example .env`: local settings (gitignored).
+- `docker compose up -d`: PostgreSQL and Redis. If host port 5432 is taken, set `POSTGRES_PORT` in `.env` and match it in `DATABASE_URL`.
+- `npm run dev -w backend`: backend with reload, reads `.env`.
 
 CI runs lint, typecheck and test on every PR.
 
