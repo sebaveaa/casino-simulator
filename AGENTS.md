@@ -20,6 +20,17 @@ Every change preserves these. Each one points to the README section that explain
 
 Stack and folder layout: README §11 and §12.
 
+## Commands
+
+- Node 22 (see `.nvmrc`).
+- `npm install`: install all workspaces.
+- `npm run lint`: Biome check.
+- `npm run format`: Biome check with fixes applied.
+- `npm run typecheck`: `tsc` in every workspace.
+- `npm test`: Vitest in every workspace.
+
+CI runs lint, typecheck and test on every PR.
+
 ## Workflow
 
 1. **Start from an issue.** Every change traces to a GitHub issue, and its acceptance criteria define done. When they are missing or ambiguous, clarify them in the issue before coding.
