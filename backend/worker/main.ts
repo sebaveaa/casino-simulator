@@ -5,9 +5,8 @@ import type { Stoppable } from "../platform/run";
 
 // Race lifecycle and settlement land here later (README §12).
 export async function startWorker(config: Config): Promise<Stoppable> {
-  const pool = createPostgresPool(config);
-  const redis = createRedisClient(config);
-  redis.on("error", () => {});
+  const pool = createPostgresPool(config, (error) => console.error("postgres pool error:", error));
+  const redis = createRedisClient(config, (error) => console.error("redis error:", error));
   console.log(`worker started (APP_ENV=${config.appEnv})`);
   return {
     stop: async () => {

@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/2
 Branch: `chore/2-project-bootstrap`
-Status: in review (PRs #3–#6)
+Status: done; squash-merged to `main` as `9d3aeaf` (PR #3)
 
 ## Objective
 
@@ -109,6 +109,10 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 
 - Delivery: branches pushed; tracker PR #3 (draft, `main`), slice PRs #4 (229 lines), #5 (492 lines, size exception: cohesive backend skeleton), #6 (208 lines). CI `Checks` and `Conventional Commit title` green on #4–#6; #3 has only the title check until children merge. #4 needed a close/reopen because CI did not start on open.
 
+- Merges: #4 → tracker as 81a006e, #5 as 29040e0, #6 as ce2dfb7. After each squash the next child was rebased `--onto` the tracker and retargeted; its tree matched the tested slice tree. Merging #4 with `--delete-branch` closed #5 (its base vanished); restored the branch, reopened #5 and retargeted it. In a chain, retarget the next child before deleting a merged branch.
+- Review of the tracker against `main` (the large feature merge): approved and acknowledged, lineage `review-332d389b222dc301`, authority burned. Eleven advisory findings, all non-blocking. The four priority ones (pg pool `'error'` listener, health ping client leak, swallowed Redis errors, compose ports on all interfaces) are fixed in `odd/tasks/platform-hardening.md`. The rest stay open: JWT placeholder accepted in production, `/health` couples liveness and readiness, `PING_TIMEOUT_MS` hides the global 1 s timeouts, `withTimeout` untested, the config "is required" branch unasserted.
+- #3 merged to `main` as 9d3aeaf with an admin bypass (sole maintainer cannot approve their own PR); issue #2 closed; tracker branch deleted.
+
 ## Next step
 
-Review and merge #4 → #5 → #6 into the tracker (rebase each next child after a squash), then native review and merge of #3 into `main`.
+None. Follow-up work: `odd/tasks/platform-hardening.md`.
