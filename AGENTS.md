@@ -31,6 +31,9 @@ Stack and folder layout: README §11 and §12.
 - `cp .env.example .env`: local settings (gitignored).
 - `docker compose up -d`: PostgreSQL and Redis. If host port 5432 is taken, set `POSTGRES_PORT` in `.env` and match it in `DATABASE_URL`.
 - `npm run dev -w backend`: backend with reload, reads `.env`.
+- `npm run dev -w frontend`: Vite dev server.
+- `docker build -t casino-cloud .`: the backend image; `PROCESS_ROLE` picks `api` or `worker`.
+- `docker compose --profile app up --build`: whole stack in containers.
 
 CI runs lint, typecheck and test on every PR.
 
