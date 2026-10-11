@@ -1,0 +1,26 @@
+name: Task
+description: A unit of work with a clear objective and acceptance criteria.
+labels: ["type:task"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What the task delivers, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable conditions that mean the task is done.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Context, out-of-scope items, or issues that must land first (`#N`).
+    validations:
+      required: false

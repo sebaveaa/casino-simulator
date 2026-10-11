@@ -1,0 +1,27 @@
+name: Bug
+description: Something behaves differently from what the design or README says.
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happens and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant log output or error messages. Remove secrets before pasting.
+      render: shell
+    validations:
+      required: false
