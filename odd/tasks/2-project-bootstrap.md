@@ -35,7 +35,7 @@ Out of scope: DB schema and migrations, auth, Terraform, deploy.
 
 - [x] T1 Record the repo-rules delivery in `odd/tasks/repo-rules.md` (commit 6ca2762, PR #1, remote state).
   Route: inline. One mechanical doc edit.
-- [ ] T2 Root workspace and tooling: `package.json` workspaces and scripts, `tsconfig.base.json`, `biome.json`, `.gitattributes`, `.gitignore`, `.nvmrc`; `shared` package with one exported schema and a test.
+- [x] T2 Root workspace and tooling: `package.json` workspaces and scripts, `tsconfig.base.json`, `biome.json`, `.gitattributes`, `.gitignore`, `.nvmrc`; `shared` package with one exported schema and a test.
   Route: delegated. Writer trigger: 2+ non-trivial files.
 - [ ] T3 CI workflow running lint, typecheck and tests; commands listed in `AGENTS.md`.
   Route: delegated, same writer as T2.
@@ -97,6 +97,7 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 
 - Issue #2 created; tracker branch created from `main` at 42fc1fe; plan committed on the tracker as 80d1e76.
 - T1 done: structural readback of the `repo-rules.md` diff (status, T4 commit, delivery, applied remote state). Review: skipped, passive doc edit.
+- T2 done: `npm install`, `npm ci`, `npm run lint` (8 files clean), `npm run typecheck`, `npm test` (4 passed) all green. `git add --renormalize .` changed nothing; tracked blobs were already LF. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
