@@ -6,14 +6,15 @@ import { run, type Stoppable } from "./platform/run";
 import { startWorker } from "./worker/main";
 
 async function startApi(config: Config): Promise<Stoppable> {
-  const pool = createPostgresPool(config);
-  const redis = createRedisClient(config);
-  // Without a listener an unreachable Redis would log unhandled error events.
-  redis.on("error", () => {});
+  // The checks only run once the server listens, so they may reference the clients below,
+  // which in turn log through the app's logger.
   const app = await buildApp({
     config,
     checks: { postgres: () => pingPostgres(pool), redis: () => pingRedis(redis) },
   });
+  const pool = createPostgresPool(config, (error) => app.log.error(error, "postgres pool error"));
+  const redis = createRedisClient(config);
+  redis.on("error", () => {});
   await app.listen({ host: "0.0.0.0", port: config.port });
   return {
     stop: async () => {
