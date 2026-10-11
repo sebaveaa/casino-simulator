@@ -41,7 +41,7 @@ Out of scope: real auth, ledger, RNG and game logic; routes for those modules; s
   Route: inline. One mechanical doc.
 - [x] T2 Shared money, RNG contract, `Game` interface and roulette bet types, with tests.
   Route: delegated. Writer trigger: 2+ non-trivial files (T2 and T3 share one writer).
-- [ ] T3 Shared API contract: error body, paths, `Idempotency-Key`, auth, balance, deposit, transaction history and roulette bet schemas, with tests.
+- [x] T3 Shared API contract: error body, paths, `Idempotency-Key`, auth, balance, deposit, transaction history and roulette bet schemas, with tests.
   Route: delegated, same writer as T2.
 - [ ] T4 Database: Kysely types, initial migration, migrate script, `int8` parser, README §3.4 and AGENTS commands.
   Route: delegated. Writer trigger: 2+ non-trivial files.
@@ -93,7 +93,8 @@ Strategy: `ask-on-risk`. Chain strategy: `stacked-to-main`, from the issue note 
 
 - Branch `feat/8-core-01-shared` created from `main` at d1962e6 (PR #7 merged).
 - T2 done: `Money`, `amountSchema`/`positiveAmountSchema`/`signedAmountSchema`, `toAmount`/`parseAmount`/`formatCredits`, `NotImplementedError`, RNG contract (`Rng`, `SeedInput`, #11 stubs), `Game<Bet, Result>` and `GameId`, roulette selection/result schemas, with tests. Checks: lint clean, typecheck clean, npm test 41 passed (shared 21, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
+- T3 done: `shared/src/api/` with error body and codes, `apiPaths`, `Idempotency-Key` header and schema, auth, wallet (balance, deposit, transaction history) and roulette bet schemas, with tests. Checks: lint clean, typecheck clean, npm test 64 passed (shared 44, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-T1 commit, then T2.
+T4 (database).
