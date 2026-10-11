@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/2
 Branch: `chore/2-project-bootstrap`
-Status: in progress
+Status: implemented locally; not pushed
 
 ## Objective
 
@@ -45,7 +45,7 @@ Out of scope: DB schema and migrations, auth, Terraform, deploy.
   Route: delegated, same writer as T4.
 - [x] T6 Frontend skeleton: Vite + React app with a smoke test.
   Route: delegated. Writer trigger: 2+ non-trivial files.
-- [ ] T7 Root `Dockerfile` and `.dockerignore`; one image runs either role.
+- [x] T7 Root `Dockerfile` and `.dockerignore`; one image runs either role.
   Route: delegated, same writer as T6.
 
 ## Acceptance criteria
@@ -104,7 +104,8 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 
 - T5 follow-up: the writer hit a host PostgreSQL on 5432 (`28P01` from the host server); the compose host port is now `${POSTGRES_PORT:-5432}`, documented in `docker-compose.yml` and `AGENTS.md`. Checks: `docker compose config` renders `5432` by default and `5433` with `POSTGRES_PORT=5433`.
 - T6 done: `frontend` workspace (Vite 8.3, React 19.3, plugin-react 6.1, jsdom, Testing Library; vite 8 matches vitest 5's peer range and avoids a second vite copy). `npm install`, `npm ci`, lint (28 files), typecheck green; tests 18 passed (4 shared, 13 backend, 1 frontend); `npm run build` built the frontend (dist 220 kB). Dev server serves `<div id="root">` (checked at 127.0.0.1:5180: on this machine localhost:5173 binds IPv6 only and is unreachable). Review: skipped, user left candidate unreviewed.
+- T7 done: `backend/build.mjs` (esbuild, externals read from `dependencies`, `@casino/shared` bundled), root `Dockerfile` (two-stage `node:22-alpine`; runtime uses `npm ci --omit=dev --workspace backend`), `.dockerignore`, compose `app` profile, AGENTS.md commands. lint, typecheck, tests (18) and `npm run build` green; `npm ci` ok. `docker build -t casino-cloud .` ok, image 263 MB. With `POSTGRES_PORT=5433`: `docker compose --profile app up -d --build` healthy deps, `GET /health` 200 `{"status":"ok",...}`; same image with `PROCESS_ROLE=worker` logged `worker started (APP_ENV=development)`; `down` kept the volume. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-Slice 2 ready; then T6–T7 on slice 3.
+All slices ready; push and open the tracker and child PRs (needs user authorization).

@@ -26,5 +26,25 @@ services:
       timeout: 3s
       retries: 10
 
+  # Whole stack in containers: `docker compose --profile app up --build`.
+  app:
+    profiles: ["app"]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://casino:casino@postgres:5432/casino
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: local-dev-only-not-a-real-secret-change-me
+      APP_ENV: development
+      PORT: "3000"
+      ALLOWED_ORIGINS: http://localhost:5173
+      PROCESS_ROLE: api
+    ports:
+      - "3000:3000"
+
 volumes:
   postgres-data:
