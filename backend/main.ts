@@ -13,8 +13,7 @@ async function startApi(config: Config): Promise<Stoppable> {
     checks: { postgres: () => pingPostgres(pool), redis: () => pingRedis(redis) },
   });
   const pool = createPostgresPool(config, (error) => app.log.error(error, "postgres pool error"));
-  const redis = createRedisClient(config);
-  redis.on("error", () => {});
+  const redis = createRedisClient(config, (error) => app.log.error(error, "redis error"));
   await app.listen({ host: "0.0.0.0", port: config.port });
   return {
     stop: async () => {

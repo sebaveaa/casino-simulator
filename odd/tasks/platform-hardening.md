@@ -30,9 +30,9 @@ Out of scope: the other seven advisory findings (JWT placeholder in production, 
   Route: inline. One mechanical doc edit.
 - [x] T2 Compose: bind `postgres`, `redis` and `app` ports to `127.0.0.1`.
   Route: inline. One mechanical file.
-- [ ] T3 PostgreSQL: pool `'error'` listener that logs; health ping that releases or aborts its client on timeout; tests.
+- [x] T3 PostgreSQL: pool `'error'` listener that logs; health ping that releases or aborts its client on timeout; tests.
   Route: delegated. Writer trigger: 2+ non-trivial files (T3 and T4 share one writer).
-- [ ] T4 Redis: log `'error'` events in the API and worker instead of swallowing them; tests.
+- [x] T4 Redis: log `'error'` events in the API and worker instead of swallowing them; tests.
   Route: delegated, same writer as T3.
 
 ## Acceptance criteria
@@ -70,6 +70,9 @@ Forecast: about 150 authored changed lines, under the 400-line budget. Strategy:
 - T1 done: `2-project-bootstrap.md` records merges, review lineage, advisory findings and the #3 merge; structural readback of the diff. Commit 31b5557. Review: skipped, passive doc edit.
 - T2 done: compose publishes `postgres`, `redis` and `app` on `127.0.0.1`. Check: `docker compose --profile app config` shows `host_ip: 127.0.0.1` on all three ports. Review: skipped, user left candidate unreviewed.
 
+- T3 done (commit 963c865): pool `'error'` listener logs through an `onError` callback (API: Fastify logger, worker: `console.error`); `pingPostgres` checks out a client and releases it with the error on timeout, so a hung query destroys the client. Checks: `npm run lint` clean, `npm run typecheck` clean, `npm test` 24 passed (shared 4, backend 19, frontend 1); new `postgres.test.ts` covers the pool listener and the ping (success, hung query, no client). Review: skipped, user left candidate unreviewed.
+- T4 done: Redis `'error'` events are logged through `reportRedisErrors` (skips repeats of the same message until `ready`), wired to the Fastify logger in the API and `console.error` in the worker. Checks: lint, typecheck and `npm test` as above plus `redis.test.ts`. Real stack (postgres on 5433, redis on 6379, loopback): `/health` 200, `docker compose stop redis` gave 503 degraded with `redis error` lines in the server log, `docker compose start redis` returned 200; stack brought down without `-v`. Review: skipped, user left candidate unreviewed.
+
 ## Next step
 
-T3 and T4 (one delegated writer).
+Push, open the fix PR, merge.
