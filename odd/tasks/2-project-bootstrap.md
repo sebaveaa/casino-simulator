@@ -33,7 +33,7 @@ Out of scope: DB schema and migrations, auth, Terraform, deploy.
 
 ## Tasks
 
-- [ ] T1 Record the repo-rules delivery in `odd/tasks/repo-rules.md` (commit 6ca2762, PR #1, remote state).
+- [x] T1 Record the repo-rules delivery in `odd/tasks/repo-rules.md` (commit 6ca2762, PR #1, remote state).
   Route: inline. One mechanical doc edit.
 - [ ] T2 Root workspace and tooling: `package.json` workspaces and scripts, `tsconfig.base.json`, `biome.json`, `.gitattributes`, `.gitignore`, `.nvmrc`; `shared` package with one exported schema and a test.
   Route: delegated. Writer trigger: 2+ non-trivial files.
@@ -95,8 +95,9 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 
 ## Progress
 
-- Issue #2 created; tracker branch created from `main` at 42fc1fe.
+- Issue #2 created; tracker branch created from `main` at 42fc1fe; plan committed on the tracker as 80d1e76.
+- T1 done: structural readback of the `repo-rules.md` diff (status, T4 commit, delivery, applied remote state). Review: skipped, passive doc edit.
 
 ## Next step
 
-T1 on the slice 1 branch.
+T2–T3 on the slice 1 branch (delegated writer).
