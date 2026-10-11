@@ -3,7 +3,7 @@
 - **Feature:** `repo-rules`
 - **Branch:** `chore/repo-rules`
 - **Engram mirror:** `odd/repo-rules/tasks` (project `casino-simulator`)
-- **Status:** implemented locally; awaiting remote decisions
+- **Status:** implemented; PR opened
 
 ## Objective
 
@@ -36,12 +36,14 @@ Teammates will use different agents (unknown mix). Without shared rules each age
   - Route: delegated writer — multi-file, keeps parent thin (long-session backstop).
 - [x] **T3** `.github/CODEOWNERS` + `.github/workflows/pr-title.yml`.
   - Route: same delegated writer, after T2.
+- [x] **T4** Simplify the templates: task form to objective, acceptance criteria, notes; bug form to problem, steps, logs; PR template drops the duplicated definition-of-done list for one checkbox pointing to `AGENTS.md`.
+  - Route: inline — mechanical rewrite of three small files, design agreed with the user in conversation.
 
 ## Acceptance criteria
 
 - `AGENTS.md` at repo root, under ~100 lines, every invariant points to its `README.md` section instead of restating it.
-- PR template carries `Closes #`, and a definition-of-done checklist matching `AGENTS.md`.
-- Task issue form captures objective, context, scope, acceptance criteria, dependencies, area.
+- PR template carries `Closes #` and one checkbox pointing to the definition of done in `AGENTS.md` (single source of truth).
+- Task issue form requires objective and acceptance criteria; everything else goes in optional notes. Area is a label, not a form field.
 - `CODEOWNERS` assigns `@sebaveaa` as default owner, module paths ready for owners.
 - PR-title workflow rejects non-conventional titles and accepts conventional ones; `permissions: {}`.
 
@@ -63,15 +65,16 @@ Teammates will use different agents (unknown mix). Without shared rules each age
   - Fixed: required check name in pending decisions below.
   - Accepted as-is (nits): description guard allows tab/NBSP/trailing space; GitHub's Revert button title `Revert "…"` must be retitled `revert: …`; `edited` also re-runs on body edits.
   - Pending (remote): labels `type:task` and `type:bug` do not exist yet, so the forms skip them until created.
+- **Second review:** after `172f80b`, consent relayed again; user chose **Skip this time** (lineage `review-48264b0455705d20`).
+- **T4** done: forms cut from 7 and 6 fields to 3 each, because long forms get filled with noise and the PR checklist duplicated `AGENTS.md`. Checks: `yaml.safe_load` over `task.yml`, `bug.yml`, `config.yml`; ids unique, no prefilled `value`; required = task `objective`, `acceptance` and bug `problem`, `steps`. Review: skipped, the user explicitly left this candidate unreviewed (native review only for large feature merges).
 
 ## Next step
 
-User decisions below.
+Merge the PR, then the remote decisions below.
 
 ## Pending user decisions (remote, not tasks)
 
-- Push `chore/repo-rules` and open the PR (the PR-title check runs on its own PR).
-- Create labels `type:task`, `type:bug`, and area labels; create stage milestones.
+- Create labels `type:task`, `type:bug`, and area labels (area no longer lives in the forms); create stage milestones.
 - Protect `main`: require a PR and the `Conventional Commit title` check (selectable after the workflow has run once). Leave "Require review from Code Owners" off until module owners exist: with `@sebaveaa` as sole owner, GitHub does not let authors approve their own PRs.
 - Merge settings: squash only, default commit message = PR title.
 - Invite the three missing teammates.

@@ -1,48 +1,12 @@
 name: Task
-description: A unit of work with clear scope and acceptance criteria.
+description: A unit of work with a clear objective and acceptance criteria.
 labels: ["type:task"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        The rules in `AGENTS.md` apply to every task. Multi-step work gets a task file under `odd/tasks/` before the first code change.
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      description: The part of the system this task mainly touches.
-      options:
-        - Auth & security
-        - Wallet / Ledger
-        - Games & RNG
-        - Worker & realtime
-        - Frontend & rendering
-        - Infra, CI/CD & observability
-        - Docs & repo
-    validations:
-      required: true
   - type: textarea
     id: objective
     attributes:
       label: Objective
-      description: What outcome the task delivers, and why it matters.
-    validations:
-      required: true
-  - type: textarea
-    id: context
-    attributes:
-      label: Context
-      description: Links to README sections, related issues, or designs.
-    validations:
-      required: false
-  - type: textarea
-    id: scope
-    attributes:
-      label: Scope
-      description: What is in scope and what is explicitly out of scope.
-      placeholder: |
-        In scope: ...
-        Out of scope: ...
+      description: What the task delivers, and why it matters.
     validations:
       required: true
   - type: textarea
@@ -54,16 +18,9 @@ body:
     validations:
       required: true
   - type: textarea
-    id: dependencies
+    id: notes
     attributes:
-      label: Dependencies
-      description: Issues that must land first, as `#N`.
-    validations:
-      required: false
-  - type: textarea
-    id: checks
-    attributes:
-      label: Checks
-      description: Commands or tests that prove it works.
+      label: Notes
+      description: Context, out-of-scope items, or issues that must land first (`#N`).
     validations:
       required: false
