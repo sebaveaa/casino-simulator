@@ -1,6 +1,8 @@
 import { healthResponseSchema } from "@casino/shared";
 import { afterEach, describe, expect, it } from "vitest";
+import type { Db } from "../db/database";
 import { type AppDeps, buildApp } from "./app";
+import { stubServices } from "./services";
 
 const config = { appEnv: "production" as const, allowedOrigins: ["http://localhost:5173"] };
 const pass = async () => true;
@@ -9,9 +11,12 @@ const boom = async (): Promise<boolean> => {
   throw new Error("connection refused");
 };
 
+// The stub services never touch the database.
+const db = {} as Db;
+
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 async function build(checks: AppDeps["checks"]) {
-  const app = await buildApp({ config, checks });
+  const app = await buildApp({ config, checks, db, services: stubServices });
   apps.push(app);
   return app;
 }
