@@ -1,8 +1,18 @@
-export function App() {
+import { type createBrowserRouter, RouterProvider } from "react-router";
+
+import { type ApiClient, ApiProvider } from "./api";
+
+/** Root component: API client for the screens plus the router. */
+export function App({
+  client,
+  router,
+}: {
+  client: ApiClient;
+  router: ReturnType<typeof createBrowserRouter>;
+}) {
   return (
-    <main>
-      <h1>Casino Cloud</h1>
-      <p>Everything here runs on fictitious credits.</p>
-    </main>
+    <ApiProvider client={client}>
+      <RouterProvider router={router} />
+    </ApiProvider>
   );
 }
