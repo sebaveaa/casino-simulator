@@ -99,8 +99,33 @@ Strategy: `ask-on-risk`. Chain strategy: `stacked-to-main`, from the issue note 
 - T4 done (commit de39e73): Kysely 0.29.6 `Database` types, `Db`/`createDatabase`, `int8` to `BigInt` parser on the pg pool (`postgresTypes`), migration `0001_initial` (7 tables, constraints, append-only and deferred zero-sum and min-entries guards, issuance and house wallets), static migrator, `backend/migrate.ts` CLI (`npm run migrate`), build emits `dist/migrate.js`, README §3.4 and AGENTS commands. Checks: lint clean, typecheck clean, npm test 72 passed (shared 44, backend 27, frontend 1); build emits main.js and migrate.js; real DB (postgres on 5433, env passed inline because `.env` access was denied in this session): `npm run migrate` applied 0001_initial, second run "No pending migrations", `node backend/dist/migrate.js` also no-op; 7 tables; 2 system wallets (house, issuance); unbalanced tx (-100/+50) fails at `SET CONSTRAINTS ALL IMMEDIATE` and at COMMIT; balanced tx passes; tx with no entries fails at COMMIT; UPDATE and DELETE on ledger_entries and UPDATE on transactions fail ("is append-only"); negative player balance fails; bet with neither round_id nor seed_pair_id fails; `down` removed tables and functions, re-`up` restored the 2 wallets. Review: skipped, user left candidate unreviewed.
 - T5 done (commit d0a2065): `AppError` and error handlers (every body matches `errorResponseSchema`), `parseWith` and `readIdempotencyKey`, `WalletService`/`PaymentProvider`/`SeedPairService`/`TokenService` interfaces with stubs that throw `NotImplementedError` (#9, #10, #11), `scopedKey`, `createAuthGuard` with `getAuth`, `Services`/`stubServices`, `moduleRoutes` extension point, `buildApp` DI wiring, `main.ts` ends the pool once through `db.destroy()` (`pool.end()` twice throws). Checks: lint clean, typecheck clean, npm test 110 passed (shared 44, backend 65, frontend 1); build ok; real stack (postgres 5433, redis, env inline): `GET /health` 200, `GET /does-not-exist` 404 with error body, shutdown path exits 0 without the pool error (SIGTERM emulated with `process.emit` because Windows cannot deliver it). Review: skipped, user left candidate unreviewed.
 - T6 done (commit 30f6704): react-router 7.18.4 data router (`routes`, `Shell` with nav and balance chip, `LobbyPage` catalog, placeholder wallet/login/register/roulette pages, not found), `ApiClient` interface with `ApiError`, in-memory mock (idempotent deposit and bet, newest-first history), HTTP client validating responses with the shared schemas, `ApiProvider`/`useApi`, `createApiClient` picks HTTP when `VITE_API_URL` is set, casino theme CSS, AGENTS command note. Checks: lint clean, typecheck clean, npm test 124 passed (shared 44, backend 65, frontend 15); build 406.74 kB js (125.62 kB gzip); dev server: index has #root, /src/main.tsx and /src/app/Shell.tsx 200. Review: skipped, user left candidate unreviewed.
-- Follow-up: `zod` declared in frontend `dependencies` (`http.ts` imports its types; it resolved only through hoisting). Parent spot check: `npm test` 124 passed.
+- Follow-up: `zod` declared in frontend `dependencies` (`http.ts` imports its types; it resolved only through hoisting). Commit e62e1a8. Parent spot check: `npm test` 124 passed.
+- Reviews (user chose to review each slice, then open the PRs; consent granted per slice). All approved and acknowledged, authority burned, no correction opened:
+  - Slice 1: lineage `review-6cfa32d1880fba8d`, high risk, 4 lenses, 10 advisory findings.
+  - Slice 2: lineage `review-918d40b7418e69b7`, medium risk, 1 lens, 6 advisory findings.
+  - Slice 3: lineage `review-b1d18cf44ea24469`, high risk, 4 lenses, 11 advisory findings.
+  - Slice 4: lineage `review-40b2744cccd311ef`, medium risk, 1 lens, 4 advisory findings.
+
+## Advisory findings (non-blocking, open)
+
+Contract fixes worth doing before #9–#12 build on them:
+
+- Amount schemas: cap the digit string length (`.max(20)`) before `BigInt` runs, so huge inputs are rejected cheaply (`shared/src/money.ts`).
+- Password limit: `max(72)` counts UTF-16 code units, not the UTF-8 bytes bcrypt truncates at; check the byte length and share one constant between register and login (`shared/src/api/auth.ts`).
+- `Rng.int(max)`: define behavior for invalid `max` and exhausted outcome bits (`shared/src/rng.ts`).
+- `main.ts`: the pool and Redis error callbacks read `app` before `buildApp` resolves; an early client error would throw instead of logging.
+- Auth guard: log or rethrow infrastructure errors from `tokens.verify` instead of answering 401; accept the `Bearer` scheme case-insensitively.
+- Error handler: keep Fastify's original 4xx status (413, 415) instead of collapsing to 400; `parseWith` messages should not echo Zod messages that can include input values.
+- `scopedKey` purpose as a string-literal union.
+
+Tests and hardening:
+
+- Ledger guards have no automated test; #10 needs a PostgreSQL service in CI anyway.
+- Ledger: block entries added later to an already committed transaction; guard `TRUNCATE`; `int8[]` is not parsed to `BigInt`; test that the pool receives `postgresTypes`; the migrate CLI pool has no `'error'` listener.
+- `readIdempotencyKey` through a real `app.inject`; idempotency key length boundaries.
+- Frontend mock: reject stakes above the balance with `insufficient_funds`, validate requests with the shared schemas, range-check `limit`; test the balance chip error state.
+- Readability: rename `absWithinBounds`, move the `apiPaths` test next to `paths.ts`, document the transaction amount sign in general terms, share the stub `notImplemented` helper.
 
 ## Next step
 
-Delivery: push the four slices and open stacked PRs (user decision).
+Push the four slices and open the stacked PRs (approved by the user). Then decide which advisory findings to fix before teammates start.
