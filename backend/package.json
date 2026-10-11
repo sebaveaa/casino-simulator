@@ -1,0 +1,26 @@
+{
+  "name": "@casino/backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../.env main.ts",
+    "build": "node build.mjs",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@casino/shared": "*",
+    "@fastify/cors": "^11.0.0",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.0.0",
+    "pg": "^8.0.0",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.0.0",
+    "esbuild": "^0.28.0",
+    "tsx": "^4.0.0"
+  }
+}

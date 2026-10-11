@@ -3,7 +3,7 @@
 - **Feature:** `repo-rules`
 - **Branch:** `chore/repo-rules`
 - **Engram mirror:** `odd/repo-rules/tasks` (project `casino-simulator`)
-- **Status:** implemented; PR opened
+- **Status:** done; squash-merged to `main` as `42fc1fe` (PR #1)
 
 ## Objective
 
@@ -66,16 +66,18 @@ Teammates will use different agents (unknown mix). Without shared rules each age
   - Accepted as-is (nits): description guard allows tab/NBSP/trailing space; GitHub's Revert button title `Revert "…"` must be retitled `revert: …`; `edited` also re-runs on body edits.
   - Pending (remote): labels `type:task` and `type:bug` do not exist yet, so the forms skip them until created.
 - **Second review:** after `172f80b`, consent relayed again; user chose **Skip this time** (lineage `review-48264b0455705d20`).
-- **T4** done: forms cut from 7 and 6 fields to 3 each, because long forms get filled with noise and the PR checklist duplicated `AGENTS.md`. Checks: `yaml.safe_load` over `task.yml`, `bug.yml`, `config.yml`; ids unique, no prefilled `value`; required = task `objective`, `acceptance` and bug `problem`, `steps`. Review: skipped, the user explicitly left this candidate unreviewed (native review only for large feature merges).
+- **T4** done: forms cut from 7 and 6 fields to 3 each, because long forms get filled with noise and the PR checklist duplicated `AGENTS.md`. Checks: `yaml.safe_load` over `task.yml`, `bug.yml`, `config.yml`; ids unique, no prefilled `value`; required = task `objective`, `acceptance` and bug `problem`, `steps`. Review: skipped, the user explicitly left this candidate unreviewed (native review only for large feature merges). Commit `6ca2762`.
+- **Delivery:** PR #1 squash-merged as `42fc1fe`; branch deleted.
 
 ## Next step
 
-Merge the PR, then the remote decisions below.
+None. The project bootstrap continues in `odd/tasks/2-project-bootstrap.md`.
 
-## Pending user decisions (remote, not tasks)
+## Remote state (applied 2026-10-11)
 
-- Create labels `type:task`, `type:bug`, and area labels (area no longer lives in the forms); create stage milestones.
-- Protect `main`: require a PR and the `Conventional Commit title` check (selectable after the workflow has run once). Leave "Require review from Code Owners" off until module owners exist: with `@sebaveaa` as sole owner, GitHub does not let authors approve their own PRs.
-- Merge settings: squash only, default commit message = PR title.
-- Invite the three missing teammates.
-- Later, with the project bootstrap: `.gitattributes` with `eol=lf` for a mixed-OS team.
+- Labels: `type:task`, `type:bug`, `area:auth`, `area:wallet`, `area:games`, `area:realtime`, `area:frontend`, `area:infra`, `area:docs`.
+- Milestones: `1.er corte` (2026-10-28), `2.º corte` (2026-12-09), `Entrega final` (2026-12-15).
+- Merge settings: squash only; commit title = PR title, message = commit messages.
+- `main` protection: PR with 1 approval, required check `Conventional Commit title`, no force pushes or deletions; admins can bypass; code-owner review off until module owners exist.
+- Pending: invite the three missing teammates (needs their GitHub usernames), then fill module owners in `CODEOWNERS`.
+- `.gitattributes` with `eol=lf` moved to the project bootstrap (#2).
