@@ -2,7 +2,7 @@
 
 Issue: none (user decision, 2026-10-11: fix directly, no follow-up issue).
 Branch: `fix/platform-hardening`
-Status: in progress
+Status: in review (fix PR to `main`)
 
 ## Objective
 
@@ -72,7 +72,8 @@ Forecast: about 150 authored changed lines, under the 400-line budget. Strategy:
 
 - T3 done (commit 963c865): pool `'error'` listener logs through an `onError` callback (API: Fastify logger, worker: `console.error`); `pingPostgres` checks out a client and releases it with the error on timeout, so a hung query destroys the client. Checks: `npm run lint` clean, `npm run typecheck` clean, `npm test` 24 passed (shared 4, backend 19, frontend 1); new `postgres.test.ts` covers the pool listener and the ping (success, hung query, no client). Review: skipped, user left candidate unreviewed.
 - T4 done (commit 9f64053, hash recorded in a follow-up docs commit): Redis `'error'` events are logged through `reportRedisErrors` (skips repeats of the same message until `ready`), wired to the Fastify logger in the API and `console.error` in the worker. Checks: lint, typecheck and `npm test` as above plus `redis.test.ts`. Real stack (postgres on 5433, redis on 6379, loopback): `/health` 200, `docker compose stop redis` gave 503 degraded with `redis error` lines in the server log, `docker compose start redis` returned 200; stack brought down without `-v`. Review: skipped, user left candidate unreviewed.
+- Parent spot check: `npm test` re-run, 24 passed. Branch pushed and fix PR opened against `main` (single PR, about 150 authored lines).
 
 ## Next step
 
-Push, open the fix PR, merge.
+Merge the fix PR into `main`.
