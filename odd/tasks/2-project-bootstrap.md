@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/2
 Branch: `chore/2-project-bootstrap`
-Status: implemented locally; not pushed
+Status: in review (PRs #3–#6)
 
 ## Objective
 
@@ -107,6 +107,8 @@ Tracker: `chore/2-project-bootstrap`, draft PR to `main`, merged only after ever
 - T7 done: `backend/build.mjs` (esbuild, externals read from `dependencies`, `@casino/shared` bundled), root `Dockerfile` (two-stage `node:22-alpine`; runtime uses `npm ci --omit=dev --workspace backend`), `.dockerignore`, compose `app` profile, AGENTS.md commands. lint, typecheck, tests (18) and `npm run build` green; `npm ci` ok. `docker build -t casino-cloud .` ok, image 263 MB. With `POSTGRES_PORT=5433`: `docker compose --profile app up -d --build` healthy deps, `GET /health` 200 `{"status":"ok",...}`; same image with `PROCESS_ROLE=worker` logged `worker started (APP_ENV=development)`; `down` kept the volume. Review: skipped, user left candidate unreviewed.
 - Root trim (user request): `.gitattributes` reduced to `* text=auto eol=lf` (the `binary` lines were redundant with `text=auto` detection); `CONTRIBUTING.md` moved to `.github/` with its `AGENTS.md` link fixed to `../AGENTS.md`. Checks: `git add --renormalize .` no changes; `git check-attr -a` on a `.png` path reports `text: auto`.
 
+- Delivery: branches pushed; tracker PR #3 (draft, `main`), slice PRs #4 (229 lines), #5 (492 lines, size exception: cohesive backend skeleton), #6 (208 lines). CI `Checks` and `Conventional Commit title` green on #4–#6; #3 has only the title check until children merge. #4 needed a close/reopen because CI did not start on open.
+
 ## Next step
 
-All slices ready; push and open the tracker and child PRs (needs user authorization).
+Review and merge #4 → #5 → #6 into the tracker (rebase each next child after a squash), then native review and merge of #3 into `main`.
