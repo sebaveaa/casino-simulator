@@ -196,7 +196,7 @@ erDiagram
     USERS ||--o{ SEED_PAIRS : usa
     SEED_PAIRS ||--o{ BETS : "genera resultado de"
     GAME_ROUNDS ||--o{ BETS : incluye
-    BETS ||--o| TRANSACTIONS : "genera"
+    BETS ||--o{ TRANSACTIONS : "genera"
 
     USERS { uuid id PK
             string email
@@ -209,11 +209,13 @@ erDiagram
     TRANSACTIONS { uuid id PK
                    string idempotency_key UK
                    string type
+                   uuid bet_id FK "apuesta que la origina"
                    timestamp created_at }
     LEDGER_ENTRIES { uuid id PK
                      uuid transaction_id FK
                      uuid wallet_id FK
-                     bigint amount "con signo" }
+                     bigint amount "con signo"
+                     timestamp created_at }
     SEED_PAIRS { uuid id PK
                  uuid user_id FK
                  string server_seed_hash
@@ -230,15 +232,20 @@ erDiagram
                   timestamp closes_at }
     BETS { uuid id PK
            uuid user_id FK
+           string game
            uuid round_id FK "solo animalitos"
            uuid seed_pair_id FK "juegos individuales"
            int nonce
            bigint stake
            jsonb selection
            jsonb actions "decisiones de blackjack"
+           jsonb result "resultado, para reintentos y verificador"
            bigint payout
-           string status }
+           string status
+           timestamp created_at }
 ```
+
+Un `amount` positivo aumenta el saldo del wallet y uno negativo lo reduce; por eso la cuenta de emisión queda en negativo por diseño. La base de datos se encarga de hacer cumplir las reglas del ledger: rechaza cualquier `UPDATE` o `DELETE` sobre `ledger_entries` y `transactions`, y rechaza al hacer `COMMIT` toda transacción cuyos asientos no sumen cero o que tenga menos de dos. Una apuesta puede generar varias transacciones (la del cobro y la del premio; las carreras pagan al liquidarse), por eso la relación `BETS` a `TRANSACTIONS` es de uno a muchos.
 
 Los montos se guardan como **enteros** (en la unidad mínima), nunca como decimales flotantes, para evitar errores de redondeo. En el backend (TypeScript), el driver de PostgreSQL devuelve las columnas `bigint` como texto; se convierten a `BigInt` en un único punto de la capa de datos y se serializan como texto en la API, para no perder precisión ni mezclar tipos.
 

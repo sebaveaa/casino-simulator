@@ -3,6 +3,19 @@ import type { Config } from "./config";
 import { withTimeout } from "./timeout";
 
 const PING_TIMEOUT_MS = 1000;
+const INT8_OID = 20;
+
+/**
+ * The single point where `bigint` columns become `BigInt` (README §3.4). It is passed to the pool
+ * as its `types` config, so pg's global registry stays untouched; every other OID keeps pg's
+ * default parser. Note that `count(*)` is `int8` too, so it also yields a bigint.
+ */
+export const postgresTypes = {
+  getTypeParser: ((oid: number, format?: "text" | "binary") =>
+    oid === INT8_OID
+      ? (value: string) => BigInt(value)
+      : pg.types.getTypeParser(oid, format as "text")) as typeof pg.types.getTypeParser,
+};
 
 export function createPostgresPool(
   config: Pick<Config, "databaseUrl">,
@@ -11,6 +24,7 @@ export function createPostgresPool(
   const pool = new pg.Pool({
     connectionString: config.databaseUrl,
     connectionTimeoutMillis: PING_TIMEOUT_MS,
+    types: postgresTypes,
   });
   // An idle client that errors (server restart, dropped connection) emits on the pool;
   // without a listener Node treats it as unhandled and kills the process.

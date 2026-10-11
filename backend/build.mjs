@@ -9,9 +9,13 @@ const { dependencies } = JSON.parse(readFileSync(here("./package.json"), "utf8")
 // packages such as @casino/shared export TypeScript source, so they are bundled.
 const external = Object.keys(dependencies).filter((name) => name !== "@casino/shared");
 
+// Two entry points: the server and the one-off migration command.
 await build({
-  entryPoints: [here("./main.ts")],
-  outfile: here("./dist/main.js"),
+  entryPoints: {
+    main: here("./main.ts"),
+    migrate: here("./migrate.ts"),
+  },
+  outdir: here("./dist"),
   platform: "node",
   target: "node22",
   format: "esm",

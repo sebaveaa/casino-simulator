@@ -43,7 +43,7 @@ Out of scope: real auth, ledger, RNG and game logic; routes for those modules; s
   Route: delegated. Writer trigger: 2+ non-trivial files (T2 and T3 share one writer).
 - [x] T3 Shared API contract: error body, paths, `Idempotency-Key`, auth, balance, deposit, transaction history and roulette bet schemas, with tests.
   Route: delegated, same writer as T2.
-- [ ] T4 Database: Kysely types, initial migration, migrate script, `int8` parser, README §3.4 and AGENTS commands.
+- [x] T4 Database: Kysely types, initial migration, migrate script, `int8` parser, README §3.4 and AGENTS commands.
   Route: delegated. Writer trigger: 2+ non-trivial files.
 - [ ] T5 Backend: errors and request helpers, service interfaces with stubs, auth guard, `buildApp` DI wiring, tests.
   Route: delegated. Writer trigger: 2+ non-trivial files.
@@ -95,7 +95,8 @@ Strategy: `ask-on-risk`. Chain strategy: `stacked-to-main`, from the issue note 
 - T2 done (commit fea83f9): `Money`, `amountSchema`/`positiveAmountSchema`/`signedAmountSchema`, `toAmount`/`parseAmount`/`formatCredits`, `NotImplementedError`, RNG contract (`Rng`, `SeedInput`, #11 stubs), `Game<Bet, Result>` and `GameId`, roulette selection/result schemas, with tests. Checks: lint clean, typecheck clean, npm test 41 passed (shared 21, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
 - T3 done (commit 8f31f11): `shared/src/api/` with error body and codes, `apiPaths`, `Idempotency-Key` header and schema, auth, wallet (balance, deposit, transaction history) and roulette bet schemas, with tests. Checks: lint clean, typecheck clean, npm test 64 passed (shared 44, backend 19, frontend 1). Review: skipped, user left candidate unreviewed.
 - Slice 1 complete: 710 authored lines (forecast 450; schema tests account for most of the gap). Parent spot check: `npm test` 64 passed. Not pushed yet.
+- T4 done: Kysely 0.29.6 `Database` types, `Db`/`createDatabase`, `int8` to `BigInt` parser on the pg pool (`postgresTypes`), migration `0001_initial` (7 tables, constraints, append-only and deferred zero-sum and min-entries guards, issuance and house wallets), static migrator, `backend/migrate.ts` CLI (`npm run migrate`), build emits `dist/migrate.js`, README §3.4 and AGENTS commands. Checks: lint clean, typecheck clean, npm test 72 passed (shared 44, backend 27, frontend 1); build emits main.js and migrate.js; real DB (postgres on 5433, env passed inline because `.env` access was denied in this session): `npm run migrate` applied 0001_initial, second run "No pending migrations", `node backend/dist/migrate.js` also no-op; 7 tables; 2 system wallets (house, issuance); unbalanced tx (-100/+50) fails at `SET CONSTRAINTS ALL IMMEDIATE` and at COMMIT; balanced tx passes; tx with no entries fails at COMMIT; UPDATE and DELETE on ledger_entries and UPDATE on transactions fail ("is append-only"); negative player balance fails; bet with neither round_id nor seed_pair_id fails; `down` removed tables and functions, re-`up` restored the 2 wallets. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-T4 (database) on `feat/8-core-02-database`.
+T5 (backend interfaces) on `feat/8-core-03-backend`.
