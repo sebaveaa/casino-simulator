@@ -1,7 +1,7 @@
 import type { GameId } from "@casino/shared";
 import type { CSSProperties } from "react";
 import { Link } from "react-router";
-import { useBalance } from "../app/useBalance";
+import { BALANCE_LOADING, useBalance } from "../app/useBalance";
 import { GameArt } from "./GameIcons";
 
 /** Circle color of a game button; each maps to a `.tone-*` class. */
@@ -111,7 +111,12 @@ export function LobbyPage() {
               </span>
             </span>
             <span className="credits-label">Tus créditos</span>
-            <span className="credits-amount amount">{balance}</span>
+            <span
+              className="credits-amount amount"
+              data-loading={balance === BALANCE_LOADING || undefined}
+            >
+              {balance}
+            </span>
             <Link to="/wallet" className="wallet-link">
               Abrir billetera
             </Link>

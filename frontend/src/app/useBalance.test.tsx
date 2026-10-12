@@ -35,6 +35,14 @@ describe("balance", () => {
     expect(within(pick).getByText("…")).toBeTruthy();
   });
 
+  it("flags the balance as loading until the amount arrives", async () => {
+    const { header, pick } = renderLobby(createMockApiClient());
+    expect(within(header).getByText("…").hasAttribute("data-loading")).toBe(true);
+    expect(within(pick).getByText("…").hasAttribute("data-loading")).toBe(true);
+    expect((await within(header).findByText("1,000.00")).hasAttribute("data-loading")).toBe(false);
+    expect((await within(pick).findByText("1,000.00")).hasAttribute("data-loading")).toBe(false);
+  });
+
   it("shows the failure mark in both places when the request fails", async () => {
     const client = createMockApiClient();
     vi.spyOn(client, "getBalance").mockRejectedValue(new Error("down"));

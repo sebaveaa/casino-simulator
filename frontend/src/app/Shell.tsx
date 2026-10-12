@@ -1,13 +1,15 @@
 import { Link, NavLink, Outlet } from "react-router";
 import { CoinIcon, DieIcon } from "./icons";
-import { useBalance } from "./useBalance";
+import { BALANCE_LOADING, useBalance } from "./useBalance";
 
 function BalanceChip() {
   const balance = useBalance();
   return (
     <span className="balance-chip">
       <CoinIcon />
-      <strong className="amount">{balance}</strong>
+      <strong className="amount" data-loading={balance === BALANCE_LOADING || undefined}>
+        {balance}
+      </strong>
       <span className="balance-label">créditos</span>
     </span>
   );

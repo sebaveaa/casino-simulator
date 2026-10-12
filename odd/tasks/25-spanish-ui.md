@@ -2,7 +2,7 @@
 
 Issue: #25 Frontend: Spanish interface.
 Branch: `feat/25-spanish-ui`, from `main` at 5eb8c43.
-Status: in progress
+Status: implemented, PR pending
 
 ## Objective
 
@@ -34,7 +34,7 @@ Out of scope: game screens, new dependencies, API changes (`useBalance` keeps it
   Route: inline in the delegated writer (one stylesheet).
 - [x] T3 Ambient motion: staggered entrance of the game cards (`--i` from the list index), a slowly spinning roulette wheel in the pick banner that speeds up while its call to action is hovered or focused, and a gently floating hero sticker.
   Route: delegated writer (stylesheet plus `LobbyPage.tsx` and its test).
-- [ ] T4 Polish: reduced motion for everything above, one keyboard focus ring for links and buttons, a compact header at ≤ 400px with no horizontal scroll at 320px, and a pulsing placeholder while the balance loads.
+- [x] T4 Polish: reduced motion for everything above, one keyboard focus ring for links and buttons, a compact header at ≤ 400px with no horizontal scroll at 320px, and a pulsing placeholder while the balance loads.
   Route: delegated writer (stylesheet, `Shell.tsx`, `LobbyPage.tsx`, `useBalance.tsx`, tests).
 
 Writer trigger: T2–T4 touch 2+ non-trivial files, so one delegated writer does all three.
@@ -72,8 +72,10 @@ Forecast: about 350 authored changed lines for T2–T4. Strategy: `single-pr` (u
 
 - T1 done: interface translated to Spanish. Commit `b208d66`. Review skipped: user left candidate unreviewed.
 - T2 done: `.game-link:is(:hover, :focus-visible)` lifts and tilts the circle with a growing shadow (`--circle-shadow`, tomato on the ink card), wiggles the icon (`icon-wiggle`) and pops the sticker; `:active` presses it down; coming-soon stickers wiggle on hover (`sticker-wiggle`); reduced motion turns all of it off. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 26) pass, `build -w frontend` passes. Commit `988ef56`. Review skipped: user left candidate unreviewed.
-- T3 done: game items carry `--i` and enter staggered (`card-in`, 90ms apart); the pick bubble holds a decorative roulette wheel that turns every 14s (`.pick-wheel-turn`) and gets a second, paused spin on its art that runs while the CTA is hovered or focused (`.pick:has(.button:is(:hover, :focus-visible))`), so it speeds up without jumping; the hero sticker floats (`sticker-float`). The card art is wrapped in `.game-art` so the T2 wiggle no longer targets `svg` (Biome `noDescendingSpecificity`). Test added for `--i`. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 27) pass, `build -w frontend` passes. Review skipped: user left candidate unreviewed.
+- T3 done: game items carry `--i` and enter staggered (`card-in`, 90ms apart); the pick bubble holds a decorative roulette wheel that turns every 14s (`.pick-wheel-turn`) and gets a second, paused spin on its art that runs while the CTA is hovered or focused (`.pick:has(.button:is(:hover, :focus-visible))`), so it speeds up without jumping; the hero sticker floats (`sticker-float`). The card art is wrapped in `.game-art` so the T2 wiggle no longer targets `svg` (Biome `noDescendingSpecificity`). Test added for `--i`. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 27) pass, `build -w frontend` passes. Commit `526612d`. Review skipped: user left candidate unreviewed.
+- T4 done: one keyboard ring (`:focus-visible`, 3px ink outline, 4px offset) without the sun halo, which `.button` and the game circles overrode with their own shadows; brand, game link and wallet link get rounded corners so the ring follows them. At `max-width: 25rem` the header packs into three short rows (brand, nav, balance and log in), with smaller padding, gaps and type, and the word "créditos" in the chip visually hidden but still read by screen readers. `BALANCE_LOADING` (`"…"`) is exported from `useBalance.tsx`; the header chip and the pick bubble set `data-loading` while it shows, and CSS turns it into a pulsing placeholder bar (`pulse`). Reduced motion now also stops the card entrance, wheel, floating sticker and pulse. Test added for `data-loading`. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 28) pass, `build -w frontend` passes. Review skipped: user left candidate unreviewed.
+- Not verified visually (no browser in this session): the animations, the 320px and 360px header, and the focus ring were checked structurally only.
 
 ## Next step
 
-T4: reduced motion, focus ring, compact header, balance loading placeholder.
+Check the lobby in a browser (hover, keyboard focus, reduced motion, 320px), then open the PR (`Closes #25`).
