@@ -2,7 +2,7 @@
 
 Issue: #21 Frontend: Arcade visual identity and lobby layout.
 Branch: `feat/21-arcade-identity`, from `main` at 0bea633.
-Status: implemented, pending PR
+Status: in review
 
 ## Objective
 
@@ -79,8 +79,8 @@ Forecast: about 900 authored changed lines. Strategy: `single-pr`, by explicit u
   - R3-dup-balance-fetch (warning): the header chip and the lobby bubble each call `useBalance`, so the lobby sends two balance requests and can show two different values if one fails.
   - R3-balance-failure-untested (suggestion): no test covers the `…` loading and `--` failure states of `useBalance`.
   - R3-app-balance-assertion-weakened (suggestion): the App balance test only checks that the amount appears somewhere.
-- T4 done: `BalanceProvider` in `App.tsx` (inside `ApiProvider`, around the router) owns the single `getBalance()` request; `useBalance` reads it and throws outside the provider. Tests cover one request, `…`, `--`, and the outside-provider error; the App assertion now needs the amount in the header and in the pick bubble. Checks: lint, typecheck, test (26 frontend tests passed), `build -w frontend` all pass. Review: skipped, user left candidate unreviewed.
+- T4 done: `BalanceProvider` in `App.tsx` (inside `ApiProvider`, around the router) owns the single `getBalance()` request; `useBalance` reads it and throws outside the provider. Tests cover one request, `…`, `--`, and the outside-provider error; the App assertion now needs the amount in the header and in the pick bubble. Checks: lint, typecheck, test (26 frontend tests passed), `build -w frontend` all pass. Commit `c2d7c2c`; parent spot check: frontend tests 26 passed. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-T4, then open the single PR (see Delivery).
+Merge the single PR after CI and review.
