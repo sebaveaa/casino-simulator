@@ -73,7 +73,11 @@ Forecast: about 900 authored changed lines. Strategy: `single-pr`, by explicit u
 - Delivery switched to a single PR by user choice (d9d5afb).
 - Follow-up on T1: the default Fontsource import carries only the weight axis; `main.tsx` now loads `opsz.css` (weight plus optical size, 12–96, as in the design; latin file 77 kB instead of 41 kB). Parent checks: lint clean (101 files), typecheck clean, `npm test` 149 passed (shared 57, backend 70, frontend 22), `build -w frontend` bundles the opsz woff2 files.
 - Not verified visually: the 360px layout and the rendered fonts were checked structurally only.
+- Feature review on `main..642943c`: medium risk (configuration change in `frontend/package.json`), consent granted by the user. The reliability lens approved it, and the approval was acknowledged (lineage `review-1ec96b61302e819d`). Advisory findings, none blocking:
+  - R3-dup-balance-fetch (warning): the header chip and the lobby bubble each call `useBalance`, so the lobby sends two balance requests and can show two different values if one fails.
+  - R3-balance-failure-untested (suggestion): no test covers the `…` loading and `--` failure states of `useBalance`.
+  - R3-app-balance-assertion-weakened (suggestion): the App balance test only checks that the amount appears somewhere.
 
 ## Next step
 
-Open the single PR (see Delivery).
+Decide whether to fix R3-dup-balance-fetch before the PR, then open the single PR (see Delivery).
