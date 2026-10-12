@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+coverage
+.git
+.env
+.env.*
+!.env.example
+backend
+!backend/package.json
+odd
+docs
+*.log
