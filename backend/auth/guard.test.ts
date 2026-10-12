@@ -1,11 +1,12 @@
 import { errorResponseSchema, NotImplementedError } from "@casino/shared";
-import type { FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Db } from "../db/database";
 import { buildApp } from "../platform/app";
+import { createLogger } from "../platform/logger";
 import { stubServices } from "../platform/services";
 import { getAuth } from "./guard";
-import type { AuthUser, TokenService } from "./token-service";
+import { type AuthUser, InvalidTokenError, type TokenService } from "./token-service";
 
 const player: AuthUser = { id: "11111111-1111-4111-8111-111111111111", role: "player" };
 
@@ -14,8 +15,12 @@ function fakeTokens(verify: TokenService["verify"]): TokenService {
 }
 
 const apps: FastifyInstance[] = [];
-async function build(verify: TokenService["verify"]): Promise<FastifyInstance> {
+async function build(
+  verify: TokenService["verify"],
+  logger?: FastifyBaseLogger,
+): Promise<FastifyInstance> {
   const app = await buildApp({
+    logger,
     config: { appEnv: "production", allowedOrigins: [] },
     checks: { postgres: async () => true, redis: async () => true },
     db: {} as Db,
@@ -56,13 +61,33 @@ describe("requireAuth", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("rejects a token that fails verification with 401", async () => {
+  it("rejects an invalid token with 401", async () => {
     const app = await build(async () => {
-      throw new Error("jwt expired");
+      throw new InvalidTokenError("jwt expired");
     });
     const res = await app.inject({ method: "GET", url: "/t/any", headers: bearer });
     expect(res.statusCode).toBe(401);
+    expect(errorResponseSchema.parse(res.json()).error.code).toBe("unauthorized");
     expect(res.body).not.toContain("jwt expired");
+  });
+
+  it("answers 500 and logs when verification fails for another reason", async () => {
+    const lines: string[] = [];
+    const logger = createLogger(
+      { appEnv: "production" },
+      { write: (line: string) => void lines.push(line) },
+    );
+    const app = await build(async () => {
+      throw new Error("database is down");
+    }, logger);
+    const res = await app.inject({ method: "GET", url: "/t/any", headers: bearer });
+    expect(res.statusCode).toBe(500);
+    expect(errorResponseSchema.parse(res.json()).error.code).toBe("internal");
+    expect(res.body).not.toContain("database is down");
+    const entries = lines.map((line) => JSON.parse(line));
+    expect(
+      entries.some((e) => e.msg === "unhandled error" && e.err?.message === "database is down"),
+    ).toBe(true);
   });
 
   it("surfaces a not-implemented verifier as 501", async () => {

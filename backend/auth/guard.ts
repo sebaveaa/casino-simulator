@@ -1,7 +1,7 @@
-import { NotImplementedError, type Role } from "@casino/shared";
+import type { Role } from "@casino/shared";
 import type { FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 import { AppError } from "../platform/errors";
-import type { AuthUser, TokenService } from "./token-service";
+import { type AuthUser, InvalidTokenError, type TokenService } from "./token-service";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -27,8 +27,12 @@ export function createAuthGuard(tokens: TokenService): RequireAuth {
       try {
         user = await tokens.verify(match[1]);
       } catch (error) {
-        if (error instanceof NotImplementedError) throw error;
-        throw new AppError("unauthorized", "Invalid or expired token");
+        // Only a bad token is the client's problem; anything else (including
+        // `NotImplementedError`) goes to the error handler, which logs it.
+        if (error instanceof InvalidTokenError) {
+          throw new AppError("unauthorized", "Invalid or expired token");
+        }
+        throw error;
       }
 
       if (roles.length > 0 && !roles.includes(user.role)) {
