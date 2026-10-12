@@ -1,6 +1,6 @@
 import type { HealthResponse } from "@casino/shared";
 import cors from "@fastify/cors";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import { createAuthGuard } from "../auth/guard";
 import type { Db } from "../db/database";
 import type { Config } from "./config";
@@ -20,7 +20,13 @@ export type AppDeps = {
   services: Services;
   /** Module routes to register; defaults to `moduleRoutes`. Tests inject their own. */
   routes?: ModuleRoutes[];
+  /** The logger to use, created by the caller; without one Fastify creates its own. */
+  logger?: FastifyBaseLogger;
 };
+
+function loggerOptions(config: Pick<Config, "appEnv">) {
+  return { level: config.appEnv === "development" ? "debug" : "info" };
+}
 
 /** A check that throws counts as failed. */
 async function settle(check: HealthCheck): Promise<boolean> {
@@ -37,8 +43,11 @@ export async function buildApp({
   db,
   services,
   routes = moduleRoutes,
+  logger,
 }: AppDeps): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: config.appEnv === "development" ? "debug" : "info" } });
+  const app: FastifyInstance = logger
+    ? Fastify({ loggerInstance: logger })
+    : Fastify({ logger: loggerOptions(config) });
 
   registerErrorHandlers(app);
   await app.register(cors, { origin: config.allowedOrigins });
