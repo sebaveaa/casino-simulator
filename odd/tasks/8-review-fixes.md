@@ -40,7 +40,7 @@ Out of scope: the other 26 advisory findings; the worker's logging; decimal inpu
   Route: delegated, same writer.
 - [x] T3 Backend: `InvalidTokenError`; the guard answers 401 only for it; tests.
   Route: delegated, same writer.
-- [ ] T4 Backend: keep the status of Fastify 4xx errors; tests.
+- [x] T4 Backend: keep the status of Fastify 4xx errors; tests.
   Route: delegated, same writer.
 
 ## Acceptance criteria
@@ -76,7 +76,8 @@ Forecast: about 250 authored changed lines, under the 400-line budget. Strategy:
 - T1 done: lint clean, typecheck clean, npm test passed (shared 57, backend 65, frontend 15). The 1,000,000-digit amount is rejected with `BigInt` never called; the bounds and 20-digit cases behave as specified; passwords of 72 bytes pass and 73 or 74 bytes fail at register and login. Review: skipped, user left candidate unreviewed.
 - T2 done: lint clean, typecheck clean, npm test passed (shared 57, backend 66, frontend 15). Real run of `node backend/dist/main.js` with Redis on a closed port (6390) for 6 seconds: the server listened, one `"msg":"redis error"` line (ECONNREFUSED 127.0.0.1:6390) was logged through the shared pino logger, no `ReferenceError`, and the process stayed up until the timeout (exit 124). Added `pino` ^10.4.0 to the backend (the version Fastify resolves) and `lib: DOM` to the shared tsconfig for `TextEncoder` (T1 typecheck fix, amended into the T1 commit). Review: skipped, user left candidate unreviewed.
 - T3 done: lint clean, typecheck clean, npm test passed (shared 57, backend 67, frontend 15). `InvalidTokenError` answers 401 with the shared error body; a generic `Error` from `verify` answers 500 `internal` and the handler logs "unhandled error" (asserted through an in-memory pino stream); `NotImplementedError` still answers 501. Review: skipped, user left candidate unreviewed.
+- T4 done: lint clean, typecheck clean, npm test passed (shared 57, backend 70, frontend 15). A body over the route limit answers 413 "Request body too large", an unknown content type answers 415 "Unsupported content type", malformed JSON answers 400 "Malformed request"; each body validates against `errorResponseSchema`. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-T1.
+All tasks done; open the pull request.

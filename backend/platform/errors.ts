@@ -41,6 +41,11 @@ function clientStatus(error: unknown): number | undefined {
     : undefined;
 }
 
+const clientMessage: Partial<Record<number, string>> = {
+  413: "Request body too large",
+  415: "Unsupported content type",
+};
+
 /**
  * Makes every error response, including unknown routes, match `errorResponseSchema`.
  * Unexpected errors are logged and answered with a generic message, never their own.
@@ -53,8 +58,12 @@ export function registerErrorHandlers(app: FastifyInstance): void {
     if (error instanceof NotImplementedError) {
       return reply.code(501).send(body("not_implemented", error.message));
     }
-    if (clientStatus(error) !== undefined) {
-      return reply.code(400).send(body("invalid_request", "Malformed request"));
+    const status = clientStatus(error);
+    if (status !== undefined) {
+      // A fixed message per status: the error's own message can echo the request.
+      return reply
+        .code(status)
+        .send(body("invalid_request", clientMessage[status] ?? "Malformed request"));
     }
     request.log.error(error, "unhandled error");
     return reply.code(500).send(body("internal", "Internal server error"));
