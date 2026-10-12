@@ -328,15 +328,6 @@ main {
   box-shadow: 10px 10px 0 var(--circle-shadow);
 }
 
-/* Wraps the decorative art so it can wiggle as one piece. */
-.game-art {
-  display: flex;
-}
-
-.game-link:is(:hover, :focus-visible) .game-art {
-  animation: icon-wiggle 450ms var(--ease-spring);
-}
-
 .game-link:is(:hover, :focus-visible) .sticker-play {
   transform: rotate(14deg) scale(1.15);
 }
@@ -352,19 +343,6 @@ main {
   animation: sticker-wiggle 500ms ease-in-out;
 }
 
-@keyframes icon-wiggle {
-  0%,
-  100% {
-    transform: none;
-  }
-  30% {
-    transform: rotate(-10deg) scale(1.08);
-  }
-  60% {
-    transform: rotate(6deg) scale(1.04);
-  }
-}
-
 @keyframes sticker-wiggle {
   0%,
   100% {
@@ -375,6 +353,159 @@ main {
   }
   75% {
     transform: rotate(12deg);
+  }
+}
+
+/*
+ * Each icon idles with its own motion and livens up while its card is hovered or focused:
+ * the wheel spins faster, the flag flaps, the reels roll once and the card flips once.
+ * Coming-soon cards animate too; only playable cards lift.
+ */
+.game-art {
+  display: flex;
+}
+
+.game-art :is(.art-wheel, .art-wheel-boost, .art-card) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.game-art .art-wheel {
+  animation: spin 12s linear infinite;
+}
+
+.game-art .art-wheel-boost {
+  animation: spin 1s linear infinite paused;
+}
+
+.game-art .art-flag {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: flag-wave 2.6s ease-in-out infinite;
+}
+
+.game-art .art-reel {
+  --reel-delay: 0s;
+  animation: reel-roll 5s ease-out var(--reel-delay) infinite;
+}
+
+.game-art .art-reel:nth-child(2) {
+  --reel-delay: 0.2s;
+}
+
+.game-art .art-reel:nth-child(3) {
+  --reel-delay: 0.4s;
+}
+
+.game-art .art-card {
+  animation: card-flip 6s ease-in-out infinite;
+}
+
+.game-art .art-card-back {
+  animation: card-back 6s linear infinite;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-wheel-boost {
+  animation-play-state: running;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-flag {
+  animation-duration: 0.7s;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-reel {
+  animation: reel-spin 0.3s linear var(--reel-delay) 4;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-card {
+  animation: card-flip-once 0.8s ease-in-out;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-card-back {
+  animation: card-back-once 0.8s linear;
+}
+
+@keyframes flag-wave {
+  0%,
+  100% {
+    transform: none;
+  }
+  25% {
+    transform: skewY(-6deg) scaleX(0.95);
+  }
+  75% {
+    transform: skewY(4deg) scaleX(0.98);
+  }
+}
+
+/* A strip moves three symbols (108 viewBox units) and lands on its 7 again. */
+@keyframes reel-roll {
+  0% {
+    transform: none;
+  }
+  20%,
+  100% {
+    transform: translateY(108px);
+  }
+}
+
+@keyframes reel-spin {
+  to {
+    transform: translateY(108px);
+  }
+}
+
+/* The card turns edge-on, shows its back, then turns back to the ace; the rest is a pause. */
+@keyframes card-flip {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  85%,
+  95% {
+    transform: scaleX(0);
+  }
+  90% {
+    transform: none;
+  }
+}
+
+@keyframes card-back {
+  0%,
+  84.9%,
+  95%,
+  100% {
+    opacity: 0;
+  }
+  85%,
+  94.9% {
+    opacity: 1;
+  }
+}
+
+@keyframes card-flip-once {
+  0%,
+  50%,
+  100% {
+    transform: none;
+  }
+  25%,
+  75% {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes card-back-once {
+  0%,
+  24.9%,
+  75%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  74.9% {
+    opacity: 1;
   }
 }
 
@@ -689,13 +820,17 @@ main {
     transition: none;
   }
 
-  .game-link:is(:hover, :focus-visible) .game-art,
   .game-item:hover .sticker-soon,
   .game-item,
   .hero-sticker,
   .pick-wheel-turn,
   .pick-wheel svg,
   .amount[data-loading] {
+    animation: none;
+  }
+
+  .game-item .game-art :is(.art-wheel, .art-wheel-boost, .art-flag),
+  .game-item .game-art :is(.art-reel, .art-card, .art-card-back) {
     animation: none;
   }
 
