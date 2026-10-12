@@ -2,7 +2,7 @@
 
 Issue: #21 Frontend: Arcade visual identity and lobby layout.
 Branch: `feat/21-arcade-identity`, from `main` at 0bea633.
-Status: implemented, pending PRs
+Status: implemented, pending PR
 
 ## Objective
 
@@ -62,11 +62,7 @@ Per the user, native review runs only for large feature merges. Work-unit commit
 
 ## Delivery
 
-Forecast: about 900 authored changed lines, over the 400-line budget. Strategy: `ask-on-risk`, chain `stacked-to-main`, from AGENTS.md ("split larger work into stacked PRs") and the #16–#20 precedent. One commit per task on this branch; at PR time each slice gets a branch at its commit:
-
-- PR 1 `feat/21-arcade-01-tokens`: T1, base `main`.
-- PR 2 `feat/21-arcade-02-shell`: T2, base PR 1.
-- PR 3 `feat/21-arcade-03-lobby`: T3, base PR 2, `Closes #21`.
+Forecast: about 900 authored changed lines. Strategy: `single-pr`, by explicit user choice (2026-10-11), overriding the 400-line split. One PR from `feat/21-arcade-identity` to `main`, with `Closes #21`.
 
 ## Progress
 
@@ -77,4 +73,4 @@ Forecast: about 900 authored changed lines, over the 400-line budget. Strategy: 
 
 ## Next step
 
-Open the stacked PRs (see Delivery).
+Open the single PR (see Delivery).
