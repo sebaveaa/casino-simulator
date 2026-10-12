@@ -384,6 +384,20 @@ main {
   animation: flag-wave 2.6s ease-in-out infinite;
 }
 
+/* Wind streaks drift past the flag on the same beat, one after another. */
+.game-art .art-wind-streak {
+  transform-box: fill-box;
+  animation: wind-drift 2.6s ease-in-out infinite;
+}
+
+.game-art .art-wind-streak:nth-child(2) {
+  animation-delay: -0.9s;
+}
+
+.game-art .art-wind-streak:nth-child(3) {
+  animation-delay: -1.7s;
+}
+
 .game-art .art-reel {
   --reel-delay: 0s;
   animation: reel-roll 5s ease-out var(--reel-delay) infinite;
@@ -409,7 +423,7 @@ main {
   animation-play-state: running;
 }
 
-:is(.game-item:hover, .game-link:focus-visible) .art-flag {
+:is(.game-item:hover, .game-link:focus-visible) :is(.art-flag, .art-wind-streak) {
   animation-duration: 0.7s;
 }
 
@@ -435,6 +449,21 @@ main {
   }
   75% {
     transform: skewY(4deg) scaleX(0.98);
+  }
+}
+
+@keyframes wind-drift {
+  0% {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(6px);
   }
 }
 
@@ -829,7 +858,7 @@ main {
     animation: none;
   }
 
-  .game-item .game-art :is(.art-wheel, .art-wheel-boost, .art-flag),
+  .game-item .game-art :is(.art-wheel, .art-wheel-boost, .art-flag, .art-wind-streak),
   .game-item .game-art :is(.art-reel, .art-card, .art-card-back) {
     animation: none;
   }

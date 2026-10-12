@@ -57,6 +57,11 @@ const art: Record<GameId, ReactNode> = {
         <rect x="14" y="10" width="34" height="22" />
       </g>
       <path d="M14 58V8" />
+      <g className="art-wind" strokeWidth="2">
+        <path className="art-wind-streak" d="M22 40h16" />
+        <path className="art-wind-streak" d="M28 47h18a4 4 0 1 0 -4 -4" />
+        <path className="art-wind-streak" d="M24 54h12" />
+      </g>
     </svg>
   ),
   slots: (
