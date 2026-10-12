@@ -1,31 +1,14 @@
-import { formatCredits, parseAmount } from "@casino/shared";
-import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router";
-import { useApi } from "../api";
+import { CoinIcon, DieIcon } from "./icons";
+import { useBalance } from "./useBalance";
 
-/** Balance as the API reports it; the client never computes it. */
 function BalanceChip() {
-  const api = useApi();
-  const [text, setText] = useState("…");
-
-  useEffect(() => {
-    let active = true;
-    api
-      .getBalance()
-      .then((res) => {
-        if (active) setText(formatCredits(parseAmount(res.balance)));
-      })
-      .catch(() => {
-        if (active) setText("--");
-      });
-    return () => {
-      active = false;
-    };
-  }, [api]);
-
+  const balance = useBalance();
   return (
     <span className="balance-chip">
-      <strong>{text}</strong> credits
+      <CoinIcon />
+      <strong className="amount">{balance}</strong>
+      <span className="balance-label">credits</span>
     </span>
   );
 }
@@ -36,7 +19,8 @@ export function Shell() {
     <div className="shell">
       <header className="site-header">
         <Link to="/" className="brand">
-          Casino Cloud
+          <DieIcon />
+          casino cloud
         </Link>
         <nav aria-label="Main">
           <NavLink to="/" end>
@@ -46,7 +30,7 @@ export function Shell() {
         </nav>
         <div className="header-end">
           <BalanceChip />
-          <Link to="/login" className="login-link">
+          <Link to="/login" className="button">
             Log in
           </Link>
         </div>
@@ -54,7 +38,10 @@ export function Shell() {
       <main>
         <Outlet />
       </main>
-      <footer className="site-footer">Fictitious credits only. No real money is involved.</footer>
+      <footer className="site-footer">
+        <DieIcon size={28} />
+        <p>Fictitious credits only. No real money is involved.</p>
+      </footer>
     </div>
   );
 }

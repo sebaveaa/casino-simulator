@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { App } from "./App";
@@ -15,16 +15,19 @@ function renderAt(path: string) {
 describe("App", () => {
   it("shows the brand and the lobby with the game catalog", async () => {
     renderAt("/");
-    expect(screen.getByRole("link", { name: "Casino Cloud" })).toBeTruthy();
-    expect(await screen.findByRole("heading", { name: "Lobby" })).toBeTruthy();
-    const roulette = screen.getByRole("link", { name: /Roulette/ });
+    expect(screen.getByRole("link", { name: "casino cloud" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
+    const roulette = screen.getByRole("link", { name: /Play!.*Roulette/ });
     expect(roulette.getAttribute("href")).toBe("/games/roulette");
-    expect(screen.getAllByText("Coming soon")).toHaveLength(3);
+    expect(screen.getAllByText("Soon!")).toHaveLength(3);
   });
 
   it("shows the balance returned by the API", async () => {
     renderAt("/");
-    expect(await screen.findByText("1,000.00")).toBeTruthy();
+    const header = screen.getByRole("banner");
+    const pick = screen.getByRole("region", { name: "Spin the wheel" });
+    expect(await within(header).findByText("1,000.00")).toBeTruthy();
+    expect(await within(pick).findByText("1,000.00")).toBeTruthy();
   });
 
   it("routes to the wallet page", async () => {
