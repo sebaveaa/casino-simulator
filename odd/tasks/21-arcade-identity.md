@@ -31,7 +31,7 @@ Out of scope: the game screens, a "How to bet" page, the auth, wallet and roulet
 
 - [x] T1 Tokens, fonts and shared classes (`.button`, `.badge`, links, focus ring, reduced motion); every existing page still renders.
   Route: delegated. Writer trigger: T1–T3 touch 2+ non-trivial files (one writer).
-- [ ] T2 Shell: die logo and wordmark, Lobby/Wallet nav with the current page marked, coin balance chip, Log in; centered footer; tests.
+- [x] T2 Shell: die logo and wordmark, Lobby/Wallet nav with the current page marked, coin balance chip, Log in; centered footer; tests.
   Route: delegated, same writer.
 - [ ] T3 Lobby: centered hero, round game buttons with Play!/Soon! stickers, "Today's pick" banner with the balance; responsive to 360px; tests.
   Route: delegated, same writer.
@@ -71,8 +71,9 @@ Forecast: about 900 authored changed lines, over the 400-line budget. Strategy: 
 ## Progress
 
 - Issue #21 created; branch `feat/21-arcade-identity` created from 0bea633.
-- T1 done: Arcade tokens, Fontsource fonts (`@fontsource-variable/bricolage-grotesque` 5.3.0, `@fontsource/space-mono` 5.3.0), shared classes, focus ring, reduced motion. Checks: lint, typecheck, test (15 passed), `build -w frontend` all pass. Commit hash recorded in the T2 progress line. Review skipped: user left candidate unreviewed.
+- T1 done: Arcade tokens, Fontsource fonts (`@fontsource-variable/bricolage-grotesque` 5.3.0, `@fontsource/space-mono` 5.3.0), shared classes, focus ring, reduced motion. Checks: lint, typecheck, test (15 passed), `build -w frontend` all pass. Commit `3c9d792`. Review skipped: user left candidate unreviewed.
+- T2 done: shell header and footer restyled, `useBalance` hook extracted, `Shell.test.tsx` added. Checks: lint, typecheck, test (18 passed), `build -w frontend` all pass. Commit hash recorded in the T3 progress line. Review skipped: user left candidate unreviewed.
 
 ## Next step
 
-T2.
+T3.

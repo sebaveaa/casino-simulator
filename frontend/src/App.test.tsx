@@ -15,7 +15,7 @@ function renderAt(path: string) {
 describe("App", () => {
   it("shows the brand and the lobby with the game catalog", async () => {
     renderAt("/");
-    expect(screen.getByRole("link", { name: "Casino Cloud" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "casino cloud" })).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "Lobby" })).toBeTruthy();
     const roulette = screen.getByRole("link", { name: /Roulette/ });
     expect(roulette.getAttribute("href")).toBe("/games/roulette");
