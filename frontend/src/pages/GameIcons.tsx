@@ -11,6 +11,9 @@ const reels = [
   { x: 49.3, seven: "#141414", symbols: ["7", "5", "2", "7"] },
 ];
 
+/** Wind around the races flag: above its top edge, beside its flying edge, and a curl below. */
+const windStreaks = ["M22 4.5h18", "M50.5 21h8", "M24 38h16a4 4 0 1 1 -4 4"];
+
 /**
  * Artwork of each game for the lobby; decorative, hidden from assistive tech.
  * Classed parts (`art-*`) carry each game's motion in the stylesheet.
@@ -57,10 +60,13 @@ const art: Record<GameId, ReactNode> = {
         <rect x="14" y="10" width="34" height="22" />
       </g>
       <path d="M14 58V8" />
-      <g className="art-wind" strokeWidth="2">
-        <path className="art-wind-streak" d="M22 40h16" />
-        <path className="art-wind-streak" d="M28 47h18a4 4 0 1 0 -4 -4" />
-        <path className="art-wind-streak" d="M24 54h12" />
+      <g className="art-wind">
+        {windStreaks.map((d) => (
+          <g key={d} className="art-wind-streak">
+            <path d={d} strokeWidth="4.5" />
+            <path className="art-wind-core" d={d} strokeWidth="2" />
+          </g>
+        ))}
       </g>
     </svg>
   ),

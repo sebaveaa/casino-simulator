@@ -384,7 +384,11 @@ main {
   animation: flag-wave 2.6s ease-in-out infinite;
 }
 
-/* Wind streaks drift past the flag on the same beat, one after another. */
+/* Chalk wind streaks, outlined in ink, drift past the flag on its beat, one after another. */
+.art-wind-core {
+  stroke: var(--chalk);
+}
+
 .game-art .art-wind-streak {
   transform-box: fill-box;
   animation: wind-drift 2.6s ease-in-out infinite;
