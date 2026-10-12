@@ -169,6 +169,17 @@ main {
   font-size: 0.9rem;
   font-weight: 800;
   transform: rotate(-3deg);
+  animation: sticker-float 3.2s ease-in-out infinite;
+}
+
+@keyframes sticker-float {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-5px);
+  }
 }
 
 .hero h1 {
@@ -209,6 +220,19 @@ main {
   gap: 12px;
   width: 200px;
   text-align: center;
+  animation: card-in 480ms var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .game-link {
@@ -283,7 +307,12 @@ main {
   box-shadow: 10px 10px 0 var(--circle-shadow);
 }
 
-.game-link:is(:hover, :focus-visible) .game-circle svg {
+/* Wraps the decorative art so it can wiggle as one piece. */
+.game-art {
+  display: flex;
+}
+
+.game-link:is(:hover, :focus-visible) .game-art {
   animation: icon-wiggle 450ms var(--ease-spring);
 }
 
@@ -403,6 +432,7 @@ main {
 }
 
 .credits-bubble {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -416,6 +446,37 @@ main {
   box-shadow: var(--shadow-lg);
   text-align: center;
   transform: rotate(2deg);
+}
+
+/* The wheel turns slowly; a second, paused spin on the art runs while the CTA is hovered. */
+.pick-wheel {
+  position: absolute;
+  top: -18px;
+  left: -26px;
+  display: flex;
+  --wheel-size: 72px;
+  filter: drop-shadow(3px 3px 0 var(--ink));
+}
+
+.pick-wheel-turn {
+  display: flex;
+  animation: spin 14s linear infinite;
+}
+
+.pick-wheel svg {
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  animation: spin 1.2s linear infinite paused;
+}
+
+.pick:has(.button:is(:hover, :focus-visible)) .pick-wheel svg {
+  animation-play-state: running;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .credits-label {
@@ -471,6 +532,12 @@ main {
   .credits-bubble {
     width: 200px;
     height: 200px;
+  }
+
+  .pick-wheel {
+    top: -12px;
+    left: -18px;
+    --wheel-size: 56px;
   }
 }
 
@@ -540,8 +607,12 @@ main {
     transition: none;
   }
 
-  .game-link:is(:hover, :focus-visible) .game-circle svg,
-  .game-item:hover .sticker-soon {
+  .game-link:is(:hover, :focus-visible) .game-art,
+  .game-item:hover .sticker-soon,
+  .game-item,
+  .hero-sticker,
+  .pick-wheel-turn,
+  .pick-wheel svg {
     animation: none;
   }
 

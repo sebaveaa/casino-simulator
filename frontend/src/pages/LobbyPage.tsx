@@ -1,4 +1,5 @@
 import type { GameId } from "@casino/shared";
+import type { CSSProperties } from "react";
 import { Link } from "react-router";
 import { useBalance } from "../app/useBalance";
 import { GameArt } from "./GameIcons";
@@ -45,7 +46,9 @@ function GameBody({ game, live }: { game: GameEntry; live: boolean }) {
   return (
     <>
       <span className={`game-circle tone-${game.tone}`}>
-        <GameArt id={game.id} />
+        <span className="game-art">
+          <GameArt id={game.id} />
+        </span>
         <span className={live ? "sticker sticker-play" : "sticker sticker-soon"}>
           {live ? "¡Jugar!" : "¡Pronto!"}
         </span>
@@ -73,8 +76,8 @@ export function LobbyPage() {
       </section>
 
       <ul className="game-list" aria-label="Juegos">
-        {games.map((game) => (
-          <li key={game.id} className="game-item">
+        {games.map((game, index) => (
+          <li key={game.id} className="game-item" style={{ "--i": index } as CSSProperties}>
             {game.path ? (
               <Link to={game.path} className="game-link">
                 <GameBody game={game} live />
@@ -102,6 +105,11 @@ export function LobbyPage() {
         </div>
         <div className="pick-side">
           <div className="credits-bubble">
+            <span className="pick-wheel" aria-hidden="true">
+              <span className="pick-wheel-turn">
+                <GameArt id="roulette" />
+              </span>
+            </span>
             <span className="credits-label">Tus créditos</span>
             <span className="credits-amount amount">{balance}</span>
             <Link to="/wallet" className="wallet-link">

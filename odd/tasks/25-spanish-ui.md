@@ -32,7 +32,7 @@ Out of scope: game screens, new dependencies, API changes (`useBalance` keeps it
 - [x] T1 Translate the interface to Spanish (neutral, professional register).
 - [x] T2 Game card hover and press: playable cards lift and tilt, the shadow grows, the icon wiggles and the "¡Jugar!" sticker pops; `:active` presses the card down. "¡Pronto!" cards only wiggle their sticker.
   Route: inline in the delegated writer (one stylesheet).
-- [ ] T3 Ambient motion: staggered entrance of the game cards (`--i` from the list index), a slowly spinning roulette wheel in the pick banner that speeds up while its call to action is hovered or focused, and a gently floating hero sticker.
+- [x] T3 Ambient motion: staggered entrance of the game cards (`--i` from the list index), a slowly spinning roulette wheel in the pick banner that speeds up while its call to action is hovered or focused, and a gently floating hero sticker.
   Route: delegated writer (stylesheet plus `LobbyPage.tsx` and its test).
 - [ ] T4 Polish: reduced motion for everything above, one keyboard focus ring for links and buttons, a compact header at ≤ 400px with no horizontal scroll at 320px, and a pulsing placeholder while the balance loads.
   Route: delegated writer (stylesheet, `Shell.tsx`, `LobbyPage.tsx`, `useBalance.tsx`, tests).
@@ -71,8 +71,9 @@ Forecast: about 350 authored changed lines for T2–T4. Strategy: `single-pr` (u
 ## Progress
 
 - T1 done: interface translated to Spanish. Commit `b208d66`. Review skipped: user left candidate unreviewed.
-- T2 done: `.game-link:is(:hover, :focus-visible)` lifts and tilts the circle with a growing shadow (`--circle-shadow`, tomato on the ink card), wiggles the icon (`icon-wiggle`) and pops the sticker; `:active` presses it down; coming-soon stickers wiggle on hover (`sticker-wiggle`); reduced motion turns all of it off. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 26) pass, `build -w frontend` passes. Review skipped: user left candidate unreviewed.
+- T2 done: `.game-link:is(:hover, :focus-visible)` lifts and tilts the circle with a growing shadow (`--circle-shadow`, tomato on the ink card), wiggles the icon (`icon-wiggle`) and pops the sticker; `:active` presses it down; coming-soon stickers wiggle on hover (`sticker-wiggle`); reduced motion turns all of it off. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 26) pass, `build -w frontend` passes. Commit `988ef56`. Review skipped: user left candidate unreviewed.
+- T3 done: game items carry `--i` and enter staggered (`card-in`, 90ms apart); the pick bubble holds a decorative roulette wheel that turns every 14s (`.pick-wheel-turn`) and gets a second, paused spin on its art that runs while the CTA is hovered or focused (`.pick:has(.button:is(:hover, :focus-visible))`), so it speeds up without jumping; the hero sticker floats (`sticker-float`). The card art is wrapped in `.game-art` so the T2 wiggle no longer targets `svg` (Biome `noDescendingSpecificity`). Test added for `--i`. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 27) pass, `build -w frontend` passes. Review skipped: user left candidate unreviewed.
 
 ## Next step
 
-T3: ambient motion on the landing.
+T4: reduced motion, focus ring, compact header, balance loading placeholder.

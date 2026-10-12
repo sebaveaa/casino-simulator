@@ -29,6 +29,14 @@ describe("LobbyPage", () => {
     }
   });
 
+  it("gives each game item its list index for the staggered entrance", () => {
+    renderLobby();
+    const items = within(screen.getByRole("list", { name: "Juegos" })).getAllByRole("listitem");
+    expect(items.map((item) => item.style.getPropertyValue("--i"))).toEqual(
+      games.map((_, index) => String(index)),
+    );
+  });
+
   it("links only the live games and marks the rest as coming soon", () => {
     renderLobby();
     const list = screen.getByRole("list", { name: "Juegos" });
