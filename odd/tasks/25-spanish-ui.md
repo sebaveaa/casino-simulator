@@ -2,7 +2,7 @@
 
 Issue: #25 Frontend: Spanish interface.
 Branch: `feat/25-spanish-ui`, from `main` at 5eb8c43.
-Status: implemented, PR pending
+Status: implemented, PR open
 
 ## Objective
 
@@ -71,7 +71,7 @@ Per the user, native review runs only for large feature merges. Work-unit commit
 
 ## Delivery
 
-Forecast: about 350 authored changed lines for T2–T4. Strategy: `single-pr` (user preference). One PR from `feat/25-spanish-ui` to `main`, with `Closes #25`.
+Forecast: about 350 authored changed lines for T2–T4; the branch ended near 840 with T5–T6. Strategy: `single-pr` (user preference). One PR from `feat/25-spanish-ui` to `main`, with `Closes #25`.
 
 ## Progress
 
@@ -81,9 +81,9 @@ Forecast: about 350 authored changed lines for T2–T4. Strategy: `single-pr` (u
 - T4 done: one keyboard ring (`:focus-visible`, 3px ink outline, 4px offset) without the sun halo, which `.button` and the game circles overrode with their own shadows; brand, game link and wallet link get rounded corners so the ring follows them. At `max-width: 25rem` the header packs into three short rows (brand, nav, balance and log in), with smaller padding, gaps and type, and the word "créditos" in the chip visually hidden but still read by screen readers. `BALANCE_LOADING` (`"…"`) is exported from `useBalance.tsx`; the header chip and the pick bubble set `data-loading` while it shows, and CSS turns it into a pulsing placeholder bar (`pulse`). Reduced motion now also stops the card entrance, wheel, floating sticker and pulse. Test added for `data-loading`. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 28) pass, `build -w frontend` passes. Commit `de596b8`. Review skipped: user left candidate unreviewed.
 - T5 done: `GameIcons.tsx` splits the animated parts into classed groups without changing the resting look: `.art-wheel` and `.art-wheel-boost` (roulette spokes and hub), `.art-flag` (races flag, pivoting on the pole), `.art-reel` strips under a `clipPath` window (slots; each strip starts and ends on its 7), `.art-card` and `.art-card-back` (blackjack front card, rotation moved to an outer group so the CSS transform does not override it). Idle: the wheel turns every 12s, the flag waves every 2.6s (`flag-wave`), the reels roll three symbols every 5s and stop 0.2s apart (`reel-roll`), the card flips to its back and returns once every 6s (`card-flip`, `card-back`). On `:is(.game-item:hover, .game-link:focus-visible)`: a paused second spin runs on the wheel, the flag flaps at 0.7s, the reels spin four quick turns and stop in sequence (`reel-spin`), the card flips once (`card-flip-once`, `card-back-once`). The generic `icon-wiggle` is removed. Reduced motion stops all of it. `GameIcons.test.tsx` checks the reels start and end on 7 and the card back is hidden at rest. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 30) pass, `build -w frontend` passes. Commit `7594255`. Review skipped: user left candidate unreviewed.
 - T6 done: the races icon gets an `.art-wind` group (stroke width 2, round caps, ink) with three `.art-wind-streak` paths under the flag, right of the pole: `M22 40h16`, `M28 47h18` ending in a small curl, `M24 54h12`. They run `wind-drift` (fade in from 5px left, hold, fade out 6px right) on the flag's 2.6s beat, staggered by negative delays (0, -0.9s, -1.7s); on hover or focus they share the flag's 0.7s duration. With no animation they are plain visible strokes; reduced motion stops them. `GameIcons.test.tsx` checks three streaks with no hiding attribute. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 31) pass, `build -w frontend` passes. Commit `c320ea8`. Review skipped: user left candidate unreviewed.
-- T6 follow-up (user feedback from the browser: light colour, around the flag instead of below it): each `.art-wind-streak` is now a group of a 4.5-wide ink stroke under a 2-wide `.art-wind-core` stroke coloured `var(--chalk)` in CSS, so it keeps the outlined look on the sun circle. Paths (`windStreaks` in `GameIcons.tsx`): `M22 4.5h18` above the flag's top edge, `M50.5 21h8` beside its flying edge, `M24 38h16a4 4 0 1 1 -4 4` just below its bottom edge with a downward curl; all inside the viewBox. Animation, beat, hover speed-up and reduced motion unchanged; the test still holds. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 31) pass, `build -w frontend` passes. Review skipped: user left candidate unreviewed.
+- T6 follow-up (user feedback from the browser: light colour, around the flag instead of below it): each `.art-wind-streak` is now a group of a 4.5-wide ink stroke under a 2-wide `.art-wind-core` stroke coloured `var(--chalk)` in CSS, so it keeps the outlined look on the sun circle. Paths (`windStreaks` in `GameIcons.tsx`): `M22 4.5h18` above the flag's top edge, `M50.5 21h8` beside its flying edge, `M24 38h16a4 4 0 1 1 -4 4` just below its bottom edge with a downward curl; all inside the viewBox. Animation, beat, hover speed-up and reduced motion unchanged; the test still holds. Checks: lint clean, typecheck clean, test (shared 57, backend 70, frontend 31) pass, `build -w frontend` passes. Commit `1af6ebe`. Review skipped: user left candidate unreviewed.
 - Not verified visually (no browser in this session): the animations, the 320px and 360px header, and the focus ring were checked structurally only.
 
 ## Next step
 
-Check the lobby in a browser (hover, keyboard focus, reduced motion, 320px), then open the PR (`Closes #25`).
+The user checked the lobby in a browser and approved it. Push `feat/25-spanish-ui` and open the PR (`Closes #25`); merge after CI is green.
