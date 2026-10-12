@@ -2,7 +2,7 @@
 
 Issue: #8 (advisory findings from the core contract reviews, recorded in `odd/tasks/8-core-contracts.md`).
 Branch: `fix/8-review-fixes`, stacked on `feat/8-core-04-frontend` (PR #19).
-Status: in progress
+Status: in review (PR stacked on #19)
 
 ## Objective
 
@@ -78,6 +78,9 @@ Forecast: about 250 authored changed lines, under the 400-line budget. Strategy:
 - T3 done: lint clean, typecheck clean, npm test passed (shared 57, backend 67, frontend 15). `InvalidTokenError` answers 401 with the shared error body; a generic `Error` from `verify` answers 500 `internal` and the handler logs "unhandled error" (asserted through an in-memory pino stream); `NotImplementedError` still answers 501. Review: skipped, user left candidate unreviewed.
 - T4 done: lint clean, typecheck clean, npm test passed (shared 57, backend 70, frontend 15). A body over the route limit answers 413 "Request body too large", an unknown content type answers 415 "Unsupported content type", malformed JSON answers 400 "Malformed request"; each body validates against `errorResponseSchema`. Review: skipped, user left candidate unreviewed.
 
+- Commits: T1 ebe9205, T2 e48cbdd, T3 48565a9, T4 c3feb6f. Parent spot check on c3feb6f: lint clean (96 files), typecheck clean, `npm test` 142 passed (shared 57, backend 70, frontend 15). The structural readback of the diff matches the design decisions. `shared/tsconfig.json` gains `lib: DOM` for `TextEncoder`; #11 needs it for Web Crypto anyway.
+- `8-core-contracts.md` marks the five findings fixed.
+
 ## Next step
 
-All tasks done; open the pull request.
+Push the branch and open the PR stacked on #19.
