@@ -61,8 +61,8 @@ All changes reach `main` through a reviewed pull request.
 
 ## Language
 
-- English: code, identifiers, comments, commit messages, PR titles, and agent-facing docs such as this file.
-- Spanish: `README.md` and `docs/`, which are course deliverables.
+- English: code, identifiers, comments, test names, commit messages, PR titles, and agent-facing docs such as this file.
+- Spanish: user-facing UI copy (neutral, professional register), plus `README.md` and `docs/`, which are course deliverables.
 - Issues and PR discussion: either language.
 
 ## Ownership

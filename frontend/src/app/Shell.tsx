@@ -1,14 +1,16 @@
 import { Link, NavLink, Outlet } from "react-router";
 import { CoinIcon, DieIcon } from "./icons";
-import { useBalance } from "./useBalance";
+import { BALANCE_LOADING, useBalance } from "./useBalance";
 
 function BalanceChip() {
   const balance = useBalance();
   return (
     <span className="balance-chip">
       <CoinIcon />
-      <strong className="amount">{balance}</strong>
-      <span className="balance-label">credits</span>
+      <strong className="amount" data-loading={balance === BALANCE_LOADING || undefined}>
+        {balance}
+      </strong>
+      <span className="balance-label">créditos</span>
     </span>
   );
 }
@@ -22,16 +24,16 @@ export function Shell() {
           <DieIcon />
           casino cloud
         </Link>
-        <nav aria-label="Main">
+        <nav aria-label="Principal">
           <NavLink to="/" end>
-            Lobby
+            Inicio
           </NavLink>
-          <NavLink to="/wallet">Wallet</NavLink>
+          <NavLink to="/wallet">Billetera</NavLink>
         </nav>
         <div className="header-end">
           <BalanceChip />
           <Link to="/login" className="button">
-            Log in
+            Iniciar sesión
           </Link>
         </div>
       </header>
@@ -40,7 +42,7 @@ export function Shell() {
       </main>
       <footer className="site-footer">
         <DieIcon size={28} />
-        <p>Fictitious credits only. No real money is involved.</p>
+        <p>Solo créditos ficticios. No hay dinero real en juego.</p>
       </footer>
     </div>
   );

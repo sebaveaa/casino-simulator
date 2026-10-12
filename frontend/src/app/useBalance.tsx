@@ -2,6 +2,9 @@ import { formatCredits, parseAmount } from "@casino/shared";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { useApi } from "../api";
 
+/** Balance text while the request is pending. */
+export const BALANCE_LOADING = "…";
+
 const BalanceContext = createContext<string | null>(null);
 
 /**
@@ -11,7 +14,7 @@ const BalanceContext = createContext<string | null>(null);
  */
 export function BalanceProvider({ children }: { children: ReactNode }) {
   const api = useApi();
-  const [text, setText] = useState("…");
+  const [text, setText] = useState(BALANCE_LOADING);
 
   useEffect(() => {
     let active = true;

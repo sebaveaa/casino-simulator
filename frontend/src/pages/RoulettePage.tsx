@@ -2,8 +2,8 @@
 export function RoulettePage() {
   return (
     <section>
-      <h1>Roulette</h1>
-      <p>Coming soon.</p>
+      <h1>Ruleta</h1>
+      <p>Próximamente.</p>
     </section>
   );
 }

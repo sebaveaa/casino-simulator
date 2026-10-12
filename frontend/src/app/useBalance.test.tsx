@@ -13,7 +13,7 @@ function renderLobby(client: ApiClient) {
   render(<App client={client} router={router} />);
   return {
     header: screen.getByRole("banner"),
-    pick: screen.getByRole("region", { name: "Spin the wheel" }),
+    pick: screen.getByRole("region", { name: "Gira la ruleta" }),
   };
 }
 
@@ -33,6 +33,14 @@ describe("balance", () => {
     const { header, pick } = renderLobby(client);
     expect(within(header).getByText("…")).toBeTruthy();
     expect(within(pick).getByText("…")).toBeTruthy();
+  });
+
+  it("flags the balance as loading until the amount arrives", async () => {
+    const { header, pick } = renderLobby(createMockApiClient());
+    expect(within(header).getByText("…").hasAttribute("data-loading")).toBe(true);
+    expect(within(pick).getByText("…").hasAttribute("data-loading")).toBe(true);
+    expect((await within(header).findByText("1,000.00")).hasAttribute("data-loading")).toBe(false);
+    expect((await within(pick).findByText("1,000.00")).hasAttribute("data-loading")).toBe(false);
   });
 
   it("shows the failure mark in both places when the request fails", async () => {

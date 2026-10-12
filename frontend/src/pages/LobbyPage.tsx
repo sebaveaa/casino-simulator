@@ -1,6 +1,7 @@
 import type { GameId } from "@casino/shared";
+import type { CSSProperties } from "react";
 import { Link } from "react-router";
-import { useBalance } from "../app/useBalance";
+import { BALANCE_LOADING, useBalance } from "../app/useBalance";
 import { GameArt } from "./GameIcons";
 
 /** Circle color of a game button; each maps to a `.tone-*` class. */
@@ -19,19 +20,24 @@ interface GameEntry {
 export const games: GameEntry[] = [
   {
     id: "roulette",
-    title: "Roulette",
-    description: "Bet on a number, a color or a dozen.",
+    title: "Ruleta",
+    description: "Apuesta a un número, un color o una docena.",
     tone: "tomato",
     path: "/games/roulette",
   },
   {
     id: "races",
-    title: "Animal races",
-    description: "Pick a winner and cheer it on.",
+    title: "Carreras de animales",
+    description: "Elige un ganador y anímalo hasta la meta.",
     tone: "sun",
   },
-  { id: "slots", title: "Slots", description: "Spin the reels.", tone: "chalk" },
-  { id: "blackjack", title: "Blackjack", description: "Beat the dealer to 21.", tone: "ink" },
+  { id: "slots", title: "Tragamonedas", description: "Haz girar los rodillos.", tone: "chalk" },
+  {
+    id: "blackjack",
+    title: "Blackjack",
+    description: "Vence a la banca sin pasarte de 21.",
+    tone: "ink",
+  },
 ];
 
 const roulette = games.find((game) => game.id === "roulette");
@@ -40,9 +46,11 @@ function GameBody({ game, live }: { game: GameEntry; live: boolean }) {
   return (
     <>
       <span className={`game-circle tone-${game.tone}`}>
-        <GameArt id={game.id} />
+        <span className="game-art">
+          <GameArt id={game.id} />
+        </span>
         <span className={live ? "sticker sticker-play" : "sticker sticker-soon"}>
-          {live ? "Play!" : "Soon!"}
+          {live ? "¡Jugar!" : "¡Pronto!"}
         </span>
       </span>
       <h2 className="game-title">{game.title}</h2>
@@ -58,18 +66,18 @@ export function LobbyPage() {
   return (
     <div className="lobby">
       <section className="hero">
-        <span className="hero-sticker">Fictitious credits · zero real money</span>
+        <span className="hero-sticker">Créditos ficticios · cero dinero real</span>
         <h1>
-          What are we playing <span className="underline">today?</span>
+          ¿A qué jugamos <span className="underline">hoy?</span>
         </h1>
         <p className="hero-text">
-          Everything here is played with fictitious credits. Pick a game to start.
+          Aquí todo se juega con créditos ficticios. Elige un juego para empezar.
         </p>
       </section>
 
-      <ul className="game-list" aria-label="Games">
-        {games.map((game) => (
-          <li key={game.id} className="game-item">
+      <ul className="game-list" aria-label="Juegos">
+        {games.map((game, index) => (
+          <li key={game.id} className="game-item" style={{ "--i": index } as CSSProperties}>
             {game.path ? (
               <Link to={game.path} className="game-link">
                 <GameBody game={game} live />
@@ -83,24 +91,34 @@ export function LobbyPage() {
 
       <section className="pick" aria-labelledby="pick-title">
         <div className="pick-main">
-          <span className="pick-sticker">Today's pick</span>
-          <h2 id="pick-title">Spin the wheel</h2>
+          <span className="pick-sticker">Destacado del día</span>
+          <h2 id="pick-title">Gira la ruleta</h2>
           <p>
-            Roulette is open now. The server decides every result, and your browser can check it
-            with the same code.
+            La ruleta ya está abierta. El servidor decide cada resultado y tu navegador puede
+            comprobarlo con el mismo código.
           </p>
           {roulette?.path && (
             <Link to={roulette.path} className="button button-large">
-              Play Roulette
+              Jugar a la ruleta
             </Link>
           )}
         </div>
         <div className="pick-side">
           <div className="credits-bubble">
-            <span className="credits-label">Your credits</span>
-            <span className="credits-amount amount">{balance}</span>
+            <span className="pick-wheel" aria-hidden="true">
+              <span className="pick-wheel-turn">
+                <GameArt id="roulette" />
+              </span>
+            </span>
+            <span className="credits-label">Tus créditos</span>
+            <span
+              className="credits-amount amount"
+              data-loading={balance === BALANCE_LOADING || undefined}
+            >
+              {balance}
+            </span>
             <Link to="/wallet" className="wallet-link">
-              Open wallet
+              Abrir billetera
             </Link>
           </div>
         </div>

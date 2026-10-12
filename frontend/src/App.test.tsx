@@ -17,26 +17,26 @@ describe("App", () => {
     renderAt("/");
     expect(screen.getByRole("link", { name: "casino cloud" })).toBeTruthy();
     expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
-    const roulette = screen.getByRole("link", { name: /Play!.*Roulette/ });
+    const roulette = screen.getByRole("link", { name: /¡Jugar!.*Ruleta/ });
     expect(roulette.getAttribute("href")).toBe("/games/roulette");
-    expect(screen.getAllByText("Soon!")).toHaveLength(3);
+    expect(screen.getAllByText("¡Pronto!")).toHaveLength(3);
   });
 
   it("shows the balance returned by the API", async () => {
     renderAt("/");
     const header = screen.getByRole("banner");
-    const pick = screen.getByRole("region", { name: "Spin the wheel" });
+    const pick = screen.getByRole("region", { name: "Gira la ruleta" });
     expect(await within(header).findByText("1,000.00")).toBeTruthy();
     expect(await within(pick).findByText("1,000.00")).toBeTruthy();
   });
 
   it("routes to the wallet page", async () => {
     renderAt("/wallet");
-    expect(await screen.findByRole("heading", { name: "Wallet" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Billetera" })).toBeTruthy();
   });
 
   it("shows a not found page for unknown paths", async () => {
     renderAt("/nowhere");
-    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Página no encontrada" })).toBeTruthy();
   });
 });

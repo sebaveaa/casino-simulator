@@ -17,37 +17,45 @@ describe("LobbyPage", () => {
   it("greets with the hero heading", () => {
     renderLobby();
     const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1.textContent).toBe("What are we playing today?");
+    expect(h1.textContent).toBe("¿A qué jugamos hoy?");
   });
 
   it("shows one item per game", () => {
     renderLobby();
-    const list = screen.getByRole("list", { name: "Games" });
+    const list = screen.getByRole("list", { name: "Juegos" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(games.length);
     for (const game of games) {
       expect(within(list).getByRole("heading", { name: game.title })).toBeTruthy();
     }
   });
 
+  it("gives each game item its list index for the staggered entrance", () => {
+    renderLobby();
+    const items = within(screen.getByRole("list", { name: "Juegos" })).getAllByRole("listitem");
+    expect(items.map((item) => item.style.getPropertyValue("--i"))).toEqual(
+      games.map((_, index) => String(index)),
+    );
+  });
+
   it("links only the live games and marks the rest as coming soon", () => {
     renderLobby();
-    const list = screen.getByRole("list", { name: "Games" });
+    const list = screen.getByRole("list", { name: "Juegos" });
     const links = within(list).getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0]?.getAttribute("href")).toBe("/games/roulette");
-    expect(within(links[0] as HTMLElement).getByText("Play!")).toBeTruthy();
-    expect(within(list).getAllByText("Soon!")).toHaveLength(3);
+    expect(within(links[0] as HTMLElement).getByText("¡Jugar!")).toBeTruthy();
+    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(3);
   });
 
   it("shows today's pick with the Roulette link and the balance", async () => {
     renderLobby();
-    const pick = screen.getByRole("region", { name: "Spin the wheel" });
-    expect(within(pick).getByRole("link", { name: "Play Roulette" }).getAttribute("href")).toBe(
+    const pick = screen.getByRole("region", { name: "Gira la ruleta" });
+    expect(within(pick).getByRole("link", { name: "Jugar a la ruleta" }).getAttribute("href")).toBe(
       "/games/roulette",
     );
-    expect(within(pick).getByText("Your credits")).toBeTruthy();
+    expect(within(pick).getByText("Tus créditos")).toBeTruthy();
     expect(await within(pick).findByText("1,000.00")).toBeTruthy();
-    expect(within(pick).getByRole("link", { name: "Open wallet" }).getAttribute("href")).toBe(
+    expect(within(pick).getByRole("link", { name: "Abrir billetera" }).getAttribute("href")).toBe(
       "/wallet",
     );
   });

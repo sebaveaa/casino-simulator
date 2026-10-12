@@ -15,6 +15,7 @@
   --shadow-sm: 3px 3px 0 var(--ink);
   --shadow-md: 6px 6px 0 var(--ink);
   --shadow-lg: 8px 8px 0 var(--ink);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   --font-ui: "Bricolage Grotesque Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-amount: "Space Mono", ui-monospace, "Cascadia Mono", monospace;
@@ -43,10 +44,10 @@ a:hover {
   color: var(--muted);
 }
 
+/* One keyboard ring for every control; it leaves the offset shadows untouched. */
 :focus-visible {
   outline: 3px solid var(--ink);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px var(--sun);
+  outline-offset: 4px;
 }
 
 h1,
@@ -91,6 +92,7 @@ main {
   font-weight: 800;
   letter-spacing: -0.02em;
   text-decoration: none;
+  border-radius: var(--radius-sm);
 }
 
 .site-header nav {
@@ -139,6 +141,25 @@ main {
   font-weight: 700;
 }
 
+/* While the balance loads, its "…" becomes a pulsing placeholder bar. */
+.amount[data-loading] {
+  display: inline-block;
+  min-width: 5ch;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  color: transparent;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .balance-label {
   font-size: 0.9rem;
   font-weight: 600;
@@ -168,6 +189,17 @@ main {
   font-size: 0.9rem;
   font-weight: 800;
   transform: rotate(-3deg);
+  animation: sticker-float 3.2s ease-in-out infinite;
+}
+
+@keyframes sticker-float {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-5px);
+  }
 }
 
 .hero h1 {
@@ -208,6 +240,19 @@ main {
   gap: 12px;
   width: 200px;
   text-align: center;
+  animation: card-in 480ms var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .game-link {
@@ -215,6 +260,7 @@ main {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  border-radius: var(--radius-md);
   text-decoration: none;
 }
 
@@ -227,12 +273,11 @@ main {
   height: 180px;
   border: var(--outline);
   border-radius: 50%;
-  box-shadow: var(--shadow-md);
-  transition: transform 120ms ease;
-}
-
-.game-link:hover .game-circle {
-  transform: translate(-2px, -2px) rotate(-2deg);
+  box-shadow: 6px 6px 0 var(--circle-shadow);
+  transition:
+    transform 220ms var(--ease-spring),
+    box-shadow 220ms var(--ease-spring);
+  --circle-shadow: var(--ink);
 }
 
 .tone-tomato {
@@ -249,7 +294,7 @@ main {
 
 .tone-ink {
   background: var(--ink);
-  box-shadow: 6px 6px 0 var(--tomato);
+  --circle-shadow: var(--tomato);
 }
 
 .sticker {
@@ -259,7 +304,9 @@ main {
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   font-size: 0.95rem;
+  white-space: nowrap;
   transform: rotate(8deg);
+  transition: transform 200ms var(--ease-spring);
 }
 
 .sticker-play {
@@ -275,10 +322,231 @@ main {
   font-weight: 700;
 }
 
+/* Playable cards lift, tilt and pop their sticker; a press pushes them down. */
+.game-link:is(:hover, :focus-visible) .game-circle {
+  transform: translate(-4px, -4px) rotate(-3deg);
+  box-shadow: 10px 10px 0 var(--circle-shadow);
+}
+
+.game-link:is(:hover, :focus-visible) .sticker-play {
+  transform: rotate(14deg) scale(1.15);
+}
+
+.game-link:active .game-circle {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 var(--circle-shadow);
+  transition-duration: 90ms;
+}
+
+/* Coming-soon cards only nudge their sticker, so they do not read as clickable. */
+.game-item:hover .sticker-soon {
+  animation: sticker-wiggle 500ms ease-in-out;
+}
+
+@keyframes sticker-wiggle {
+  0%,
+  100% {
+    transform: rotate(8deg);
+  }
+  25% {
+    transform: rotate(2deg);
+  }
+  75% {
+    transform: rotate(12deg);
+  }
+}
+
+/*
+ * Each icon idles with its own motion and livens up while its card is hovered or focused:
+ * the wheel spins faster, the flag flaps, the reels roll once and the card flips once.
+ * Coming-soon cards animate too; only playable cards lift.
+ */
+.game-art {
+  display: flex;
+}
+
+.game-art :is(.art-wheel, .art-wheel-boost, .art-card) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.game-art .art-wheel {
+  animation: spin 12s linear infinite;
+}
+
+.game-art .art-wheel-boost {
+  animation: spin 1s linear infinite paused;
+}
+
+.game-art .art-flag {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: flag-wave 2.6s ease-in-out infinite;
+}
+
+/* Chalk wind streaks, outlined in ink, drift past the flag on its beat, one after another. */
+.art-wind-core {
+  stroke: var(--chalk);
+}
+
+.game-art .art-wind-streak {
+  transform-box: fill-box;
+  animation: wind-drift 2.6s ease-in-out infinite;
+}
+
+.game-art .art-wind-streak:nth-child(2) {
+  animation-delay: -0.9s;
+}
+
+.game-art .art-wind-streak:nth-child(3) {
+  animation-delay: -1.7s;
+}
+
+.game-art .art-reel {
+  --reel-delay: 0s;
+  animation: reel-roll 5s ease-out var(--reel-delay) infinite;
+}
+
+.game-art .art-reel:nth-child(2) {
+  --reel-delay: 0.2s;
+}
+
+.game-art .art-reel:nth-child(3) {
+  --reel-delay: 0.4s;
+}
+
+.game-art .art-card {
+  animation: card-flip 6s ease-in-out infinite;
+}
+
+.game-art .art-card-back {
+  animation: card-back 6s linear infinite;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-wheel-boost {
+  animation-play-state: running;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) :is(.art-flag, .art-wind-streak) {
+  animation-duration: 0.7s;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-reel {
+  animation: reel-spin 0.3s linear var(--reel-delay) 4;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-card {
+  animation: card-flip-once 0.8s ease-in-out;
+}
+
+:is(.game-item:hover, .game-link:focus-visible) .art-card-back {
+  animation: card-back-once 0.8s linear;
+}
+
+@keyframes flag-wave {
+  0%,
+  100% {
+    transform: none;
+  }
+  25% {
+    transform: skewY(-6deg) scaleX(0.95);
+  }
+  75% {
+    transform: skewY(4deg) scaleX(0.98);
+  }
+}
+
+@keyframes wind-drift {
+  0% {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
+/* A strip moves three symbols (108 viewBox units) and lands on its 7 again. */
+@keyframes reel-roll {
+  0% {
+    transform: none;
+  }
+  20%,
+  100% {
+    transform: translateY(108px);
+  }
+}
+
+@keyframes reel-spin {
+  to {
+    transform: translateY(108px);
+  }
+}
+
+/* The card turns edge-on, shows its back, then turns back to the ace; the rest is a pause. */
+@keyframes card-flip {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  85%,
+  95% {
+    transform: scaleX(0);
+  }
+  90% {
+    transform: none;
+  }
+}
+
+@keyframes card-back {
+  0%,
+  84.9%,
+  95%,
+  100% {
+    opacity: 0;
+  }
+  85%,
+  94.9% {
+    opacity: 1;
+  }
+}
+
+@keyframes card-flip-once {
+  0%,
+  50%,
+  100% {
+    transform: none;
+  }
+  25%,
+  75% {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes card-back-once {
+  0%,
+  24.9%,
+  75%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  74.9% {
+    opacity: 1;
+  }
+}
+
 .game-title {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 800;
+  hyphens: auto;
 }
 
 .game-text {
@@ -349,6 +617,7 @@ main {
 }
 
 .credits-bubble {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -362,6 +631,37 @@ main {
   box-shadow: var(--shadow-lg);
   text-align: center;
   transform: rotate(2deg);
+}
+
+/* The wheel turns slowly; a second, paused spin on the art runs while the CTA is hovered. */
+.pick-wheel {
+  position: absolute;
+  top: -18px;
+  left: -26px;
+  display: flex;
+  --wheel-size: 72px;
+  filter: drop-shadow(3px 3px 0 var(--ink));
+}
+
+.pick-wheel-turn {
+  display: flex;
+  animation: spin 14s linear infinite;
+}
+
+.pick-wheel svg {
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  animation: spin 1.2s linear infinite paused;
+}
+
+.pick:has(.button:is(:hover, :focus-visible)) .pick-wheel svg {
+  animation-play-state: running;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .credits-label {
@@ -380,6 +680,7 @@ main {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  border-radius: var(--radius-sm);
   font-weight: 800;
 }
 
@@ -417,6 +718,72 @@ main {
   .credits-bubble {
     width: 200px;
     height: 200px;
+  }
+
+  .pick-wheel {
+    top: -12px;
+    left: -18px;
+    --wheel-size: 56px;
+  }
+}
+
+/* Narrow phones: the header packs into three short rows. */
+@media (max-width: 25rem) {
+  .shell {
+    padding: 0 0.75rem;
+  }
+
+  .site-header {
+    gap: 8px;
+    margin-top: 0.75rem;
+    padding: 8px 10px;
+  }
+
+  .brand {
+    gap: 8px;
+    font-size: 1.15rem;
+  }
+
+  .brand svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .site-header nav {
+    gap: 4px;
+  }
+
+  .site-header nav a {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .header-end {
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .balance-chip {
+    gap: 6px;
+    padding: 3px 10px 3px 4px;
+  }
+
+  /* The coin and the amount carry the meaning; the word stays for screen readers. */
+  .balance-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .header-end .button {
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 0.9rem;
   }
 }
 
@@ -481,13 +848,32 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
   .button,
-  .game-circle {
+  .game-circle,
+  .sticker {
     transition: none;
+  }
+
+  .game-item:hover .sticker-soon,
+  .game-item,
+  .hero-sticker,
+  .pick-wheel-turn,
+  .pick-wheel svg,
+  .amount[data-loading] {
+    animation: none;
+  }
+
+  .game-item .game-art :is(.art-wheel, .art-wheel-boost, .art-flag, .art-wind-streak),
+  .game-item .game-art :is(.art-reel, .art-card, .art-card-back) {
+    animation: none;
   }
 
   .button:hover,
   .button:active,
-  .game-link:hover .game-circle {
+  .game-link:is(:hover, :focus-visible, :active) .game-circle {
+    transform: none;
+  }
+
+  .game-link:is(:hover, :focus-visible) .sticker-play {
     transform: none;
   }
 
