@@ -491,6 +491,8 @@ flowchart LR
 └── README.md
 ```
 
+El backend y el portal se empaquetan en imágenes Docker (`Dockerfile` y `frontend/Dockerfile`). Con `docker compose --profile app up --build` se levanta todo el sistema en contenedores: el portal queda en http://localhost:8080 y la API en http://localhost:3000. Sin el perfil `app`, `docker compose up -d` inicia solo PostgreSQL y Redis.
+
 ---
 
 ## 13. Variables de entorno

@@ -32,9 +32,10 @@ Stack and folder layout: README §11 and §12.
 - `docker compose up -d`: PostgreSQL and Redis. If host port 5432 is taken, set `POSTGRES_PORT` in `.env` and match it in `DATABASE_URL`.
 - `npm run migrate`: apply pending database migrations to `DATABASE_URL`. The image runs them with `node backend/dist/migrate.js`.
 - `npm run dev -w backend`: backend with reload, reads `.env`.
-- `npm run dev -w frontend`: Vite dev server. It uses the in-memory mock API unless `VITE_API_URL` points at a backend, e.g. `VITE_API_URL=http://localhost:3000 npm run dev -w frontend`.
+- `npm run dev -w frontend`: Vite dev server at http://127.0.0.1:5173. It uses the in-memory mock API unless `VITE_API_URL` points at a backend, e.g. `VITE_API_URL=http://localhost:3000 npm run dev -w frontend`.
 - `docker build -t casino-cloud .`: the backend image; `PROCESS_ROLE` picks `api` or `worker`.
-- `docker compose --profile app up --build`: whole stack in containers.
+- `docker build -f frontend/Dockerfile -t casino-cloud-web .`: the frontend image (nginx); the build context is the repo root.
+- `docker compose --profile app up --build`: whole stack in containers, with the portal at http://localhost:8080 and the API at http://localhost:3000.
 
 CI runs lint, typecheck and test on every PR.
 
