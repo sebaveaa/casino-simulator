@@ -69,7 +69,10 @@ Forecast: about 900 authored changed lines. Strategy: `single-pr`, by explicit u
 - Issue #21 created; branch `feat/21-arcade-identity` created from 0bea633.
 - T1 done: Arcade tokens, Fontsource fonts (`@fontsource-variable/bricolage-grotesque` 5.3.0, `@fontsource/space-mono` 5.3.0), shared classes, focus ring, reduced motion. Checks: lint, typecheck, test (15 passed), `build -w frontend` all pass. Commit `3c9d792`. Review skipped: user left candidate unreviewed.
 - T2 done: shell header and footer restyled, `useBalance` hook extracted, `Shell.test.tsx` added. Checks: lint, typecheck, test (18 passed), `build -w frontend` all pass. Commit `06bd0a6`. Review skipped: user left candidate unreviewed.
-- T3 done: lobby hero, round game buttons, Today's pick banner; `LobbyPage.test.tsx` added, App test updated. Checks: lint, typecheck, test (22 frontend tests passed), `build -w frontend` all pass. Commit hash reported by the writer. Review skipped: user left candidate unreviewed.
+- T3 done: lobby hero, round game buttons, Today's pick banner; `LobbyPage.test.tsx` added, App test updated. Checks: lint, typecheck, test (22 frontend tests passed), `build -w frontend` all pass. Commit `412e5eb`. Review skipped: user left candidate unreviewed.
+- Delivery switched to a single PR by user choice (d9d5afb).
+- Follow-up on T1: the default Fontsource import carries only the weight axis; `main.tsx` now loads `opsz.css` (weight plus optical size, 12–96, as in the design; latin file 77 kB instead of 41 kB). Parent checks: lint clean (101 files), typecheck clean, `npm test` 149 passed (shared 57, backend 70, frontend 22), `build -w frontend` bundles the opsz woff2 files.
+- Not verified visually: the 360px layout and the rendered fonts were checked structurally only.
 
 ## Next step
 
