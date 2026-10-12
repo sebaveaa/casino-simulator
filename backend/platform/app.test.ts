@@ -2,6 +2,7 @@ import { healthResponseSchema } from "@casino/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Db } from "../db/database";
 import { type AppDeps, buildApp } from "./app";
+import { createLogger } from "./logger";
 import { stubServices } from "./services";
 
 const config = { appEnv: "production" as const, allowedOrigins: ["http://localhost:5173"] };
@@ -47,6 +48,30 @@ describe("GET /health", () => {
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(503);
     expect(healthResponseSchema.parse(res.json()).checks).toEqual({ postgres: false, redis: true });
+  });
+});
+
+describe("logger", () => {
+  it("logs through the pino logger it is given", async () => {
+    const lines: string[] = [];
+    const logger = createLogger(config, { write: (line: string) => void lines.push(line) });
+    const app = await buildApp({
+      config,
+      checks: { postgres: pass, redis: pass },
+      db,
+      services: stubServices,
+      logger,
+    });
+    apps.push(app);
+    await app.inject({ method: "GET", url: "/health" });
+    logger.error(new Error("early failure"), "redis error");
+    const entries = lines.map((line) => JSON.parse(line));
+    expect(entries.some((e) => e.msg === "request completed" && e.res.statusCode === 200)).toBe(
+      true,
+    );
+    expect(entries.some((e) => e.msg === "redis error" && e.err.message === "early failure")).toBe(
+      true,
+    );
   });
 });
 

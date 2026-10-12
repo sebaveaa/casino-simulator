@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   amountSchema,
   formatCredits,
@@ -26,6 +26,28 @@ describe("amountSchema", () => {
 
   it("rejects MAX_MONEY + 1", () => {
     expect(ok(amountSchema, (MAX_MONEY + 1n).toString())).toBe(false);
+  });
+});
+
+describe("amount length cap", () => {
+  it("rejects a huge digit string without calling BigInt on it", () => {
+    const huge = "9".repeat(1_000_000);
+    const spy = vi.spyOn(globalThis, "BigInt");
+    try {
+      expect(ok(amountSchema, huge)).toBe(false);
+      expect(ok(signedAmountSchema, huge)).toBe(false);
+      expect(ok(signedAmountSchema, `-${huge}`)).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps the exact bounds and still rejects 20 digits", () => {
+    expect(ok(amountSchema, "9223372036854775807")).toBe(true);
+    expect(ok(signedAmountSchema, "-9223372036854775807")).toBe(true);
+    expect(ok(amountSchema, "92233720368547758070")).toBe(false);
+    expect(ok(signedAmountSchema, "-92233720368547758070")).toBe(false);
   });
 });
 

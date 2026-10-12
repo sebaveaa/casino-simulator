@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { authResponseSchema, loginRequestSchema, registerRequestSchema } from "./auth";
 
 const uuid = "123e4567-e89b-42d3-a456-426614174000";
@@ -18,6 +18,37 @@ describe("registerRequestSchema", () => {
     );
     for (const password of ["1234567", "a".repeat(73)]) {
       expect(registerRequestSchema.safeParse({ email: "a@b.co", password }).success).toBe(false);
+    }
+  });
+});
+
+// Each case is [password, accepted]; the byte count is in the label.
+const byteCases: [string, string, boolean][] = [
+  ["72 ASCII characters", "a".repeat(72), true],
+  ["36 n-tilde (72 bytes)", "ñ".repeat(36), true],
+  ["37 n-tilde (74 bytes)", "ñ".repeat(37), false],
+  ["18 emoji (72 bytes)", "😀".repeat(18), true],
+  ["18 emoji plus a (73 bytes)", `${"😀".repeat(18)}a`, false],
+];
+
+describe("password byte limit", () => {
+  it.each(byteCases)("register: %s", (_label, password, accepted) => {
+    expect(registerRequestSchema.safeParse({ email: "a@b.co", password }).success).toBe(accepted);
+  });
+
+  it.each(byteCases)("login: %s", (_label, password, accepted) => {
+    expect(loginRequestSchema.safeParse({ email: "a@b.co", password }).success).toBe(accepted);
+  });
+
+  it("rejects a huge password without encoding it", () => {
+    const spy = vi.spyOn(TextEncoder.prototype, "encode");
+    try {
+      expect(
+        loginRequestSchema.safeParse({ email: "a@b.co", password: "a".repeat(1_000_000) }).success,
+      ).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
     }
   });
 });

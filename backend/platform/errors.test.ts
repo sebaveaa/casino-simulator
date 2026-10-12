@@ -25,6 +25,7 @@ const routes: ModuleRoutes[] = [
       throw new Error("secret connection string postgres://u:p@host/db");
     });
     app.post("/t/echo", async (request) => request.body);
+    app.post("/t/small", { bodyLimit: 16 }, async (request) => request.body);
   },
 ];
 
@@ -92,6 +93,45 @@ describe("error handlers", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(errorResponseSchema.parse(res.json()).error.code).toBe("invalid_request");
+  });
+
+  it("keeps 400 for malformed JSON with a fixed message", async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/echo",
+      headers: { "content-type": "application/json" },
+      payload: "{not json",
+    });
+    expect(errorResponseSchema.parse(res.json()).error.message).toBe("Malformed request");
+  });
+
+  it("answers 413 for a body over the limit", async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/small",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({ filler: "x".repeat(64) }),
+    });
+    expect(res.statusCode).toBe(413);
+    expect(errorResponseSchema.parse(res.json())).toEqual({
+      error: { code: "invalid_request", message: "Request body too large" },
+    });
+  });
+
+  it("answers 415 for an unsupported content type", async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/echo",
+      headers: { "content-type": "application/x-unknown" },
+      payload: "data",
+    });
+    expect(res.statusCode).toBe(415);
+    expect(errorResponseSchema.parse(res.json())).toEqual({
+      error: { code: "invalid_request", message: "Unsupported content type" },
+    });
   });
 
   it("hides the message of an unexpected error", async () => {

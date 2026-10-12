@@ -108,14 +108,19 @@ Strategy: `ask-on-risk`. Chain strategy: `stacked-to-main`, from the issue note 
 
 ## Advisory findings (non-blocking, open)
 
-Contract fixes worth doing before #9–#12 build on them:
+Fixed on `fix/8-review-fixes` (`odd/tasks/8-review-fixes.md`):
 
-- Amount schemas: cap the digit string length (`.max(20)`) before `BigInt` runs, so huge inputs are rejected cheaply (`shared/src/money.ts`).
-- Password limit: `max(72)` counts UTF-16 code units, not the UTF-8 bytes bcrypt truncates at; check the byte length and share one constant between register and login (`shared/src/api/auth.ts`).
+- Amount schemas: length cap of 20 before `BigInt` runs (ebe9205).
+- Password limit: 72 UTF-8 bytes at register and login (ebe9205).
+- `main.ts`: the logger exists before the pool and Redis clients, so an early client error is logged (e48cbdd).
+- Auth guard: only `InvalidTokenError` answers 401; other errors reach the error handler, which logs them (48565a9).
+- Error handler: Fastify's 4xx errors keep their status, so 413 and 415 are no longer 400 (c3feb6f).
+
+Contract fixes still open:
+
 - `Rng.int(max)`: define behavior for invalid `max` and exhausted outcome bits (`shared/src/rng.ts`).
-- `main.ts`: the pool and Redis error callbacks read `app` before `buildApp` resolves; an early client error would throw instead of logging.
-- Auth guard: log or rethrow infrastructure errors from `tokens.verify` instead of answering 401; accept the `Bearer` scheme case-insensitively.
-- Error handler: keep Fastify's original 4xx status (413, 415) instead of collapsing to 400; `parseWith` messages should not echo Zod messages that can include input values.
+- Auth guard: accept the `Bearer` scheme case-insensitively.
+- `parseWith` messages should not echo Zod messages that can include input values.
 - `scopedKey` purpose as a string-literal union.
 
 Tests and hardening:
@@ -128,4 +133,4 @@ Tests and hardening:
 
 ## Next step
 
-Push the four slices and open the stacked PRs (approved by the user). Then decide which advisory findings to fix before teammates start.
+Stacked PRs #16–#19 are open with CI green; merge them in order. Five advisory findings are fixed on `fix/8-review-fixes`; the rest stay open.

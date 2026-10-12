@@ -1,6 +1,7 @@
 import { createDatabase } from "./db/database";
 import { buildApp } from "./platform/app";
 import { type Config, loadConfig } from "./platform/config";
+import { createLogger } from "./platform/logger";
 import { createPostgresPool, pingPostgres } from "./platform/postgres";
 import { createRedisClient, pingRedis } from "./platform/redis";
 import { run, type Stoppable } from "./platform/run";
@@ -8,13 +9,14 @@ import { stubServices } from "./platform/services";
 import { startWorker } from "./worker/main";
 
 async function startApi(config: Config): Promise<Stoppable> {
-  // The clients log through the app, which needs them for its health checks and database: the
-  // handlers only run after `app` is assigned, so they reference it lazily.
-  const pool = createPostgresPool(config, (error) => app.log.error(error, "postgres pool error"));
-  const redis = createRedisClient(config, (error) => app.log.error(error, "redis error"));
+  // The logger comes first: the clients can report an error before `buildApp` resolves.
+  const logger = createLogger(config);
+  const pool = createPostgresPool(config, (error) => logger.error(error, "postgres pool error"));
+  const redis = createRedisClient(config, (error) => logger.error(error, "redis error"));
   const db = createDatabase(pool);
   const app = await buildApp({
     config,
+    logger,
     checks: { postgres: () => pingPostgres(pool), redis: () => pingRedis(redis) },
     db,
     services: stubServices,
