@@ -1,8 +1,9 @@
 import { type createBrowserRouter, RouterProvider } from "react-router";
 
 import { type ApiClient, ApiProvider } from "./api";
+import { BalanceProvider } from "./app/useBalance";
 
-/** Root component: API client for the screens plus the router. */
+/** Root component: API client and the shared balance for the screens, plus the router. */
 export function App({
   client,
   router,
@@ -12,7 +13,9 @@ export function App({
 }) {
   return (
     <ApiProvider client={client}>
-      <RouterProvider router={router} />
+      <BalanceProvider>
+        <RouterProvider router={router} />
+      </BalanceProvider>
     </ApiProvider>
   );
 }

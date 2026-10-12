@@ -35,6 +35,8 @@ Out of scope: the game screens, a "How to bet" page, the auth, wallet and roulet
   Route: delegated, same writer.
 - [x] T3 Lobby: centered hero, round game buttons with Play!/Soon! stickers, "Today's pick" banner with the balance; responsive to 360px; tests.
   Route: delegated, same writer.
+- [x] T4 Review follow-up, accepted by the user: one shared balance request for the header chip and the lobby bubble; tests for the loading and failure states; tighten the App balance assertion.
+  Route: delegated. Writer trigger: the hook, its provider wiring and the tests are 2+ non-trivial files.
 
 ## Acceptance criteria
 
@@ -77,7 +79,8 @@ Forecast: about 900 authored changed lines. Strategy: `single-pr`, by explicit u
   - R3-dup-balance-fetch (warning): the header chip and the lobby bubble each call `useBalance`, so the lobby sends two balance requests and can show two different values if one fails.
   - R3-balance-failure-untested (suggestion): no test covers the `…` loading and `--` failure states of `useBalance`.
   - R3-app-balance-assertion-weakened (suggestion): the App balance test only checks that the amount appears somewhere.
+- T4 done: `BalanceProvider` in `App.tsx` (inside `ApiProvider`, around the router) owns the single `getBalance()` request; `useBalance` reads it and throws outside the provider. Tests cover one request, `…`, `--`, and the outside-provider error; the App assertion now needs the amount in the header and in the pick bubble. Checks: lint, typecheck, test (26 frontend tests passed), `build -w frontend` all pass. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-Decide whether to fix R3-dup-balance-fetch before the PR, then open the single PR (see Delivery).
+T4, then open the single PR (see Delivery).

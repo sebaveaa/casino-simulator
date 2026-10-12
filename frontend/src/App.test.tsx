@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { App } from "./App";
@@ -24,7 +24,10 @@ describe("App", () => {
 
   it("shows the balance returned by the API", async () => {
     renderAt("/");
-    expect((await screen.findAllByText("1,000.00")).length).toBeGreaterThan(0);
+    const header = screen.getByRole("banner");
+    const pick = screen.getByRole("region", { name: "Spin the wheel" });
+    expect(await within(header).findByText("1,000.00")).toBeTruthy();
+    expect(await within(pick).findByText("1,000.00")).toBeTruthy();
   });
 
   it("routes to the wallet page", async () => {
