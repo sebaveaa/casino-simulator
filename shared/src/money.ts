@@ -12,8 +12,13 @@ export const MAX_MONEY: Money = 9223372036854775807n;
 const unsignedPattern = /^(0|[1-9]\d*)$/;
 const signedPattern = /^(0|-?[1-9]\d*)$/;
 
-// Zod 4 runs refinements even after a failed regex, so guard against non-numeric input.
+/** Longest valid amount string: the 19 digits of `MAX_MONEY` plus a sign. */
+const MAX_AMOUNT_LENGTH = 20;
+
+// Zod 4 runs refinements even after a failed length or regex check, so this guard
+// skips non-numeric and over-long input before `BigInt` can spend time on it.
 function absWithinBounds(value: string): boolean {
+  if (value.length > MAX_AMOUNT_LENGTH) return true;
   if (!signedPattern.test(value)) return true;
   const abs = value.startsWith("-") ? value.slice(1) : value;
   return BigInt(abs) <= MAX_MONEY;
@@ -26,6 +31,7 @@ function absWithinBounds(value: string): boolean {
  */
 export const amountSchema = z
   .string()
+  .max(MAX_AMOUNT_LENGTH, "Amount is too long")
   .regex(unsignedPattern, "Expected a non-negative integer string without leading zeros")
   .refine(absWithinBounds, "Amount exceeds the maximum");
 
@@ -38,6 +44,7 @@ export const positiveAmountSchema = amountSchema.refine(
 /** Signed amount (e.g. a net wallet change): `amountSchema` plus an optional `-` on non-zero values. */
 export const signedAmountSchema = z
   .string()
+  .max(MAX_AMOUNT_LENGTH, "Amount is too long")
   .regex(signedPattern, "Expected an integer string without leading zeros")
   .refine(absWithinBounds, "Amount exceeds the maximum");
 

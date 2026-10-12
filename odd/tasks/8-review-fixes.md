@@ -34,7 +34,7 @@ Out of scope: the other 26 advisory findings; the worker's logging; decimal inpu
 
 ## Tasks
 
-- [ ] T1 Shared: amount length cap; password byte limit for register and login; tests.
+- [x] T1 Shared: amount length cap; password byte limit for register and login; tests.
   Route: delegated. Writer trigger: 2+ non-trivial files across T1–T4 (one writer).
 - [ ] T2 Backend: create the logger before the pg and Redis clients; tests.
   Route: delegated, same writer.
@@ -73,6 +73,7 @@ Forecast: about 250 authored changed lines, under the 400-line budget. Strategy:
 ## Progress
 
 - Branch `fix/8-review-fixes` created from e0f4be3.
+- T1 done: lint clean, typecheck clean, npm test passed (shared 57, backend 65, frontend 15). The 1,000,000-digit amount is rejected with `BigInt` never called; the bounds and 20-digit cases behave as specified; passwords of 72 bytes pass and 73 or 74 bytes fail at register and login. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
