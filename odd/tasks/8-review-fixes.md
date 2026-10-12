@@ -2,7 +2,7 @@
 
 Issue: #8 (advisory findings from the core contract reviews, recorded in `odd/tasks/8-core-contracts.md`).
 Branch: `fix/8-review-fixes`, stacked on `feat/8-core-04-frontend` (PR #19).
-Status: in review (PR stacked on #19)
+Status: in review (PR #20, stacked on #19)
 
 ## Objective
 
@@ -81,6 +81,8 @@ Forecast: about 250 authored changed lines, under the 400-line budget. Strategy:
 - Commits: T1 ebe9205, T2 e48cbdd, T3 48565a9, T4 c3feb6f. Parent spot check on c3feb6f: lint clean (96 files), typecheck clean, `npm test` 142 passed (shared 57, backend 70, frontend 15). The structural readback of the diff matches the design decisions. `shared/tsconfig.json` gains `lib: DOM` for `TextEncoder`; #11 needs it for Web Crypto anyway.
 - `8-core-contracts.md` marks the five findings fixed.
 
+- PR #20 opened against `feat/8-core-04-frontend`; CI green (Checks, Conventional Commit title).
+
 ## Next step
 
-Push the branch and open the PR stacked on #19.
+Merge #20 after #16–#19, retargeting it to `main` before `feat/8-core-04-frontend` is deleted.
