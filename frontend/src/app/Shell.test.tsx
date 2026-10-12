@@ -20,7 +20,7 @@ describe("Shell", () => {
 
   it("marks the current page in the main navigation", () => {
     renderAt("/wallet");
-    const nav = screen.getByRole("navigation", { name: "Main" });
+    const nav = screen.getByRole("navigation", { name: "Principal" });
     const lobby = nav.querySelector('a[href="/"]');
     const wallet = nav.querySelector('a[href="/wallet"]');
     expect(wallet?.getAttribute("aria-current")).toBe("page");
@@ -31,10 +31,10 @@ describe("Shell", () => {
     renderAt("/");
     const header = screen.getByRole("banner");
     expect(await within(header).findByText("1,000.00")).toBeTruthy();
-    expect(within(header).getByText("credits")).toBeTruthy();
-    expect(within(header).getByRole("link", { name: "Log in" }).getAttribute("href")).toBe(
+    expect(within(header).getByText("créditos")).toBeTruthy();
+    expect(within(header).getByRole("link", { name: "Iniciar sesión" }).getAttribute("href")).toBe(
       "/login",
     );
-    expect(screen.getByText("Fictitious credits only. No real money is involved.")).toBeTruthy();
+    expect(screen.getByText("Solo créditos ficticios. No hay dinero real en juego.")).toBeTruthy();
   });
 });

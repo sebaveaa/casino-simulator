@@ -13,7 +13,7 @@ function renderLobby(client: ApiClient) {
   render(<App client={client} router={router} />);
   return {
     header: screen.getByRole("banner"),
-    pick: screen.getByRole("region", { name: "Spin the wheel" }),
+    pick: screen.getByRole("region", { name: "Gira la ruleta" }),
   };
 }
 

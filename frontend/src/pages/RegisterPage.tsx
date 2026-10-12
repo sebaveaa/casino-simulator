@@ -2,8 +2,8 @@
 export function RegisterPage() {
   return (
     <section>
-      <h1>Create an account</h1>
-      <p>Coming soon.</p>
+      <h1>Crear una cuenta</h1>
+      <p>Próximamente.</p>
     </section>
   );
 }

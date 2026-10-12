@@ -4,9 +4,9 @@ import { Link } from "react-router";
 export function NotFoundPage() {
   return (
     <section>
-      <h1>Page not found</h1>
+      <h1>Página no encontrada</h1>
       <p>
-        That page does not exist. <Link to="/">Back to the lobby</Link>
+        Esa página no existe. <Link to="/">Volver al inicio</Link>
       </p>
     </section>
   );

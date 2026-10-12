@@ -2,8 +2,8 @@
 export function LoginPage() {
   return (
     <section>
-      <h1>Log in</h1>
-      <p>Coming soon.</p>
+      <h1>Iniciar sesión</h1>
+      <p>Próximamente.</p>
     </section>
   );
 }

@@ -2,8 +2,8 @@
 export function WalletPage() {
   return (
     <section>
-      <h1>Wallet</h1>
-      <p>Coming soon.</p>
+      <h1>Billetera</h1>
+      <p>Próximamente.</p>
     </section>
   );
 }
