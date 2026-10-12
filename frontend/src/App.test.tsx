@@ -16,15 +16,15 @@ describe("App", () => {
   it("shows the brand and the lobby with the game catalog", async () => {
     renderAt("/");
     expect(screen.getByRole("link", { name: "casino cloud" })).toBeTruthy();
-    expect(await screen.findByRole("heading", { name: "Lobby" })).toBeTruthy();
-    const roulette = screen.getByRole("link", { name: /Roulette/ });
+    expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
+    const roulette = screen.getByRole("link", { name: /Play!.*Roulette/ });
     expect(roulette.getAttribute("href")).toBe("/games/roulette");
-    expect(screen.getAllByText("Coming soon")).toHaveLength(3);
+    expect(screen.getAllByText("Soon!")).toHaveLength(3);
   });
 
   it("shows the balance returned by the API", async () => {
     renderAt("/");
-    expect(await screen.findByText("1,000.00")).toBeTruthy();
+    expect((await screen.findAllByText("1,000.00")).length).toBeGreaterThan(0);
   });
 
   it("routes to the wallet page", async () => {

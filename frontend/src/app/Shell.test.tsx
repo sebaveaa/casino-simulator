@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -29,9 +29,12 @@ describe("Shell", () => {
 
   it("shows the balance, the log in action and the footer notice", async () => {
     renderAt("/");
-    expect(await screen.findByText("1,000.00")).toBeTruthy();
-    expect(screen.getByText("credits")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login");
+    const header = screen.getByRole("banner");
+    expect(await within(header).findByText("1,000.00")).toBeTruthy();
+    expect(within(header).getByText("credits")).toBeTruthy();
+    expect(within(header).getByRole("link", { name: "Log in" }).getAttribute("href")).toBe(
+      "/login",
+    );
     expect(screen.getByText("Fictitious credits only. No real money is involved.")).toBeTruthy();
   });
 });
