@@ -33,6 +33,8 @@ Out of scope: the production deploy (#13), a CI job that builds images, connecti
   Route: delegated. Writer trigger: T1–T2 touch 2+ non-trivial files (one writer).
 - [x] T2 Compose `web` service, `ALLOWED_ORIGINS`, and docs; `docker compose --profile app up --build` serves the portal; `docker compose up -d` still starts only PostgreSQL and Redis.
   Route: delegated, same writer.
+- [x] T3 Local dev server reachable: the user saw "localhost refused" with `npm run dev -w frontend`. Node resolves `localhost` to `::1` first, so Vite listened on `[::1]` only (seen in `netstat`); bind `127.0.0.1` and allow that origin in Compose.
+  Route: inline (one mechanical config line plus one Compose value).
 
 ## Acceptance criteria
 
@@ -68,6 +70,9 @@ Forecast: about 120 authored changed lines. Strategy: `single-pr` (user preferen
 - Issue #23 created; branch `feat/23-frontend-container` created from 05c2067.
 - T1 done: image `nginxinc/nginx-unprivileged:1.28.0-alpine` builds from the root context; in-container smoke test: `/`, `/wallet`, `/index.html` return 200 with the app shell and `no-cache`, hashed `/assets/*.js` returns `public, max-age=31536000, immutable`; backend image still builds; lint, typecheck, test (26) pass. Review: skipped, user left candidate unreviewed.
 - T2 done: `docker compose config --services` lists postgres, redis; with `--profile app` also web, app. `up -d --build` ran all four services (postgres, redis healthy; host port 5432 was taken, so `POSTGRES_PORT=5433` was set in the shell only); web served `index.html` from inside the container; stack removed with `down` (volumes kept). `npm run lint` passes. README had no run section, so a short paragraph was added after the §12 tree. Review: skipped, user left candidate unreviewed.
+
+- T3 done: `frontend/vite.config.ts` sets `server.host: "127.0.0.1"`; `netstat` shows `127.0.0.1:5173` listening and Vite prints http://127.0.0.1:5173. `ALLOWED_ORIGINS` in Compose adds `http://127.0.0.1:5173`; `AGENTS.md` names the dev URL. Checks: lint, typecheck, frontend tests (26) pass. `.env.example` could not be read from this session (permission settings), so its `ALLOWED_ORIGINS` still needs `http://127.0.0.1:5173` before the portal talks to a local API (#9, #10). Review: skipped, user left candidate unreviewed.
+- Host port 5432 on the user's machine is held by a native PostgreSQL Windows service (`postgres.exe`), so Compose needs `POSTGRES_PORT` (for example 5433) in `.env`, as `AGENTS.md` describes.
 
 ## Next step
 
