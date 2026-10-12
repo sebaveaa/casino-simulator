@@ -1,25 +1,31 @@
+import { createDatabase } from "./db/database";
 import { buildApp } from "./platform/app";
 import { type Config, loadConfig } from "./platform/config";
 import { createPostgresPool, pingPostgres } from "./platform/postgres";
 import { createRedisClient, pingRedis } from "./platform/redis";
 import { run, type Stoppable } from "./platform/run";
+import { stubServices } from "./platform/services";
 import { startWorker } from "./worker/main";
 
 async function startApi(config: Config): Promise<Stoppable> {
-  // The checks only run once the server listens, so they may reference the clients below,
-  // which in turn log through the app's logger.
+  // The clients log through the app, which needs them for its health checks and database: the
+  // handlers only run after `app` is assigned, so they reference it lazily.
+  const pool = createPostgresPool(config, (error) => app.log.error(error, "postgres pool error"));
+  const redis = createRedisClient(config, (error) => app.log.error(error, "redis error"));
+  const db = createDatabase(pool);
   const app = await buildApp({
     config,
     checks: { postgres: () => pingPostgres(pool), redis: () => pingRedis(redis) },
+    db,
+    services: stubServices,
   });
-  const pool = createPostgresPool(config, (error) => app.log.error(error, "postgres pool error"));
-  const redis = createRedisClient(config, (error) => app.log.error(error, "redis error"));
   await app.listen({ host: "0.0.0.0", port: config.port });
   return {
     stop: async () => {
       await app.close();
       redis.disconnect();
-      await pool.end();
+      // Kysely ends the pool; ending it again throws "Called end on pool more than once".
+      await db.destroy();
     },
   };
 }

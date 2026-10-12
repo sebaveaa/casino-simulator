@@ -1,7 +1,12 @@
 import type { HealthResponse } from "@casino/shared";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
+import { createAuthGuard } from "../auth/guard";
+import type { Db } from "../db/database";
 import type { Config } from "./config";
+import { registerErrorHandlers } from "./errors";
+import { type ModuleRoutes, moduleRoutes } from "./routes";
+import type { Services } from "./services";
 
 export type HealthCheck = () => Promise<boolean>;
 
@@ -11,6 +16,10 @@ export type AppDeps = {
     postgres: HealthCheck;
     redis: HealthCheck;
   };
+  db: Db;
+  services: Services;
+  /** Module routes to register; defaults to `moduleRoutes`. Tests inject their own. */
+  routes?: ModuleRoutes[];
 };
 
 /** A check that throws counts as failed. */
@@ -22,9 +31,16 @@ async function settle(check: HealthCheck): Promise<boolean> {
   }
 }
 
-export async function buildApp({ config, checks }: AppDeps): Promise<FastifyInstance> {
+export async function buildApp({
+  config,
+  checks,
+  db,
+  services,
+  routes = moduleRoutes,
+}: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: config.appEnv === "development" ? "debug" : "info" } });
 
+  registerErrorHandlers(app);
   await app.register(cors, { origin: config.allowedOrigins });
 
   app.get("/health", async (_request, reply) => {
@@ -36,6 +52,11 @@ export async function buildApp({ config, checks }: AppDeps): Promise<FastifyInst
     };
     return reply.code(healthy ? 200 : 503).send(body);
   });
+
+  const requireAuth = createAuthGuard(services.tokens);
+  for (const register of routes) {
+    await register(app, { db, services, requireAuth });
+  }
 
   return app;
 }
