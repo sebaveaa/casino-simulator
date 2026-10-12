@@ -2,7 +2,7 @@
 
 Issue: #23 Infra: containerize the frontend and add it to Docker Compose.
 Branch: `feat/23-frontend-container`, from `main` at 05c2067.
-Status: in progress
+Status: implemented, PR pending
 
 ## Objective
 
@@ -31,7 +31,7 @@ Out of scope: the production deploy (#13), a CI job that builds images, connecti
 
 - [x] T1 Frontend image: Dockerfile, nginx config with the SPA fallback and cache headers, per-Dockerfile ignore file; the image builds and serves `/` and `/wallet`.
   Route: delegated. Writer trigger: T1–T2 touch 2+ non-trivial files (one writer).
-- [ ] T2 Compose `web` service, `ALLOWED_ORIGINS`, and docs; `docker compose --profile app up --build` serves the portal; `docker compose up -d` still starts only PostgreSQL and Redis.
+- [x] T2 Compose `web` service, `ALLOWED_ORIGINS`, and docs; `docker compose --profile app up --build` serves the portal; `docker compose up -d` still starts only PostgreSQL and Redis.
   Route: delegated, same writer.
 
 ## Acceptance criteria
@@ -67,7 +67,8 @@ Forecast: about 120 authored changed lines. Strategy: `single-pr` (user preferen
 
 - Issue #23 created; branch `feat/23-frontend-container` created from 05c2067.
 - T1 done: image `nginxinc/nginx-unprivileged:1.28.0-alpine` builds from the root context; in-container smoke test: `/`, `/wallet`, `/index.html` return 200 with the app shell and `no-cache`, hashed `/assets/*.js` returns `public, max-age=31536000, immutable`; backend image still builds; lint, typecheck, test (26) pass. Review: skipped, user left candidate unreviewed.
+- T2 done: `docker compose config --services` lists postgres, redis; with `--profile app` also web, app. `up -d --build` ran all four services (postgres, redis healthy; host port 5432 was taken, so `POSTGRES_PORT=5433` was set in the shell only); web served `index.html` from inside the container; stack removed with `down` (volumes kept). `npm run lint` passes. README had no run section, so a short paragraph was added after the §12 tree. Review: skipped, user left candidate unreviewed.
 
 ## Next step
 
-T2.
+Open the PR (`Closes #23`).

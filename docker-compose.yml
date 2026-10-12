@@ -42,10 +42,23 @@ services:
       JWT_SECRET: local-dev-only-not-a-real-secret-change-me
       APP_ENV: development
       PORT: "3000"
-      ALLOWED_ORIGINS: http://localhost:5173
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
       PROCESS_ROLE: api
     ports:
       - "127.0.0.1:3000:3000"
+
+  # Web portal: http://localhost:8080.
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Empty selects the in-memory mock API until the backend routes land (#9, #10, #12).
+        # The browser calls the API from the host, so a real value is http://localhost:3000.
+        VITE_API_URL: ""
+    ports:
+      - "127.0.0.1:8080:8080"
 
 volumes:
   postgres-data:
