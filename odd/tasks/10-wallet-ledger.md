@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/10
 Branch: feat/10-wallet (feature base); slices feat/10-wallet-0N-*
-Status: slices complete, PRs pending
+Status: slices complete, final review approved, PRs open
 
 ## Objective
 
@@ -68,9 +68,12 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (user choice). Slice
 
 - Native review of slices 1-2: lineage `review-f9f42597570f236a`, high risk, 4 lenses, approved and acknowledged (authority burned), no correction.
 - T3 done (delegated writer). Checks: format/lint/typecheck clean; `npm test` 82 passed and 12 skipped (backend, no `TEST_DATABASE_URL`), 45 passed (frontend); `npm run build -w frontend` clean. Diff: 7 files, +607/-14.
+- Slice 3 native review: medium risk, declined by the user for this candidate.
+- Final native review of the whole feature (`f296780..a8cb6d3`, 19 files, 1544 lines): lineage `review-43bd4a5ee57a2bc3`, high risk, 4 lenses, approved and acknowledged (authority burned), no correction.
 
 ## Advisory findings (non-blocking, open)
 
+- R1 WARNING: deposits have no cap below `MAX_MONEY` (int64 max), so two huge deposits overflow the shared issuance balance and every later deposit fails with 500; reachable once #9 lands. Fix with a per-deposit cap (`backend/payments/simulated-payment-provider.ts`).
 - R3 WARNING: a deposit retry with the same Idempotency-Key but a different amount returns the original transaction instead of rejecting with 409/422 (`backend/payments/simulated-payment-provider.ts`).
 - R3 WARNING: a deposit retry returns the current balance, not the original response's balance (`backend/wallet/routes.ts`).
 - R4 WARNING: every transfer locks and updates the single house/issuance wallet row, serializing all bets and deposits system-wide (`backend/wallet/postgres-wallet-service.ts`).
@@ -78,7 +81,9 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (user choice). Slice
 - R3 SUGGESTION: no route test for a missing wallet.
 - R2 SUGGESTION: cursor `id` is the ledger entry id, name it so; misleading transaction count in an integration test.
 - R4 SUGGESTION: migration 0002 builds the index without CONCURRENTLY.
+- R3/R4 SUGGESTION: wallet page "load more" can race a history reload and append stale rows; balance refresh can overwrite a newer value.
+- R2 SUGGESTION: duplicated balance fetch in `useBalance.tsx`; name the player-only overdraft rule.
 
 ## Next step
 
-Push the three slices and open PRs into feat/10-wallet; decide on the advisory warnings before the final PR to main.
+Merge the slice PRs into `feat/10-wallet` in order, then open the final PR to `main` (Closes #10). Decide on the advisory warnings (R1 deposit cap first) before or right after #9.
