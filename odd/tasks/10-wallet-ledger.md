@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/10
 Branch: feat/10-wallet (feature base); slices feat/10-wallet-0N-*
-Status: in progress
+Status: slices complete, PRs pending
 
 ## Objective
 
@@ -31,7 +31,7 @@ Out of scope: withdrawals, deposit limits (only the existing `MAX_MONEY` schema 
 
 - [x] T1 `PostgresWalletService` (all six methods) and `SimulatedPaymentProvider`, migration `0002` index, integration tests (zero-sum entries, concurrent debits without double spend, idempotent deposit retry, insufficient balance, history paging), CI Postgres service, README/AGENTS test command. Route: delegated (writer trigger: 4+ non-trivial files).
 - [x] T2 Wallet routes in `moduleRoutes`, wiring of real wallet and payments in `main.ts`, route tests through `app.inject` with a fake `TokenService` (balance, deposit with idempotent retry, missing key 400, history paging, 401). Route: delegated (writer trigger: 3+ non-trivial files).
-- [ ] T3 Wallet page (balance, deposit form, history with "load more"), `BalanceProvider.refresh()`, Spanish UI copy, component tests against the mock API. Route: delegated (writer trigger: 3+ non-trivial files).
+- [x] T3 Wallet page (balance, deposit form, history with "load more"), `BalanceProvider.refresh()`, Spanish UI copy, component tests against the mock API. Route: delegated (writer trigger: 3+ non-trivial files).
 
 ## Acceptance criteria
 
@@ -66,6 +66,19 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (user choice). Slice
 - T1 done (delegated writer, route: delegated). Commit: see `git log` on `feat/10-wallet-01-ledger`. Checks: migrate twice (second no-op), lint, typecheck, build clean; `npm test` 81 passed with `TEST_DATABASE_URL` (11 integration tests ran), 70 passed and 11 skipped without. Cursor carries `created_at` as UTC ISO with microseconds so keyset paging is exact.
 - T2 done (delegated writer). Checks: format/lint/typecheck/build clean; `npm test` 94 passed with `TEST_DATABASE_URL` (12 gated tests ran, incl. 1 route e2e), 82 passed and 12 skipped without. Deposit answers 201 (a retry returns the same body). Diff: 4 files, +358/-2 (routes.ts 58, routes.test.ts 291). Guarded routes still answer 501 at runtime until #9.
 
+- Native review of slices 1-2: lineage `review-f9f42597570f236a`, high risk, 4 lenses, approved and acknowledged (authority burned), no correction.
+- T3 done (delegated writer). Checks: format/lint/typecheck clean; `npm test` 82 passed and 12 skipped (backend, no `TEST_DATABASE_URL`), 45 passed (frontend); `npm run build -w frontend` clean. Diff: 7 files, +607/-14.
+
+## Advisory findings (non-blocking, open)
+
+- R3 WARNING: a deposit retry with the same Idempotency-Key but a different amount returns the original transaction instead of rejecting with 409/422 (`backend/payments/simulated-payment-provider.ts`).
+- R3 WARNING: a deposit retry returns the current balance, not the original response's balance (`backend/wallet/routes.ts`).
+- R4 WARNING: every transfer locks and updates the single house/issuance wallet row, serializing all bets and deposits system-wide (`backend/wallet/postgres-wallet-service.ts`).
+- R3 SUGGESTION: a cursor with an out-of-range timestamp yields 500 instead of 400.
+- R3 SUGGESTION: no route test for a missing wallet.
+- R2 SUGGESTION: cursor `id` is the ledger entry id, name it so; misleading transaction count in an integration test.
+- R4 SUGGESTION: migration 0002 builds the index without CONCURRENTLY.
+
 ## Next step
 
-T3.
+Push the three slices and open PRs into feat/10-wallet; decide on the advisory warnings before the final PR to main.

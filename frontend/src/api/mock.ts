@@ -81,7 +81,12 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
     ): Promise<TransactionHistoryResponse> {
       await sleep(delayMs);
       const limit = Number(query.limit ?? 20);
-      return { items: [...transactions].reverse().slice(0, limit), nextCursor: null };
+      const newestFirst = [...transactions].reverse();
+      const after = query.cursor ? newestFirst.findIndex((t) => t.id === query.cursor) : -1;
+      const items = newestFirst.slice(after + 1, after + 1 + limit);
+      const last = items.at(-1);
+      const hasMore = last !== undefined && after + 1 + limit < newestFirst.length;
+      return { items, nextCursor: hasMore ? last.id : null };
     },
     async placeRouletteBet(
       body: RouletteBetRequest,
