@@ -1,4 +1,5 @@
 import { createDatabase } from "./db/database";
+import { createSimulatedPaymentProvider } from "./payments/simulated-payment-provider";
 import { buildApp } from "./platform/app";
 import { type Config, loadConfig } from "./platform/config";
 import { createLogger } from "./platform/logger";
@@ -6,6 +7,7 @@ import { createPostgresPool, pingPostgres } from "./platform/postgres";
 import { createRedisClient, pingRedis } from "./platform/redis";
 import { run, type Stoppable } from "./platform/run";
 import { stubServices } from "./platform/services";
+import { postgresWalletService } from "./wallet/postgres-wallet-service";
 import { startWorker } from "./worker/main";
 
 async function startApi(config: Config): Promise<Stoppable> {
@@ -19,7 +21,11 @@ async function startApi(config: Config): Promise<Stoppable> {
     logger,
     checks: { postgres: () => pingPostgres(pool), redis: () => pingRedis(redis) },
     db,
-    services: stubServices,
+    services: {
+      ...stubServices,
+      wallet: postgresWalletService,
+      payments: createSimulatedPaymentProvider(postgresWalletService),
+    },
   });
   await app.listen({ host: "0.0.0.0", port: config.port });
   return {
