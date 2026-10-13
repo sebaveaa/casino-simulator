@@ -28,6 +28,7 @@ Stack and folder layout: README §11 and §12.
 - `npm run format`: Biome check with fixes applied.
 - `npm run typecheck`: `tsc` in every workspace.
 - `npm test`: Vitest in every workspace.
+- `TEST_DATABASE_URL=postgres://casino:casino@127.0.0.1:5432/casino npm test`: also runs the PostgreSQL integration tests (skipped otherwise). Start the database with `docker compose up -d` and run `npm run migrate` first.
 - `cp .env.example .env`: local settings (gitignored).
 - `docker compose up -d`: PostgreSQL and Redis. If host port 5432 is taken, set `POSTGRES_PORT` in `.env` and match it in `DATABASE_URL`.
 - `npm run migrate`: apply pending database migrations to `DATABASE_URL`. The image runs them with `node backend/dist/migrate.js`.
