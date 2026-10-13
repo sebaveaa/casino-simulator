@@ -1,10 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import { type ApiClient, createMockApiClient } from "../api";
+import { type ApiClient, ApiProvider, createMockApiClient } from "../api";
 import { routes } from "./routes";
-import { useBalance } from "./useBalance";
+import { BalanceProvider, useBalance, useRefreshBalance } from "./useBalance";
 
 afterEach(cleanup);
 
@@ -49,6 +49,30 @@ describe("balance", () => {
     const { header, pick } = renderLobby(client);
     expect(await within(header).findByText("--")).toBeTruthy();
     expect(await within(pick).findByText("--")).toBeTruthy();
+  });
+
+  it("refresh re-fetches the balance and updates every consumer", async () => {
+    const client = createMockApiClient();
+    const getBalance = vi.spyOn(client, "getBalance");
+    let refresh: () => Promise<void> = async () => {};
+    function Probe() {
+      refresh = useRefreshBalance();
+      return <output>{useBalance()}</output>;
+    }
+    render(
+      <ApiProvider client={client}>
+        <BalanceProvider>
+          <Probe />
+        </BalanceProvider>
+      </ApiProvider>,
+    );
+    expect(await screen.findByText("1,000.00")).toBeTruthy();
+    await client.deposit({ amount: "500" }, "refresh-key-1");
+    await act(async () => {
+      await refresh();
+    });
+    expect(screen.getByText("1,005.00")).toBeTruthy();
+    expect(getBalance).toHaveBeenCalledTimes(2);
   });
 
   it("throws when used outside a BalanceProvider", () => {
