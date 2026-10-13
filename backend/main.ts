@@ -1,3 +1,4 @@
+import { createJwtTokenService } from "./auth/jwt-token-service";
 import { createDatabase } from "./db/database";
 import { createSimulatedPaymentProvider } from "./payments/simulated-payment-provider";
 import { buildApp } from "./platform/app";
@@ -25,6 +26,7 @@ async function startApi(config: Config): Promise<Stoppable> {
       ...stubServices,
       wallet: postgresWalletService,
       payments: createSimulatedPaymentProvider(postgresWalletService),
+      tokens: createJwtTokenService({ secret: config.jwtSecret }),
     },
   });
   await app.listen({ host: "0.0.0.0", port: config.port });
