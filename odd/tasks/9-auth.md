@@ -1,8 +1,8 @@
 # 9-auth
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/9
-Branch: feat/9-auth (feature base, stacked on `feat/10-wallet-03-page` because #10 is not on `main` yet); slices feat/9-auth-0N-*
-Status: in progress
+Branch: feat/9-auth (feature base, from `main` at 50b879e after #10 merged as #30); slices feat/9-auth-0N-*
+Status: T1 and T2 done, PRs not opened
 
 ## Objective
 
@@ -62,8 +62,16 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #10). Slice
 
 - Planned. Branch `feat/9-auth` created from `feat/10-wallet-03-page` (13e2195).
 - T1 done on `feat/9-auth-01-backend` (commit `9ec6fb6`, route: delegated writer). ~460 authored lines (tests included, lockfile excluded). Checks: format and lint clean; typecheck clean; `npm test` 97 passed, 17 skipped (no database); with `TEST_DATABASE_URL` against compose Postgres (port 5433) 114 passed; `npm run build -w backend` ok. Register returns 201 and logs the user in (`AuthResponse`); login returns 200.
-- T2 done on `feat/9-auth-02-screens` (route: delegated writer). ~1120 authored lines changed (additions plus deletions, tests included, task file excluded roughly 1050), well over the ~350 forecast because the session store, guard, mock auth and their tests are covered together. Checks: format and lint clean; typecheck clean; `npm test` shared+backend 97 passed, 17 skipped (no database), frontend 78 passed; `npm run build -w frontend` ok. Mock API keeps users in memory (409 on duplicate, 401 on bad credentials) and issues unsigned JWT-shaped tokens; the lobby stays public and shows `--` for the balance while logged out.
+- T2 done on `feat/9-auth-02-screens` (route: delegated writer). ~1120 authored lines changed (additions plus deletions, tests included, task file excluded roughly 1050), well over the ~350 forecast because the session store, guard, mock auth and their tests are covered together. Checks: format and lint clean; typecheck clean; `npm test` shared+backend 97 passed, 17 skipped (no database), frontend 78 passed (parent spot check: frontend 78 passed); `npm run build -w frontend` ok. Commit `c5ea630`. Mock API keeps users in memory (409 on duplicate, 401 on bad credentials) and issues unsigned JWT-shaped tokens; the lobby stays public and shows `--` for the balance while logged out.
+- Native review: preflight after T1 (base `main`, so it re-included #10; high risk, 27 files, 2095 lines): declined by the user for that candidate. The decline invocation then refused with `stale_target_identity` because T2 had been committed meanwhile; nothing was recorded. No review of the full #9 feature yet.
+- Rebased onto `main` (50b879e) after #10 merged; its tree matched the old base 13e2195, so no conflicts. Commits now 70d0113 (T1), b07aca6 (T2).
+
+## Advisory notes (open)
+
+- Token lifetime is fixed at 1 h (no env setting); bcrypt cost fixed at 10.
+- Auth route tests run only with `TEST_DATABASE_URL`.
+- Logged-out lobby shows `--` for the balance; the mock wallet is one shared balance; a token that expires mid-session is detected only on the next 401.
 
 ## Next step
 
-Open slice PRs into `feat/9-auth`; final PR to `main` after #10 merges.
+Open slice PRs into `feat/9-auth`, then the final PR to `main` (Closes #9).
