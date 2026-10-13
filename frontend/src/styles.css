@@ -993,3 +993,53 @@ main {
   padding: 0;
   border: 0;
 }
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.auth h1 {
+  margin: 0;
+}
+
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-card label {
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.auth-card .wallet-input {
+  flex: none;
+}
+
+.auth-card .button {
+  align-self: flex-start;
+  justify-content: center;
+}
+
+.auth-switch {
+  margin: 0;
+}
+
+.session-email {
+  max-width: 16rem;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

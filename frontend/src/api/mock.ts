@@ -13,10 +13,11 @@ import {
   type TransactionHistoryResponse,
   toAmount,
 } from "@casino/shared";
-import type { ApiClient } from "./client";
+import { createUnsignedJwt } from "../session/jwt";
+import { type ApiClient, ApiError } from "./client";
 
 const STARTING_BALANCE = 100000n;
-const DEMO_EMAIL = "demo@casino.test";
+const TOKEN_LIFETIME_SECONDS = 3600;
 
 function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
@@ -33,9 +34,16 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
   const deposits = new Map<string, DepositResponse>();
   const bets = new Map<string, RouletteBetResponse>();
 
-  const session = (email: string): AuthResponse => ({
-    token: "mock-token",
-    user: { id: crypto.randomUUID(), email, role: "player" },
+  // email -> account. Passwords are kept in plain text: this is a dev-only stand-in.
+  const users = new Map<string, { id: string; password: string }>();
+
+  const session = (id: string, email: string): AuthResponse => ({
+    token: createUnsignedJwt({
+      sub: id,
+      role: "player",
+      exp: Math.floor(Date.now() / 1000) + TOKEN_LIFETIME_SECONDS,
+    }),
+    user: { id, email, role: "player" },
   });
 
   function record(type: Transaction["type"], amount: bigint, betId: string | null): string {
@@ -53,11 +61,22 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
   return {
     async register(body: RegisterRequest) {
       await sleep(delayMs);
-      return session(body.email);
+      const email = body.email.trim().toLowerCase();
+      if (users.has(email)) {
+        throw new ApiError("conflict", "An account with this email already exists", 409);
+      }
+      const id = crypto.randomUUID();
+      users.set(email, { id, password: body.password });
+      return session(id, email);
     },
     async login(body: LoginRequest) {
       await sleep(delayMs);
-      return session(body.email || DEMO_EMAIL);
+      const email = body.email.trim().toLowerCase();
+      const user = users.get(email);
+      if (!user || user.password !== body.password) {
+        throw new ApiError("unauthorized", "Invalid email or password", 401);
+      }
+      return session(user.id, email);
     },
     async getBalance(): Promise<BalanceResponse> {
       await sleep(delayMs);

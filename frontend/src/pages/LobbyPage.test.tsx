@@ -1,12 +1,20 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "../App";
 import { createMockApiClient } from "../api";
 import { routes } from "../app/routes";
+import { seedSession } from "../test/session";
 import { games } from "./LobbyPage";
 
-afterEach(cleanup);
+beforeEach(() => {
+  seedSession();
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 function renderLobby() {
   const router = createMemoryRouter(routes, { initialEntries: ["/"] });

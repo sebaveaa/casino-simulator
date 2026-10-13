@@ -22,7 +22,7 @@ Out of scope: refresh tokens, logout on the server, password reset, rate limitin
 
 - JWT with `jose` (pure JS, HS256, `sub` = user id, `role` claim, expiry). `verify` maps every `jose` failure to `InvalidTokenError`, so the existing guard answers 401.
 - Passwords hashed with `bcryptjs` (pure JS, no native build in the Alpine image). The issue allows argon2 or bcrypt.
-- Registration inserts the user and creates the player wallet in one PostgreSQL transaction, so a failed wallet never leaves a user without one. A duplicate email or username answers 409.
+- Registration inserts the user and creates the player wallet in one PostgreSQL transaction, so a failed wallet never leaves a user without one. A duplicate email answers 409.
 - Login answers the same 401 for an unknown user and a wrong password (no user enumeration).
 - Bodies validated with the Zod schemas in `shared/src/api/auth.ts`.
 - Frontend keeps the token in `localStorage` (wrapped in try/catch) and sends `Authorization: Bearer`; a 401 clears the session.
@@ -30,7 +30,7 @@ Out of scope: refresh tokens, logout on the server, password reset, rate limitin
 ## Tasks
 
 - [x] T1 Backend: `JwtTokenService`, password hasher, `POST /auth/register` and `POST /auth/login` in `moduleRoutes`, wiring in `main.ts`, `.env.example`/config for `JWT_SECRET`, tests (register, duplicate, login, wrong password, invalid token, expired token, role check). Route: delegated (writer trigger: 3+ non-trivial files).
-- [ ] T2 Frontend: login and register screens calling the API, session provider persisted across reloads, bearer token in the HTTP client, mock API support, route guard, Spanish UI copy, component tests. Route: delegated (writer trigger: 3+ non-trivial files).
+- [x] T2 Frontend: login and register screens calling the API, session provider persisted across reloads, bearer token in the HTTP client, mock API support, route guard, Spanish UI copy, component tests. Route: delegated (writer trigger: 3+ non-trivial files).
 
 ## Acceptance criteria
 
@@ -61,8 +61,9 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #10). Slice
 ## Progress
 
 - Planned. Branch `feat/9-auth` created from `feat/10-wallet-03-page` (13e2195).
-- T1 done on `feat/9-auth-01-backend` (route: delegated writer). ~460 authored lines (tests included, lockfile excluded). Checks: format and lint clean; typecheck clean; `npm test` 97 passed, 17 skipped (no database); with `TEST_DATABASE_URL` against compose Postgres (port 5433) 114 passed; `npm run build -w backend` ok. Register returns 201 and logs the user in (`AuthResponse`); login returns 200.
+- T1 done on `feat/9-auth-01-backend` (commit `9ec6fb6`, route: delegated writer). ~460 authored lines (tests included, lockfile excluded). Checks: format and lint clean; typecheck clean; `npm test` 97 passed, 17 skipped (no database); with `TEST_DATABASE_URL` against compose Postgres (port 5433) 114 passed; `npm run build -w backend` ok. Register returns 201 and logs the user in (`AuthResponse`); login returns 200.
+- T2 done on `feat/9-auth-02-screens` (route: delegated writer). ~1120 authored lines changed (additions plus deletions, tests included, task file excluded roughly 1050), well over the ~350 forecast because the session store, guard, mock auth and their tests are covered together. Checks: format and lint clean; typecheck clean; `npm test` shared+backend 97 passed, 17 skipped (no database), frontend 78 passed; `npm run build -w frontend` ok. Mock API keeps users in memory (409 on duplicate, 401 on bad credentials) and issues unsigned JWT-shaped tokens; the lobby stays public and shows `--` for the balance while logged out.
 
 ## Next step
 
-T2 on `feat/9-auth-02-screens`.
+Open slice PRs into `feat/9-auth`; final PR to `main` after #10 merges.

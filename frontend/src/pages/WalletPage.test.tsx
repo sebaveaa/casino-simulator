@@ -1,12 +1,20 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { type ApiClient, ApiError, createMockApiClient } from "../api";
 import { routes } from "../app/routes";
+import { seedSession } from "../test/session";
 import { creditsToAmount } from "./creditsInput";
 
-afterEach(cleanup);
+beforeEach(() => {
+  seedSession();
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 function renderWallet(client: ApiClient) {
   const router = createMemoryRouter(routes, { initialEntries: ["/wallet"] });

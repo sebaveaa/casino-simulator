@@ -1,12 +1,21 @@
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { type ApiClient, ApiProvider, createMockApiClient } from "../api";
+import { createSessionStore, SessionProvider } from "../session";
+import { seedSession } from "../test/session";
 import { routes } from "./routes";
 import { BalanceProvider, useBalance, useRefreshBalance } from "./useBalance";
 
-afterEach(cleanup);
+beforeEach(() => {
+  seedSession();
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 function renderLobby(client: ApiClient) {
   const router = createMemoryRouter(routes, { initialEntries: ["/"] });
@@ -61,9 +70,11 @@ describe("balance", () => {
     }
     render(
       <ApiProvider client={client}>
-        <BalanceProvider>
-          <Probe />
-        </BalanceProvider>
+        <SessionProvider store={createSessionStore()}>
+          <BalanceProvider>
+            <Probe />
+          </BalanceProvider>
+        </SessionProvider>
       </ApiProvider>,
     );
     expect(await screen.findByText("1,000.00")).toBeTruthy();
@@ -73,6 +84,15 @@ describe("balance", () => {
     });
     expect(screen.getByText("1,005.00")).toBeTruthy();
     expect(getBalance).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not fetch the balance while logged out", () => {
+    localStorage.clear();
+    const client = createMockApiClient();
+    const getBalance = vi.spyOn(client, "getBalance");
+    const { header } = renderLobby(client);
+    expect(within(header).queryByText("créditos")).toBeNull();
+    expect(getBalance).not.toHaveBeenCalled();
   });
 
   it("throws when used outside a BalanceProvider", () => {
