@@ -1,9 +1,6 @@
-/** Placeholder: the sign-up form arrives with #9. */
+import { AuthForm } from "./AuthForm";
+
+/** Sign-up screen: creating the account also starts the session. */
 export function RegisterPage() {
-  return (
-    <section>
-      <h1>Crear una cuenta</h1>
-      <p>Próximamente.</p>
-    </section>
-  );
+  return <AuthForm mode="register" />;
 }

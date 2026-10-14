@@ -68,6 +68,50 @@ describe("HTTP API client", () => {
     await expect(client.getBalance()).rejects.toMatchObject({ code: "invalid_response" });
   });
 
+  it("calls onUnauthorized when a guarded call is answered with 401", async () => {
+    const onUnauthorized = vi.fn();
+    const client = createHttpApiClient({
+      baseUrl: "http://api.test",
+      getToken: () => "tok",
+      onUnauthorized,
+      fetch: (async () =>
+        json({ error: { code: "unauthorized", message: "expired" } }, 401)) as typeof fetch,
+    });
+    await expect(client.getBalance()).rejects.toMatchObject({ code: "unauthorized", status: 401 });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends login without the token and does not treat its 401 as a dead session", async () => {
+    const onUnauthorized = vi.fn();
+    const fetchMock = vi.fn(async (..._args: Parameters<typeof fetch>) =>
+      json({ error: { code: "unauthorized", message: "Invalid email or password" } }, 401),
+    );
+    const client = createHttpApiClient({
+      baseUrl: "http://api.test",
+      getToken: () => "stale",
+      onUnauthorized,
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    await expect(client.login({ email: "a@b.co", password: "x" })).rejects.toMatchObject({
+      code: "unauthorized",
+    });
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers.authorization).toBeUndefined();
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("logs in and registers against the auth paths", async () => {
+    const session = {
+      token: "t",
+      user: { id: crypto.randomUUID(), email: "a@b.co", role: "player" },
+    };
+    const { client, fetchMock } = setup(json(session, 201));
+    await expect(client.register({ email: "a@b.co", password: "password123" })).resolves.toEqual(
+      session,
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://api.test/auth/register");
+  });
+
   it("maps a rejected fetch to a network error", async () => {
     const { client } = setup(new TypeError("failed to fetch"));
     await expect(client.getBalance()).rejects.toMatchObject({ code: "network", status: 0 });
