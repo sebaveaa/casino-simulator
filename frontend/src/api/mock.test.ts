@@ -6,6 +6,7 @@ import {
   transactionHistoryResponseSchema,
 } from "@casino/shared";
 import { describe, expect, it } from "vitest";
+import { readJwtExpiry } from "../session/jwt";
 import { createMockApiClient } from "./mock";
 
 const bet = { stake: "500", selection: { type: "color", color: "red" } } as const;
@@ -26,6 +27,33 @@ describe("mock API client", () => {
     expect(transactionHistoryResponseSchema.safeParse(await api.listTransactions()).success).toBe(
       true,
     );
+  });
+
+  it("logs in a registered account and issues a token with an expiry", async () => {
+    const api = createMockApiClient();
+    const creds = { email: "Ana@Casino.test", password: "password123" };
+    const registered = await api.register(creds);
+    expect(registered.user.email).toBe("ana@casino.test");
+    const loggedIn = await api.login({ email: "ana@casino.test", password: "password123" });
+    expect(loggedIn.user.id).toBe(registered.user.id);
+    expect(readJwtExpiry(loggedIn.token)).toBeGreaterThan(Date.now() / 1000);
+  });
+
+  it("rejects a duplicate email with a conflict", async () => {
+    const api = createMockApiClient();
+    const creds = { email: "a@b.co", password: "password123" };
+    await api.register(creds);
+    await expect(api.register(creds)).rejects.toMatchObject({ code: "conflict", status: 409 });
+  });
+
+  it("answers the same unauthorized error for an unknown email and a wrong password", async () => {
+    const api = createMockApiClient();
+    await api.register({ email: "a@b.co", password: "password123" });
+    const wrong = await api.login({ email: "a@b.co", password: "nope-nope" }).catch((e) => e);
+    const unknown = await api.login({ email: "x@b.co", password: "password123" }).catch((e) => e);
+    expect(wrong).toMatchObject({ code: "unauthorized", status: 401 });
+    expect(unknown).toMatchObject({ code: "unauthorized", status: 401 });
+    expect(unknown.message).toBe(wrong.message);
   });
 
   it("starts with 1,000.00 credits and deposits increase the balance", async () => {

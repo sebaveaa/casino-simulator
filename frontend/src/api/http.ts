@@ -15,6 +15,8 @@ export interface HttpApiClientOptions {
   baseUrl: string;
   /** Returns the session token, or null when logged out. */
   getToken: () => string | null;
+  /** Called when the server rejects the session token (401 on a guarded call). */
+  onUnauthorized?: () => void;
   fetch?: typeof fetch;
 }
 
@@ -25,11 +27,18 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
 
   async function request<S extends z.ZodType>(
     schema: S,
-    init: { method: string; path: string; body?: unknown; idempotencyKey?: string },
+    init: {
+      method: string;
+      path: string;
+      body?: unknown;
+      idempotencyKey?: string;
+      /** Login and register: no bearer token, and a 401 means bad credentials, not a dead session. */
+      public?: boolean;
+    },
   ): Promise<z.output<S>> {
     const headers: Record<string, string> = { accept: "application/json" };
     if (init.body !== undefined) headers["content-type"] = "application/json";
-    const token = options.getToken();
+    const token = init.public ? null : options.getToken();
     if (token) headers.authorization = `Bearer ${token}`;
     if (init.idempotencyKey) headers[IDEMPOTENCY_KEY_HEADER] = init.idempotencyKey;
 
@@ -52,6 +61,7 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
     }
 
     if (!response.ok) {
+      if (response.status === 401 && token) options.onUnauthorized?.();
       const parsed = errorResponseSchema.safeParse(payload);
       if (parsed.success) {
         throw new ApiError(parsed.data.error.code, parsed.data.error.message, response.status);
@@ -72,8 +82,9 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
 
   return {
     register: (body) =>
-      request(authResponseSchema, { method: "POST", path: apiPaths.register, body }),
-    login: (body) => request(authResponseSchema, { method: "POST", path: apiPaths.login, body }),
+      request(authResponseSchema, { method: "POST", path: apiPaths.register, body, public: true }),
+    login: (body) =>
+      request(authResponseSchema, { method: "POST", path: apiPaths.login, body, public: true }),
     getBalance: () => request(balanceResponseSchema, { method: "GET", path: apiPaths.balance }),
     deposit: (body, idempotencyKey) =>
       request(depositResponseSchema, {
