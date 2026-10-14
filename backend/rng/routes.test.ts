@@ -5,6 +5,7 @@ import {
   hashServerSeed,
   rotateSeedPairResponseSchema,
   seedPairResponseSchema,
+  setClientSeedResponseSchema,
 } from "@casino/shared";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
@@ -47,12 +48,7 @@ function fakeSeedPairs(): SeedPairService {
     draw: async () => {
       throw new Error("not used by these routes");
     },
-    setClientSeed: async (_db, _user, clientSeed) => {
-      active ??= await create(clientSeed);
-      active = { ...active, clientSeed };
-      return active;
-    },
-    rotate: async () => {
+    rotate: async (_db, _user, clientSeed) => {
       active ??= await create("default-client-seed");
       const revealed = {
         id: active.id,
@@ -62,7 +58,7 @@ function fakeSeedPairs(): SeedPairService {
         revealedAt: new Date("2026-01-01T00:00:00.000Z"),
       };
       serverSeed = "server-seed-2";
-      active = await create(active.clientSeed);
+      active = await create(clientSeed ?? active.clientSeed);
       return { revealed, active };
     },
   };
@@ -111,8 +107,11 @@ describe("seed pair routes", () => {
     expect(Object.keys(res.json())).not.toContain("serverSeed");
   });
 
-  it("sets the client seed", async () => {
+  it("sets the client seed by rotating: the old pair is revealed with its old client seed", async () => {
     const app = await build();
+    const before = seedPairResponseSchema.parse(
+      (await app.inject({ method: "GET", url: apiPaths.seedPair, headers: auth })).json(),
+    );
     const res = await app.inject({
       method: "PUT",
       url: apiPaths.seedPairClientSeed,
@@ -120,9 +119,17 @@ describe("seed pair routes", () => {
       payload: { clientSeed: "my-seed" },
     });
     expect(res.statusCode).toBe(200);
-    expect(seedPairResponseSchema.parse(res.json()).clientSeed).toBe("my-seed");
+    const { revealed, active } = setClientSeedResponseSchema.parse(res.json());
+    expect(revealed.id).toBe(before.id);
+    expect(revealed.serverSeed).toBe("server-seed-1");
+    expect(await hashServerSeed(revealed.serverSeed)).toBe(before.serverSeedHash);
+    expect(revealed.clientSeed).toBe(before.clientSeed);
+    expect(active.id).not.toBe(before.id);
+    expect(active.clientSeed).toBe("my-seed");
+    expect(active.nextNonce).toBe(0);
+    expect(res.body).not.toContain("server-seed-2");
     const current = await app.inject({ method: "GET", url: apiPaths.seedPair, headers: auth });
-    expect(seedPairResponseSchema.parse(current.json()).clientSeed).toBe("my-seed");
+    expect(seedPairResponseSchema.parse(current.json())).toEqual(active);
   });
 
   it.each([{}, { clientSeed: "" }, { clientSeed: "x".repeat(65) }, { clientSeed: 5 }])(

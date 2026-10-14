@@ -24,6 +24,7 @@ Out of scope: race seeds (§5.2, come with the worker), the browser verifier scr
 - `createRng` maps the outcome to integers without modulo bias (rejection sampling over successive bit chunks of the outcome).
 - Server seeds come from a CSPRNG; the random default client seed too.
 - `draw` locks the active pair with `SELECT … FOR UPDATE` inside the bet transaction, so a rolled-back bet does not burn a nonce.
+- Changing the client seed rotates the pair, so every revealed pair reproduces its bets with one client seed (`bets` does not store the client seed, so replacing it in place would break verification).
 - Rotation reveals the old pair and inserts the new one in one transaction; the partial unique index `seed_pairs_active_key` guarantees one active pair per user.
 
 ## Tasks
@@ -61,7 +62,8 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #10 and #9)
 
 - Planned. Branch `feat/11-rng` created from `main` (272a7cd).
 - T1 done on feat/11-rng-01-hmac (commit 895dd06). Route: delegated. ~316 authored lines (shared/src/rng.ts + tests; includes a pure SHA-256 so `Rng.int` stays synchronous past the first 256 bits). Checks: format clean, lint, typecheck, test all green.
-- T2 done on feat/11-rng-02-seed-pairs (commit 84b85a8). Route: delegated. ~600 authored lines (about 320 of them tests). Checks: format clean, lint, typecheck, test, build -w backend green; PostgreSQL integration tests written but not run (no reachable test database in the writer environment).
+- T2 done on feat/11-rng-02-seed-pairs (commit 7a01a91). Route: delegated. ~600 authored lines (about 320 of them tests). Checks: format clean, lint, typecheck, test, build -w backend green; PostgreSQL integration tests written but not run (no reachable test database in the writer environment).
+- Correction on feat/11-rng-02-seed-pairs (commit da4b183): `setClientSeed` removed; `rotate(db, userId, clientSeed?)` reveals the pair and creates the new one with the chosen client seed at nonce 0; `PUT /rng/seed-pair/client-seed` returns the rotate shape. Route: delegated. ~181 authored lines. Checks: format, lint, typecheck, test, build -w backend green; PostgreSQL integration tests run against compose Postgres on port 5433 (134 shared/backend tests passed, 0 skipped).
 
 ## Next step
 

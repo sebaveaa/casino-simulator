@@ -3,6 +3,7 @@ import {
   rotateSeedPairResponseSchema,
   seedPairResponseSchema,
   setClientSeedRequestSchema,
+  setClientSeedResponseSchema,
 } from "./seed-pair";
 
 const hash = "a".repeat(64);
@@ -36,5 +37,8 @@ describe("seed pair schemas", () => {
       revealedAt: "2026-01-01T00:00:00.000Z",
     };
     expect(rotateSeedPairResponseSchema.safeParse({ revealed, active }).success).toBe(true);
+    // Setting the client seed answers with the same shape.
+    expect(setClientSeedResponseSchema.safeParse({ revealed, active }).success).toBe(true);
+    expect(setClientSeedResponseSchema.safeParse(active).success).toBe(false);
   });
 });

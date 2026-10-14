@@ -94,19 +94,8 @@ export const postgresSeedPairService: SeedPairService = {
     };
   },
 
-  async setClientSeed(db, userId, clientSeed) {
-    const valid = validateClientSeed(clientSeed);
-    const pair = await lockActive(db, userId, valid);
-    const updated = await db
-      .updateTable("seed_pairs")
-      .set({ client_seed: valid })
-      .where("id", "=", pair.id)
-      .returningAll()
-      .executeTakeFirstOrThrow();
-    return toActive(updated);
-  },
-
-  async rotate(db, userId) {
+  async rotate(db, userId, clientSeed) {
+    const chosen = clientSeed === undefined ? undefined : validateClientSeed(clientSeed);
     const pair = await lockActive(db, userId);
     const revealed = await db
       .updateTable("seed_pairs")
@@ -114,8 +103,8 @@ export const postgresSeedPairService: SeedPairService = {
       .where("id", "=", pair.id)
       .returning(["id", "server_seed", "server_seed_hash", "client_seed", "revealed_at"])
       .executeTakeFirstOrThrow();
-    // The player keeps their chosen client seed; only the server seed changes.
-    await insertPair(db, userId, pair.client_seed);
+    // The new pair carries the chosen client seed, or the current one when none is given.
+    await insertPair(db, userId, chosen ?? pair.client_seed);
     const active = await selectActive(db, userId).executeTakeFirstOrThrow();
     if (revealed.revealed_at === null) throw new Error("rotated pair has no revealed_at");
     return {

@@ -34,3 +34,7 @@ export const rotateSeedPairResponseSchema = z.object({
   active: seedPairResponseSchema,
 });
 export type RotateSeedPairResponse = z.infer<typeof rotateSeedPairResponseSchema>;
+
+/** Setting the client seed rotates the pair, so the response is the rotation result. */
+export const setClientSeedResponseSchema = rotateSeedPairResponseSchema;
+export type SetClientSeedResponse = RotateSeedPairResponse;

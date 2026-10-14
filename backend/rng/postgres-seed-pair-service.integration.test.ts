@@ -32,8 +32,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresSeedPairService", () =>
   }
 
   const draw = (userId: string) => db.transaction().execute((trx) => seedPairs.draw(trx, userId));
-  const rotate = (userId: string) =>
-    db.transaction().execute((trx) => seedPairs.rotate(trx, userId));
+  const rotate = (userId: string, clientSeed?: string) =>
+    db.transaction().execute((trx) => seedPairs.rotate(trx, userId, clientSeed));
   const openPairs = (userId: string) =>
     db
       .selectFrom("seed_pairs")
@@ -111,33 +111,53 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresSeedPairService", () =>
     expect((await seedPairs.getActive(db, userId)).nextNonce).toBe(10);
   });
 
-  it("sets the client seed and keeps the nonce", async () => {
+  it("changing the client seed rotates: the old pair keeps its seed, the new one starts at nonce 0", async () => {
     const userId = await createUser();
-    await draw(userId);
-    const pair = await seedPairs.setClientSeed(db, userId, "my-client-seed");
-    expect(pair.clientSeed).toBe("my-client-seed");
-    expect(pair.nextNonce).toBe(1);
+    const before = await draw(userId);
+    const { revealed, active } = await rotate(userId, "my-client-seed");
+
+    expect(revealed.id).toBe(before.seedPairId);
+    expect(revealed.serverSeed).toBe(before.seed.serverSeed);
+    expect(await hashServerSeed(revealed.serverSeed)).toBe(before.serverSeedHash);
+    expect(revealed.clientSeed).toBe(before.seed.clientSeed);
+    expect(active.id).not.toBe(revealed.id);
+    expect(active.serverSeedHash).not.toBe(revealed.serverSeedHash);
+    expect(active.clientSeed).toBe("my-client-seed");
+    expect(active.nextNonce).toBe(0);
     expect((await draw(userId)).seed.clientSeed).toBe("my-client-seed");
+    expect(await openPairs(userId)).toHaveLength(1);
+    const old = await db
+      .selectFrom("seed_pairs")
+      .select("client_seed")
+      .where("id", "=", revealed.id)
+      .executeTakeFirstOrThrow();
+    expect(old.client_seed).toBe(before.seed.clientSeed);
   });
 
   it("sets the client seed of a user with no pair yet", async () => {
     const userId = await createUser();
-    const pair = await seedPairs.setClientSeed(db, userId, "first-seed");
-    expect(pair.clientSeed).toBe("first-seed");
-    expect(pair.nextNonce).toBe(0);
+    const { active } = await rotate(userId, "first-seed");
+    expect(active.clientSeed).toBe("first-seed");
+    expect(active.nextNonce).toBe(0);
+    expect(await openPairs(userId)).toHaveLength(1);
   });
 
-  it.each(["", "x".repeat(65)])("rejects the client seed of length %#", async (clientSeed) => {
-    const userId = await createUser();
-    const error = await seedPairs.setClientSeed(db, userId, clientSeed).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(AppError);
-    expect((error as AppError).code).toBe("invalid_request");
-  });
+  it.each(["", "x".repeat(65)])(
+    "rejects the client seed of length %# and leaves the pair untouched",
+    async (clientSeed) => {
+      const userId = await createUser();
+      const before = await seedPairs.getActive(db, userId);
+      const error = await rotate(userId, clientSeed).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AppError);
+      expect((error as AppError).code).toBe("invalid_request");
+      expect(await seedPairs.getActive(db, userId)).toEqual(before);
+    },
+  );
 
   it("rotates: reveals the old server seed and creates a fresh active pair", async () => {
     const userId = await createUser();
+    await rotate(userId, "keep-me");
     const before = await draw(userId);
-    await seedPairs.setClientSeed(db, userId, "keep-me");
     const { revealed, active } = await rotate(userId);
 
     expect(revealed.id).toBe(before.seedPairId);
