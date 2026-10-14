@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/11
 Branch: feat/11-rng (feature base, from `main` at 272a7cd); slices feat/11-rng-0N-*
-Status: in progress
+Status: implemented, pending PRs
 
 ## Objective
 
@@ -29,7 +29,7 @@ Out of scope: race seeds (§5.2, come with the worker), the browser verifier scr
 ## Tasks
 
 - [x] T1 Shared: implement `computeOutcome`, `createRng`, `hashServerSeed` with Web Crypto; replace the stub tests with known test vectors (RFC 4231 HMAC vectors, a fixed SHA-256 vector, deterministic `createRng` sequences, range and bias edge cases). Route: delegated (writer trigger, bundled with T2).
-- [ ] T2 Backend: `PgSeedPairService` (getActive creates the first pair, draw with atomic nonce, setClientSeed, rotate), API schemas and paths in `shared/src/api`, routes for current pair, set client seed and rotate, wiring in `main.ts`, tests (unit plus PG integration under `TEST_DATABASE_URL`, including concurrent draws). Route: delegated (writer trigger: 3+ non-trivial files).
+- [x] T2 Backend: `PgSeedPairService` (getActive creates the first pair, draw with atomic nonce, setClientSeed, rotate), API schemas and paths in `shared/src/api`, routes for current pair, set client seed and rotate, wiring in `main.ts`, tests (unit plus PG integration under `TEST_DATABASE_URL`, including concurrent draws). Route: delegated (writer trigger: 3+ non-trivial files).
 
 ## Acceptance criteria
 
@@ -60,8 +60,9 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #10 and #9)
 ## Progress
 
 - Planned. Branch `feat/11-rng` created from `main` (272a7cd).
-- T1 done on feat/11-rng-01-hmac (commit e692672). Route: delegated. ~316 authored lines (shared/src/rng.ts + tests; includes a pure SHA-256 so `Rng.int` stays synchronous past the first 256 bits). Checks: format clean, lint, typecheck, test all green.
+- T1 done on feat/11-rng-01-hmac (commit 895dd06). Route: delegated. ~316 authored lines (shared/src/rng.ts + tests; includes a pure SHA-256 so `Rng.int` stays synchronous past the first 256 bits). Checks: format clean, lint, typecheck, test all green.
+- T2 done on feat/11-rng-02-seed-pairs (commit 84b85a8). Route: delegated. ~600 authored lines (about 320 of them tests). Checks: format clean, lint, typecheck, test, build -w backend green; PostgreSQL integration tests written but not run (no reachable test database in the writer environment).
 
 ## Next step
 
-T2.
+Open slice PRs into `feat/11-rng`, then the final PR into `main` (closes #11). Run the PostgreSQL integration tests against the compose database first.
