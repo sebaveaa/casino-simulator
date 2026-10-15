@@ -48,6 +48,8 @@ Mode: off. Source: carried from the user's choice on #25, #10 and #9 (no project
 
 Native review only for large feature merges (user preference); small work units are left unreviewed.
 
+Lineage review-76ad92e1c6a1b067 approved (medium risk, reliability lens) with three advisories, all fixed in 3b90f7e (integer bit width in `int(max)`) and 0cc3ef6 (per-user lock on the users row replaces the lockActive retry loop; deterministic concurrent rotation and draw/rotation tests).
+
 ## Delivery
 
 Forecast: ~550 authored lines (T1 ~150, T2 ~400).
@@ -64,6 +66,7 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #10 and #9)
 - T1 done on feat/11-rng-01-hmac (commit 895dd06). Route: delegated. ~316 authored lines (shared/src/rng.ts + tests; includes a pure SHA-256 so `Rng.int` stays synchronous past the first 256 bits). Checks: format clean, lint, typecheck, test all green.
 - T2 done on feat/11-rng-02-seed-pairs (commit 7a01a91). Route: delegated. ~600 authored lines (about 320 of them tests). Checks: format clean, lint, typecheck, test, build -w backend green; PostgreSQL integration tests written but not run (no reachable test database in the writer environment).
 - Correction on feat/11-rng-02-seed-pairs (commit 30027a8): `setClientSeed` removed; `rotate(db, userId, clientSeed?)` reveals the pair and creates the new one with the chosen client seed at nonce 0; `PUT /rng/seed-pair/client-seed` returns the rotate shape. Route: delegated. ~181 authored lines. Checks: format, lint, typecheck, test, build -w backend green; PostgreSQL integration tests run against compose Postgres on port 5433 (134 shared/backend tests passed, 0 skipped).
+- Review follow-ups on feat/11-rng-02-seed-pairs (commits 3b90f7e, 0cc3ef6). Route: delegated. ~110 authored lines. Checks: format, lint, typecheck, test, build -w backend green; PostgreSQL integration tests green (135 tests, seed pair file run 3 times, 14/14 each).
 
 ## Next step
 
