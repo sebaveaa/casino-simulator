@@ -8,6 +8,5 @@ const notImplemented = (method: string) => () =>
 export const stubSeedPairService: SeedPairService = {
   getActive: notImplemented("getActive"),
   draw: notImplemented("draw"),
-  setClientSeed: notImplemented("setClientSeed"),
   rotate: notImplemented("rotate"),
 };

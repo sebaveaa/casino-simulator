@@ -8,6 +8,9 @@ export const apiPaths = {
   balance: "/wallet/balance",
   deposits: "/wallet/deposits",
   transactions: "/wallet/transactions",
+  seedPair: "/rng/seed-pair",
+  seedPairClientSeed: "/rng/seed-pair/client-seed",
+  seedPairRotate: "/rng/seed-pair/rotate",
   rouletteBets: "/games/roulette/bets",
 } as const;
 

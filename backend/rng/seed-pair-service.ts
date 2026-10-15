@@ -37,9 +37,14 @@ export interface SeedPairService {
    */
   draw(trx: Db, userId: string): Promise<SeedDraw>;
 
-  /** Replaces the client seed of the active pair. */
-  setClientSeed(db: Db, userId: string, clientSeed: string): Promise<ActiveSeedPair>;
-
-  /** Reveals the active server seed and starts a new pair. */
-  rotate(db: Db, userId: string): Promise<{ revealed: RevealedSeedPair; active: ActiveSeedPair }>;
+  /**
+   * Reveals the active server seed and starts a new pair at nonce 0. The new pair keeps the
+   * current client seed unless `clientSeed` is given. Changing the client seed always rotates,
+   * so each revealed pair reproduces all of its bets with a single client seed.
+   */
+  rotate(
+    db: Db,
+    userId: string,
+    clientSeed?: string,
+  ): Promise<{ revealed: RevealedSeedPair; active: ActiveSeedPair }>;
 }
