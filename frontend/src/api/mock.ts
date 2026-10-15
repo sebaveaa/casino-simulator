@@ -1,13 +1,17 @@
 import {
   type AuthResponse,
   type BalanceResponse,
+  computeOutcome,
+  createRng,
   type DepositRequest,
   type DepositResponse,
+  hashServerSeed,
   type LoginRequest,
   parseAmount,
   type RegisterRequest,
   type RouletteBetRequest,
   type RouletteBetResponse,
+  roulette,
   type Transaction,
   type TransactionHistoryQueryInput,
   type TransactionHistoryResponse,
@@ -18,14 +22,16 @@ import { type ApiClient, ApiError } from "./client";
 
 const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
+const MOCK_CLIENT_SEED = "mock-client-seed";
 
 function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }
 
 /**
- * In-memory `ApiClient` for developing screens without a backend. It does not
- * implement game rules (#12 does): every roulette bet pays `"0"`.
+ * In-memory `ApiClient` for developing screens without a backend. Roulette bets run the shared
+ * rules (`roulette.validateBet/resolve/payout`) over a fixed mock seed pair, so payouts match
+ * the real API; only the seeds and persistence are fake.
  */
 export function createMockApiClient(options: { delayMs?: number } = {}): ApiClient {
   const delayMs = options.delayMs ?? 0;
@@ -113,21 +119,38 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
     ): Promise<RouletteBetResponse> {
       await sleep(delayMs);
       const previous = bets.get(idempotencyKey);
-      if (previous) return previous;
-      const stake = parseAmount(body.stake);
-      balance -= stake;
+      if (previous) return { ...previous, balance: toAmount(balance) };
+      const bet = { stake: parseAmount(body.stake), selection: body.selection };
+      if (!roulette.validateBet(bet)) {
+        throw new ApiError("invalid_request", "Invalid roulette bet", 400);
+      }
+      if (bet.stake > balance) {
+        throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+      }
+      const seed = {
+        serverSeed: crypto.randomUUID(),
+        clientSeed: MOCK_CLIENT_SEED,
+        nonce: bets.size,
+      };
+      const result = roulette.resolve(bet, createRng(await computeOutcome(seed)));
+      const payout = roulette.payout(bet, result);
       const betId = crypto.randomUUID();
-      record("bet", -stake, betId);
+      balance -= bet.stake;
+      record("bet", -bet.stake, betId);
+      if (payout > 0n) {
+        balance += payout;
+        record("payout", payout, betId);
+      }
       const response: RouletteBetResponse = {
         betId,
-        result: { number: Math.floor(Math.random() * 37) },
-        payout: "0",
+        result,
+        payout: toAmount(payout),
         balance: toAmount(balance),
         fairness: {
           seedPairId: crypto.randomUUID(),
-          serverSeedHash: "0".repeat(64),
-          clientSeed: "mock",
-          nonce: bets.size,
+          serverSeedHash: await hashServerSeed(seed.serverSeed),
+          clientSeed: seed.clientSeed,
+          nonce: seed.nonce,
         },
       };
       bets.set(idempotencyKey, response);
