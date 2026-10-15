@@ -166,7 +166,9 @@ export function createRng(outcome: Outcome): Rng {
         throw new RangeError("max must be a positive safe integer");
       }
       if (max === 1) return 0;
-      const bits = Math.ceil(Math.log2(max));
+      // Integer arithmetic: Math.log2 rounds up near powers of two (log2(2 ** 52 + 1) === 52).
+      let bits = 0;
+      for (let capacity = 1; capacity < max; capacity *= 2) bits += 1;
       for (;;) {
         // Multiplication, not shifts: up to 53 bits do not fit in a 32-bit shift.
         let value = 0;
