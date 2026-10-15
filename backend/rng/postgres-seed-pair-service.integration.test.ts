@@ -179,10 +179,47 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresSeedPairService", () =>
     expect(await openPairs(userId)).toHaveLength(1);
   });
 
-  it("keeps one active pair under concurrent rotations", async () => {
+  it("serializes concurrent rotations into one consistent chain", async () => {
+    const userId = await createUser();
+    const first = await draw(userId);
+    const results = await Promise.all(Array.from({ length: 8 }, () => rotate(userId)));
+
+    // Every rotation succeeds and reveals a different pair.
+    const revealedIds = results.map((r) => r.revealed.id);
+    expect(new Set(revealedIds).size).toBe(8);
+    expect(revealedIds).toContain(first.seedPairId);
+
+    // The chain is consistent: each rotation's new pair is revealed by exactly one later
+    // rotation, except the last one, which is the single active pair.
+    const open = await openPairs(userId);
+    expect(open).toHaveLength(1);
+    const activeIds = results.map((r) => r.active.id);
+    expect(new Set(activeIds).size).toBe(8);
+    expect(activeIds.filter((id) => !revealedIds.includes(id))).toEqual([open[0]?.id]);
+    for (const { revealed } of results) {
+      expect(await hashServerSeed(revealed.serverSeed)).toBe(revealed.serverSeedHash);
+    }
+    const all = await db
+      .selectFrom("seed_pairs")
+      .select("id")
+      .where("user_id", "=", userId)
+      .execute();
+    expect(all).toHaveLength(9);
+  });
+
+  it("keeps draws and rotations racing without failures or lost nonces", async () => {
     const userId = await createUser();
     await seedPairs.getActive(db, userId);
-    await Promise.all(Array.from({ length: 4 }, () => rotate(userId)));
+    const operations = Array.from({ length: 12 }, (_, i) =>
+      i % 3 === 0 ? rotate(userId) : draw(userId),
+    );
+    const results = await Promise.all(operations);
     expect(await openPairs(userId)).toHaveLength(1);
+
+    // No (pair, nonce) was handed out twice.
+    const drawn = results.filter((r) => "nonce" in r) as Awaited<ReturnType<typeof draw>>[];
+    expect(drawn).toHaveLength(8);
+    const keys = drawn.map((d) => `${d.seedPairId}:${d.nonce}`);
+    expect(new Set(keys).size).toBe(8);
   });
 });

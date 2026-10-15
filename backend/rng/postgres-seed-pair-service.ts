@@ -47,16 +47,26 @@ const selectActive = (db: Db, userId: string) =>
 
 /**
  * The user's active pair, locked until the surrounding transaction ends. Creates the first pair
- * when there is none. A concurrent rotation can reveal the pair between the lock attempts, so
- * the lookup is retried against the new one.
+ * when there is none.
+ *
+ * The user's row is locked first, so one user's seed pair operations run one at a time and the
+ * pair read afterwards cannot be revealed or created by anyone else: no retry loop is needed.
+ * `FOR NO KEY UPDATE` does not block foreign key checks on other tables that reference the user.
+ * Lock order is users -> seed_pairs. The bet flow locks the wallet first and calls `draw`
+ * (wallets -> users -> seed_pairs); `rotate` never touches a wallet, so no path takes these
+ * locks in the opposite order.
  */
 async function lockActive(db: Db, userId: string, clientSeed?: string): Promise<SeedPairRow> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const row = await selectActive(db, userId).forUpdate().executeTakeFirst();
-    if (row) return row;
-    await insertPair(db, userId, clientSeed ?? newClientSeed());
-  }
-  throw new Error("could not lock the active seed pair");
+  await db
+    .selectFrom("users")
+    .select("id")
+    .where("id", "=", userId)
+    .forNoKeyUpdate()
+    .executeTakeFirst();
+  const row = await selectActive(db, userId).forUpdate().executeTakeFirst();
+  if (row) return row;
+  await insertPair(db, userId, clientSeed ?? newClientSeed());
+  return selectActive(db, userId).forUpdate().executeTakeFirstOrThrow();
 }
 
 function validateClientSeed(value: string): string {
