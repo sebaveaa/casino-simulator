@@ -50,6 +50,7 @@ Mode: off. Source: carried from the user's choice on #25, #11, #10 and #9 (no pr
 
 Native review only for large feature merges (user preference); small work units are left unreviewed.
 Work-unit commits T1–T4 left unreviewed per user preference; native review runs on the whole feature before the final PR.
+Lineage review-2cf8949c0d012835 approved (medium risk, reliability lens) on 5b42651 with one advisory, R3-001: a reused Idempotency-Key with a different stake or selection replayed the first bet. Fixed at the user's request: the replay now answers 409 `conflict`, covered by an integration test.
 
 ## Delivery
 
@@ -65,6 +66,8 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #11, #10, #
 
 - T4 done (this commit, ~120 authored lines): profiles removed; `migrate` (one-shot, shared image `casino-cloud:local`), `app` and `web` with healthchecks, new `worker` (stays up: "worker started"; it needs `ALLOWED_ORIGINS` in its env); `web` built with `VITE_API_URL=http://localhost:3000`. Checks: lint, typecheck, test, `docker compose config` pass. Smoke (`POSTGRES_PORT=5433`): `docker compose ps` shows postgres, redis, app, web healthy, migrate exited 0, worker up; register 201, deposit 201 (balance 1000), roulette bet 201 (balance 900), retry with the same key 201 with identical body and balance 900, `GET /wallet/balance` 200 "900"; portal 200 and the built JS contains `localhost:3000`. Stack left running. Route: delegated writer.
 
+- R3-001 fix: replay refuses a key reused with a different bet (409). Route: inline. ~40 authored lines. Checks: lint, typecheck, npm test with TEST_DATABASE_URL (shared 119, backend 147, frontend 96) green.
+
 ## Next step
 
-Native review of the feature, then PR into `main` closing #12.
+Push the branch and open the PR into `main` closing #12 (awaiting the user's go-ahead).

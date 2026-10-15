@@ -6,6 +6,7 @@ import {
   type RouletteResult,
   roulette,
   rouletteResultSchema,
+  rouletteSelectionSchema,
   toAmount,
 } from "@casino/shared";
 import type { Db } from "../../db/database";
@@ -34,7 +35,7 @@ export async function placeRouletteBet(
   const balance = await wallet.lockBalance(trx, userId);
 
   const existing = await wallet.findTransaction(trx, betKey);
-  if (existing) return replay(trx, wallet, userId, existing.betId);
+  if (existing) return replay(trx, wallet, userId, existing.betId, bet);
 
   // Checked before `draw`, so a bet the player cannot afford burns no nonce. The transfer still
   // enforces it, and the transaction rolls back either way.
@@ -95,12 +96,16 @@ export async function placeRouletteBet(
   };
 }
 
-/** Rebuilds the original response from the stored bet. Only the balance is current. */
+/**
+ * Rebuilds the original response from the stored bet. Only the balance is current. A key reused
+ * with a different stake or selection is a client bug, so it is refused instead of replayed.
+ */
 async function replay(
   trx: Db,
   wallet: WalletService,
   userId: string,
   betId: string | null,
+  bet: RouletteBet,
 ): Promise<RouletteBetResponse> {
   const row = betId
     ? await trx
@@ -111,6 +116,8 @@ async function replay(
           "b.nonce",
           "b.result",
           "b.payout",
+          "b.stake",
+          "b.selection",
           "s.id as seedPairId",
           "s.server_seed_hash",
           "s.client_seed",
@@ -125,6 +132,10 @@ async function replay(
     // The key was used for something other than a settled roulette bet.
     throw new AppError("conflict", "Idempotency-Key was already used for another operation");
   }
+  const selection = rouletteSelectionSchema.safeParse(row.selection);
+  if (row.stake !== bet.stake || !selection.success || !sameSelection(selection.data, bet)) {
+    throw new AppError("conflict", "Idempotency-Key was already used for a different bet");
+  }
   return {
     betId: row.id,
     result: result.data,
@@ -137,4 +148,13 @@ async function replay(
       nonce: row.nonce,
     },
   };
+}
+
+/** Field by field, so the key order jsonb stores does not matter. */
+function sameSelection(stored: RouletteBet["selection"], bet: RouletteBet): boolean {
+  const requested: Record<string, unknown> = bet.selection;
+  return (
+    Object.keys(stored).length === Object.keys(requested).length &&
+    Object.entries(stored).every(([field, value]) => requested[field] === value)
+  );
 }

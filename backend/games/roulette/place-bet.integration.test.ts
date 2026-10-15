@@ -163,6 +163,23 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("placeRouletteBet", () => {
     );
   });
 
+  it("refuses a key reused with a different stake or selection", async () => {
+    const userId = await createPlayer(1000n);
+    const key = randomUUID();
+    const first = await place(userId, red, key);
+    for (const changed of [
+      { ...red, stake: 200n },
+      { ...red, selection: { type: "color", color: "black" } },
+      { ...red, selection: { type: "straight", number: 7 } },
+    ] satisfies RouletteBet[]) {
+      await expect(place(userId, changed, key)).rejects.toMatchObject({ code: "conflict" });
+    }
+    expect(await countBets(userId)).toBe(1);
+    expect(await wallet.getBalance(db, userId)).toBe(BigInt(first.balance));
+    // The original request still replays.
+    expect(await place(userId, red, key)).toEqual(first);
+  });
+
   it("scopes a key to its player", async () => {
     const a = await createPlayer(1000n);
     const b = await createPlayer(1000n);
