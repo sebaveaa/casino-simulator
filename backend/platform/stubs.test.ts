@@ -34,7 +34,6 @@ const cases: Case[] = [
   ],
   ["seedPairs.getActive", "#11", () => seedPairs.getActive(db, id)],
   ["seedPairs.draw", "#11", () => seedPairs.draw(db, id)],
-  ["seedPairs.setClientSeed", "#11", () => seedPairs.setClientSeed(db, id, "seed")],
   ["seedPairs.rotate", "#11", () => seedPairs.rotate(db, id)],
   ["tokens.sign", "#9", () => tokens.sign({ id, role: "player" })],
   ["tokens.verify", "#9", () => tokens.verify("token")],

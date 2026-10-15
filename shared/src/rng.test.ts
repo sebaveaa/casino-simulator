@@ -135,6 +135,12 @@ describe("createRng", () => {
     }
   });
 
+  it("reaches max - 1 when max is just above a power of two", () => {
+    // 53 bits are needed for 2 ** 52 + 1; this outcome starts with the bits 1, 0, 0, ... 0.
+    const rng = createRng(`80${"00".repeat(31)}`);
+    expect(rng.int(2 ** 52 + 1)).toBe(2 ** 52);
+  });
+
   it("supports Number.MAX_SAFE_INTEGER", () => {
     const rng = createRng("5c".repeat(32));
     for (let i = 0; i < 50; i++) {

@@ -8,6 +8,7 @@ import { createPostgresPool, pingPostgres } from "./platform/postgres";
 import { createRedisClient, pingRedis } from "./platform/redis";
 import { run, type Stoppable } from "./platform/run";
 import { stubServices } from "./platform/services";
+import { postgresSeedPairService } from "./rng/postgres-seed-pair-service";
 import { postgresWalletService } from "./wallet/postgres-wallet-service";
 import { startWorker } from "./worker/main";
 
@@ -25,6 +26,7 @@ async function startApi(config: Config): Promise<Stoppable> {
     services: {
       ...stubServices,
       wallet: postgresWalletService,
+      seedPairs: postgresSeedPairService,
       payments: createSimulatedPaymentProvider(postgresWalletService),
       tokens: createJwtTokenService({ secret: config.jwtSecret }),
     },
