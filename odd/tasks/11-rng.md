@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/11
 Branch: feat/11-rng (feature base, from `main` at 272a7cd); slices feat/11-rng-0N-*
-Status: planned
+Status: in progress
 
 ## Objective
 
@@ -28,7 +28,7 @@ Out of scope: race seeds (§5.2, come with the worker), the browser verifier scr
 
 ## Tasks
 
-- [ ] T1 Shared: implement `computeOutcome`, `createRng`, `hashServerSeed` with Web Crypto; replace the stub tests with known test vectors (RFC 4231 HMAC vectors, a fixed SHA-256 vector, deterministic `createRng` sequences, range and bias edge cases). Route: delegated (writer trigger, bundled with T2).
+- [x] T1 Shared: implement `computeOutcome`, `createRng`, `hashServerSeed` with Web Crypto; replace the stub tests with known test vectors (RFC 4231 HMAC vectors, a fixed SHA-256 vector, deterministic `createRng` sequences, range and bias edge cases). Route: delegated (writer trigger, bundled with T2).
 - [ ] T2 Backend: `PgSeedPairService` (getActive creates the first pair, draw with atomic nonce, setClientSeed, rotate), API schemas and paths in `shared/src/api`, routes for current pair, set client seed and rotate, wiring in `main.ts`, tests (unit plus PG integration under `TEST_DATABASE_URL`, including concurrent draws). Route: delegated (writer trigger: 3+ non-trivial files).
 
 ## Acceptance criteria
@@ -60,7 +60,8 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #10 and #9)
 ## Progress
 
 - Planned. Branch `feat/11-rng` created from `main` (272a7cd).
+- T1 done on feat/11-rng-01-hmac (commit e692672). Route: delegated. ~316 authored lines (shared/src/rng.ts + tests; includes a pure SHA-256 so `Rng.int` stays synchronous past the first 256 bits). Checks: format clean, lint, typecheck, test all green.
 
 ## Next step
 
-T1.
+T2.
