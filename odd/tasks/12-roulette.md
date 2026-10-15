@@ -30,7 +30,7 @@ Out of scope: the browser verifier screen (#15), slots (#14), other bet types (c
 ## Tasks
 
 - [x] T1 Shared: `roulette: Game` implementation, export, tests with fixed seeds (payout table, zero, validation, deterministic resolve from known seeds). Route: inline (one mechanical file plus its test).
-- [ ] T2 Backend: roulette bet service and route, registration in `moduleRoutes` and `main.ts`, route unit tests and a PostgreSQL integration test (win, loss, insufficient funds, retried bet charges once). Route: delegated (writer trigger: 3+ non-trivial files).
+- [x] T2 Backend: roulette bet service and route, registration in `moduleRoutes` and `main.ts`, route unit tests and a PostgreSQL integration test (win, loss, insufficient funds, retried bet charges once). Route: delegated (writer trigger: 3+ non-trivial files).
 - [ ] T3 Frontend: mock uses the shared rules; `pixi.js` dependency; wheel component animating to the server number; bet form (stake, selection) on `RoulettePage`; balance refresh; tests. Route: delegated (writer trigger).
 - [ ] T4 Compose: whole stack on `docker compose up`, migrate service, web against the real API; AGENTS.md, README and `.env.example` updated. Route: delegated (writer trigger, docs + config).
 
@@ -58,7 +58,9 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #11, #10, #
 ## Progress
 
 - Planned. Branch `feat/12-roulette-bets` created from `main` (45cd645).
+- T1 done: `roulette: Game` in shared (3fddc37).
+- T2 done (this commit, ~480 authored lines): `backend/games/roulette/` (`place-bet.ts`, `routes.ts`, route unit tests, PostgreSQL integration test), registered in `moduleRoutes`; no new service or migration, `main.ts` already wires wallet and seed pairs. Replay answers 201 like deposits. Checks: lint, typecheck, build -w backend pass; `npm test` 146 passed (108 passed + 38 skipped without a database in the backend); with `TEST_DATABASE_URL` (compose Postgres on host port 5433) all 146 backend tests passed, integration tests included. Route: delegated writer.
 
 ## Next step
 
-T1.
+T3.
