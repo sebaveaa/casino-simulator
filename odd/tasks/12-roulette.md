@@ -32,7 +32,7 @@ Out of scope: the browser verifier screen (#15), slots (#14), other bet types (c
 - [x] T1 Shared: `roulette: Game` implementation, export, tests with fixed seeds (payout table, zero, validation, deterministic resolve from known seeds). Route: inline (one mechanical file plus its test).
 - [x] T2 Backend: roulette bet service and route, registration in `moduleRoutes` and `main.ts`, route unit tests and a PostgreSQL integration test (win, loss, insufficient funds, retried bet charges once). Route: delegated (writer trigger: 3+ non-trivial files).
 - [x] T3 Frontend: mock uses the shared rules; `pixi.js` dependency; wheel component animating to the server number; bet form (stake, selection) on `RoulettePage`; balance refresh; tests. Route: delegated (writer trigger).
-- [ ] T4 Compose: whole stack on `docker compose up`, migrate service, web against the real API; AGENTS.md, README and `.env.example` updated. Route: delegated (writer trigger, docs + config).
+- [x] T4 Compose: whole stack on `docker compose up`, migrate service, web against the real API; AGENTS.md and README updated (`.env.example` unchanged: no new variable names). Route: delegated (writer trigger, docs + config).
 
 ## Acceptance criteria
 
@@ -49,6 +49,7 @@ Mode: off. Source: carried from the user's choice on #25, #11, #10 and #9 (no pr
 ## Review
 
 Native review only for large feature merges (user preference); small work units are left unreviewed.
+Work-unit commits T1–T4 left unreviewed per user preference; native review runs on the whole feature before the final PR.
 
 ## Delivery
 
@@ -62,6 +63,8 @@ Strategy: ask-on-risk. Chain strategy: feature-branch-chain (same as #11, #10, #
 - T2 done (this commit, ~480 authored lines): `backend/games/roulette/` (`place-bet.ts`, `routes.ts`, route unit tests, PostgreSQL integration test), registered in `moduleRoutes`; no new service or migration, `main.ts` already wires wallet and seed pairs. Replay answers 201 like deposits. Checks: lint, typecheck, build -w backend pass; `npm test` 146 passed (108 passed + 38 skipped without a database in the backend); with `TEST_DATABASE_URL` (compose Postgres on host port 5433) all 146 backend tests passed, integration tests included. Route: delegated writer.
 - T3 done (this commit, ~700 authored lines including tests and CSS): `pixi.js` ^8.22.0, `pages/roulette/` (`wheelAngles` pure helpers, `wheelScene` PixiJS scene loaded with dynamic `import()`, `RouletteWheel` component), `RoulettePage` bet form, mock API on the shared rules. Checks: format, lint, typecheck pass; `npm test` 96 frontend tests passed; `npm run build -w frontend` passes (PixiJS in lazy chunks, `lib` chunk 638 kB / 180 kB gzip). Route: delegated writer.
 
+- T4 done (this commit, ~120 authored lines): profiles removed; `migrate` (one-shot, shared image `casino-cloud:local`), `app` and `web` with healthchecks, new `worker` (stays up: "worker started"; it needs `ALLOWED_ORIGINS` in its env); `web` built with `VITE_API_URL=http://localhost:3000`. Checks: lint, typecheck, test, `docker compose config` pass. Smoke (`POSTGRES_PORT=5433`): `docker compose ps` shows postgres, redis, app, web healthy, migrate exited 0, worker up; register 201, deposit 201 (balance 1000), roulette bet 201 (balance 900), retry with the same key 201 with identical body and balance 900, `GET /wallet/balance` 200 "900"; portal 200 and the built JS contains `localhost:3000`. Stack left running. Route: delegated writer.
+
 ## Next step
 
-T4.
+Native review of the feature, then PR into `main` closing #12.

@@ -74,6 +74,10 @@ Forecast: about 120 authored changed lines. Strategy: `single-pr` (user preferen
 - T3 done: `frontend/vite.config.ts` sets `server.host: "127.0.0.1"`; `netstat` shows `127.0.0.1:5173` listening and Vite prints http://127.0.0.1:5173. `ALLOWED_ORIGINS` in Compose adds `http://127.0.0.1:5173`; `AGENTS.md` names the dev URL. Checks: lint, typecheck, frontend tests (26) pass. `.env.example` could not be read from this session (permission settings), so its `ALLOWED_ORIGINS` still needs `http://127.0.0.1:5173` before the portal talks to a local API (#9, #10). Review: skipped, user left candidate unreviewed.
 - Host port 5432 on the user's machine is held by a native PostgreSQL Windows service (`postgres.exe`), so Compose needs `POSTGRES_PORT` (for example 5433) in `.env`, as `AGENTS.md` describes.
 
+## Update (#12)
+
+Superseded by #12: the `app` profile is gone, so `docker compose up` starts the whole stack, and `web` is built with `VITE_API_URL=http://localhost:3000` (real API). See `odd/tasks/12-roulette.md`.
+
 ## Next step
 
 Open the PR (`Closes #23`).
