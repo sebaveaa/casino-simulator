@@ -7,9 +7,13 @@ import {
   type RouletteSelection,
 } from "@casino/shared";
 import { type FormEvent, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { ApiError, useApi } from "../api";
 import { BALANCE_LOADING, useBalance, useRefreshBalance } from "../app/useBalance";
 import { creditsToAmount } from "./creditsInput";
+import { PrototypeSwitcher } from "./roulette/prototype/PrototypeSwitcher";
+import { VariantA } from "./roulette/prototype/VariantA";
+import { VariantB } from "./roulette/prototype/VariantB";
 import { RouletteWheel } from "./roulette/RouletteWheel";
 
 const COLOR_NAMES: Record<PocketColor, string> = { red: "rojo", black: "negro", green: "verde" };
@@ -47,8 +51,21 @@ function errorMessage(error: unknown): string {
 
 type Round = { response: RouletteBetResponse; stake: string };
 
-/** Roulette table: the server draws the number, the wheel only animates it (README §4.2). */
+/** PROTOTYPE gate — throwaway, see branch prototype/12-roulette-table. */
 export function RoulettePage() {
+  const [params] = useSearchParams();
+  if (!import.meta.env.DEV) return <CurrentRoulette />;
+  const variant = params.get("variant");
+  return (
+    <>
+      {variant === "A" ? <VariantA /> : variant === "B" ? <VariantB /> : <CurrentRoulette />}
+      <PrototypeSwitcher />
+    </>
+  );
+}
+
+/** Roulette table: the server draws the number, the wheel only animates it (README §4.2). */
+function CurrentRoulette() {
   const api = useApi();
   const balance = useBalance();
   const refreshBalance = useRefreshBalance();
