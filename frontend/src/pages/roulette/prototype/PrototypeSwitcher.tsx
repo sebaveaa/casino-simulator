@@ -3,11 +3,12 @@ import { useEffect } from "react";
 import { useSearchParams } from "react-router";
 import "./prototype.css";
 
-const VARIANTS = ["actual", "A", "B"] as const;
+const VARIANTS = ["actual", "A", "B", "C"] as const;
 const NAMES: Record<(typeof VARIANTS)[number], string> = {
   actual: "Actual",
   A: "A — Mesa clásica",
   B: "B — Boleta y mapa de resultados",
+  C: "C — Mesa clásica con bola",
 };
 
 function isTyping(target: EventTarget | null): boolean {
@@ -23,7 +24,10 @@ function isTyping(target: EventTarget | null): boolean {
 export function PrototypeSwitcher() {
   const [params, setParams] = useSearchParams();
   const raw = params.get("variant");
-  const index = Math.max(0, VARIANTS.indexOf(raw === "A" || raw === "B" ? raw : "actual"));
+  const index = Math.max(
+    0,
+    VARIANTS.indexOf(raw === "A" || raw === "B" || raw === "C" ? raw : "actual"),
+  );
 
   function go(step: number) {
     const next = VARIANTS[(index + step + VARIANTS.length) % VARIANTS.length] ?? "actual";

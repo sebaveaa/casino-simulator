@@ -1,0 +1,567 @@
+/* PROTOTYPE — throwaway, see branch prototype/12-roulette-table */
+/* Variant C: derived from A (same felt, chips, cells), new layout, ball wheel. */
+
+/* ---------- Variant C: felt table with ball ---------- */
+.proto-c {
+  --felt: #0b6b3a;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 0 88px;
+}
+
+.proto-c-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 24px;
+}
+
+.proto-c-head h1,
+.proto-c-head p {
+  margin: 0;
+}
+
+.proto-c-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .proto-c-main {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+}
+
+.proto-c-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.proto-c-history {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proto-c-history-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.proto-c-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  animation: proto-c-dot-in 400ms var(--ease-spring) both;
+}
+
+@keyframes proto-c-dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+
+.proto-c-play {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.proto-c-status {
+  min-height: 4.5rem;
+}
+
+.proto-c-status p {
+  margin: 4px 0;
+}
+
+.proto-c-spinning,
+.proto-c-hint {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.proto-c-spinning {
+  animation: pulse 700ms ease-in-out infinite alternate;
+}
+
+.proto-c-banner {
+  padding: 10px 16px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-sm);
+  animation: proto-c-banner-in 450ms var(--ease-spring) both;
+}
+
+.proto-c-banner[data-won] {
+  background: var(--sun);
+}
+
+.proto-c-banner-main {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+@keyframes proto-c-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+.proto-c-scroll {
+  padding-top: 30px;
+  overflow-x: auto;
+}
+
+.proto-c-felt {
+  display: grid;
+  grid-template-columns: 56px repeat(12, minmax(46px, 1fr));
+  grid-template-rows: repeat(3, 64px) 44px 44px;
+  min-width: 660px;
+  padding: 14px;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(ellipse at 50% 40%, rgb(255 255 255 / 12%), transparent 70%), var(--felt);
+  box-shadow: var(--shadow-md);
+}
+
+.proto-c-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid rgb(255 255 255 / 75%);
+  background-color: transparent;
+  color: #fff;
+  font-family: var(--font-amount);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    filter 150ms ease;
+}
+
+.proto-c-cell:disabled {
+  cursor: default;
+}
+
+.proto-c-cell:hover:not(:disabled),
+.proto-c-cell:focus-visible {
+  z-index: 3;
+  background-color: rgb(255 255 255 / 22%);
+}
+
+.proto-c-red {
+  background-color: #d62839;
+}
+
+.proto-c-black {
+  background-color: var(--ink);
+}
+
+.proto-c-red:hover:not(:disabled),
+.proto-c-black:hover:not(:disabled) {
+  filter: brightness(1.4);
+}
+
+.proto-c-zero {
+  background-color: #1b8a3e;
+  border-radius: 12px 0 0 12px;
+  font-size: 1.4rem;
+}
+
+.proto-c-outside {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.proto-c-diamond-red,
+.proto-c-diamond-black {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 60% 70%;
+}
+
+.proto-c-diamond-red {
+  background-image: linear-gradient(#d62839, #d62839);
+}
+
+.proto-c-diamond-black {
+  background-image: linear-gradient(var(--ink), var(--ink));
+}
+
+/* Tooltip: "Paga 35 a 1". */
+.proto-c-cell::after {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 10;
+  padding: 3px 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--sun);
+  color: var(--ink);
+  content: attr(data-tip);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  white-space: nowrap;
+}
+
+.proto-c-cell:hover::after,
+.proto-c-cell:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+/* Winning cells pulse. */
+.proto-c-cell.is-win {
+  z-index: 2;
+  animation: proto-c-win 900ms ease-in-out infinite alternate;
+}
+
+@keyframes proto-c-win {
+  from {
+    box-shadow: inset 0 0 0 3px var(--sun);
+    filter: brightness(1);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 3px var(--sun),
+      0 0 18px 4px var(--sun);
+    filter: brightness(1.5);
+  }
+}
+
+/* Chips. */
+.proto-c-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 3px dashed rgb(255 255 255 / 85%);
+  border-radius: 50%;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 50%);
+  color: #fff;
+  font-family: var(--font-amount);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.proto-c-chip-1 {
+  border-color: #888;
+  background: #e8e8e8;
+  color: var(--ink);
+}
+
+.proto-c-chip-5 {
+  background: #d62839;
+}
+
+.proto-c-chip-10 {
+  background: #2b59c3;
+}
+
+.proto-c-chip-25 {
+  background: #1b8a3e;
+}
+
+.proto-c-chip-100 {
+  background: var(--ink);
+}
+
+.proto-c-chip-on-cell {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  animation: proto-c-drop 360ms var(--ease-spring) both;
+  pointer-events: none;
+  transition:
+    opacity 600ms ease,
+    transform 600ms ease,
+    filter 600ms ease;
+}
+
+@keyframes proto-c-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-26px) scale(1.5);
+  }
+}
+
+.proto-c-chip-on-cell.is-win {
+  z-index: 4;
+  filter: drop-shadow(0 0 8px var(--sun));
+  transform: scale(1.25);
+}
+
+.proto-c-chip-on-cell.is-lose {
+  opacity: 0.18;
+  transform: scale(0.8);
+  filter: grayscale(1);
+}
+
+.proto-c-rack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 18px 14px 8px;
+}
+
+.proto-c-rack-chip {
+  width: 56px;
+  height: 56px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition:
+    transform 180ms var(--ease-spring),
+    box-shadow 180ms ease;
+}
+
+.proto-c-rack-chip:hover {
+  transform: translateY(-4px);
+}
+
+.proto-c-rack-chip[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 7px var(--sun),
+    0 10px 0 -2px rgb(0 0 0 / 35%);
+  transform: translateY(-10px) scale(1.1);
+}
+
+.proto-c-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.proto-c-controls .button {
+  justify-content: center;
+}
+
+.proto-c-controls .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.proto-c-spin {
+  min-width: 8rem;
+  margin-left: auto;
+}
+
+.proto-c-summary {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-md);
+}
+
+.proto-c-summary dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.proto-c-summary dd {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+/* ---------- Variant C overrides: two-column layout that fits 1440x900 ---------- */
+.proto-c {
+  gap: 10px;
+  padding: 0 0 72px;
+}
+
+.proto-c-head {
+  align-items: center;
+  min-height: 40px;
+}
+
+.proto-c-head h1 {
+  font-size: 1.6rem;
+}
+
+.proto-c-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .proto-c-main {
+    grid-template-columns: 400px minmax(0, 1fr);
+  }
+}
+
+.proto-c-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.proto-c-wheel {
+  width: min(100%, 400px, calc(100vh - 500px));
+  min-width: 240px;
+  aspect-ratio: 1;
+  align-self: center;
+}
+
+.proto-c-history {
+  min-height: 44px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.proto-c-dot {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 2px solid rgb(255 255 255 / 85%);
+  box-shadow: 0 0 0 1.5px var(--ink);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.proto-c-dot.pocket-red {
+  background: #d62839;
+}
+
+.proto-c-dot.pocket-black {
+  background: var(--ink);
+}
+
+.proto-c-dot.pocket-green {
+  background: #1b8a3e;
+}
+
+.proto-c-dot.is-latest {
+  width: 38px;
+  height: 38px;
+  border-color: var(--sun);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 12px 2px var(--sun);
+  font-size: 1rem;
+}
+
+.proto-c-status {
+  min-height: 3.6rem;
+}
+
+.proto-c-status p {
+  margin: 0;
+}
+
+.proto-c-banner {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.proto-c-banner-main {
+  font-size: 1rem;
+}
+
+.proto-c-banner-net {
+  font-size: 0.9rem;
+}
+
+.proto-c-summary {
+  position: static;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.proto-c-summary dd {
+  font-size: 1.1rem;
+}
+
+.proto-c-alert {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.proto-c-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.proto-c-scroll {
+  padding-top: 26px;
+}
+
+.proto-c-rack {
+  padding: 14px 14px 4px;
+}
+
+.proto-c-controls {
+  align-items: center;
+}
+
+.proto-c-spin {
+  min-width: 12rem;
+  min-height: 60px;
+  background: var(--sun);
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+}
+
+.proto-c-spin:not(:disabled) {
+  animation: proto-c-ready 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes proto-c-ready {
+  to {
+    box-shadow: 6px 6px 0 var(--ink);
+    transform: translate(-2px, -2px);
+  }
+}

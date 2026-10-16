@@ -14,6 +14,7 @@ import { creditsToAmount } from "./creditsInput";
 import { PrototypeSwitcher } from "./roulette/prototype/PrototypeSwitcher";
 import { VariantA } from "./roulette/prototype/VariantA";
 import { VariantB } from "./roulette/prototype/VariantB";
+import { VariantC } from "./roulette/prototype/VariantC";
 import { RouletteWheel } from "./roulette/RouletteWheel";
 
 const COLOR_NAMES: Record<PocketColor, string> = { red: "rojo", black: "negro", green: "verde" };
@@ -58,7 +59,15 @@ export function RoulettePage() {
   const variant = params.get("variant");
   return (
     <>
-      {variant === "A" ? <VariantA /> : variant === "B" ? <VariantB /> : <CurrentRoulette />}
+      {variant === "A" ? (
+        <VariantA />
+      ) : variant === "B" ? (
+        <VariantB />
+      ) : variant === "C" ? (
+        <VariantC />
+      ) : (
+        <CurrentRoulette />
+      )}
       <PrototypeSwitcher />
     </>
   );

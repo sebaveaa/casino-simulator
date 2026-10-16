@@ -1048,6 +1048,8 @@
 @media (prefers-reduced-motion: reduce) {
   .proto-a *,
   .proto-b *,
+  .proto-c *,
+  .proto-c *::after,
   .proto-switcher {
     /* biome-ignore lint/complexity/noImportantStyles: must beat per-element animations */
     animation: none !important;
