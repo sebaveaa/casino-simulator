@@ -1043,3 +1043,158 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Roulette page. */
+.roulette {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.roulette h1,
+.roulette-balance {
+  margin: 0;
+}
+
+.roulette-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.roulette-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.roulette-wheel {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1;
+}
+
+.roulette-result {
+  min-height: 4rem;
+  text-align: center;
+}
+
+.roulette-result p {
+  margin: 4px 0;
+}
+
+.roulette-number {
+  font-size: 1.25rem;
+}
+
+.pocket {
+  display: inline-block;
+  min-width: 2.2rem;
+  padding: 0 8px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: var(--font-amount);
+}
+
+.pocket-red {
+  background: #d62839;
+}
+
+.pocket-black {
+  background: var(--ink);
+}
+
+.pocket-green {
+  background: #1b8a3e;
+}
+
+.roulette-fairness {
+  width: 100%;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.roulette-fairness dt {
+  font-weight: 700;
+}
+
+.roulette-fairness dd {
+  margin: 0 0 6px;
+}
+
+.roulette-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roulette-form > label {
+  font-weight: 700;
+}
+
+.roulette-form .wallet-input {
+  flex: none;
+}
+
+.roulette-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.roulette-fieldset legend {
+  padding: 0;
+  font-weight: 700;
+}
+
+.roulette-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.roulette-chip {
+  min-height: 44px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: var(--font-amount);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.roulette-chip[aria-pressed="true"],
+.roulette-outside .button[aria-pressed="true"] {
+  outline: 4px solid var(--sun);
+  outline-offset: 2px;
+}
+
+.roulette-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.roulette-outside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.roulette-chosen {
+  margin: 0;
+  font-weight: 600;
+}
+
+.roulette-form > .button {
+  align-self: flex-start;
+  justify-content: center;
+}

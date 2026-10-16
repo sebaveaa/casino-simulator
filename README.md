@@ -491,7 +491,9 @@ flowchart LR
 └── README.md
 ```
 
-El backend y el portal se empaquetan en imágenes Docker (`Dockerfile` y `frontend/Dockerfile`). Con `docker compose --profile app up --build` se levanta todo el sistema en contenedores: el portal queda en http://localhost:8080 y la API en http://localhost:3000. Sin el perfil `app`, `docker compose up -d` inicia solo PostgreSQL y Redis.
+El backend y el portal se empaquetan en imágenes Docker (`Dockerfile` y `frontend/Dockerfile`). Con `docker compose up -d --build` se levanta todo el sistema en contenedores: PostgreSQL, Redis, las migraciones (`migrate`, que corre una vez y termina), la API (`app`), el `worker` y el portal (`web`). `docker compose ps` muestra `healthy` en cada servicio cuando todo está encendido; el portal queda en http://localhost:8080 y la API en http://localhost:3000.
+
+Para desarrollar es posible usar la interfaz fuera de Compose: `docker compose up -d --build app` levanta la API y sus dependencias, y luego `VITE_API_URL=http://localhost:3000 npm run dev -w frontend` sirve el portal en http://127.0.0.1:5173. Para ejecutar también el backend desde el código fuente (`npm run dev -w backend`), se inicia solo `docker compose up -d postgres redis`, se corre `npm run migrate` y, si el contenedor `app` está activo, se detiene antes con `docker compose stop app`, porque ambos usan el puerto 3000.
 
 ---
 
