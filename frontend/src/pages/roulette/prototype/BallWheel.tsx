@@ -19,7 +19,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /** European roulette wheel with a ball, drawn with PixiJS. It never decides a result. */
-export function BallWheel({ target, spinId, onSpinEnd, theme = "classic" }: BallWheelProps) {
+export function BallWheel({ target, spinId, onSpinEnd, theme = "brand" }: BallWheelProps) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<BallWheelScene | null>(null);
   const failed = useRef(false);

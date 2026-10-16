@@ -873,3 +873,239 @@
   color: #d62839;
   animation: pulse 600ms ease-in-out infinite alternate;
 }
+
+/* ---------- Variant C iteration 3: result sequence, captions, felt themes ---------- */
+.proto-c-result {
+  position: relative;
+}
+
+.proto-c-result-skip {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.proto-c-step {
+  min-height: 34px;
+  animation: proto-c-step-in 320ms var(--ease-spring) both;
+}
+
+@keyframes proto-c-step-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.9);
+  }
+}
+
+.proto-c-step-small {
+  font-size: 1.1rem;
+  opacity: 0.85;
+}
+
+.proto-c-step-small.is-up {
+  color: #0a7a3e;
+}
+
+.proto-c-eq {
+  font-family: var(--font-amount);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.proto-c-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 22px;
+}
+
+.proto-c-breakdown {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.proto-c-breakdown .is-up {
+  color: #0a7a3e;
+}
+
+.proto-c-breakdown .is-down {
+  color: #d62839;
+}
+
+.proto-c-stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.1;
+}
+
+.proto-c-cap {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.proto-c-summary .is-hot .proto-c-cap {
+  color: #ff2e63;
+}
+
+.proto-c-summary li {
+  font-size: 0.95rem;
+}
+
+.proto-c-felt-themes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+}
+
+.proto-c-rack {
+  align-items: center;
+}
+
+/* Casino Cloud felt: paper surface, thick ink cells, flat tokens, hard shadow. */
+.proto-c[data-felt="brand"] .proto-c-felt {
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-md);
+}
+
+.proto-c[data-felt="brand"] .proto-c-cell {
+  border: 1px solid var(--ink);
+  background-color: var(--chalk);
+  color: var(--ink);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.proto-c[data-felt="brand"] .proto-c-cell:hover:not(:disabled),
+.proto-c[data-felt="brand"] .proto-c-cell:focus-visible {
+  z-index: 4;
+  background-color: var(--sun);
+  box-shadow: 3px 3px 0 var(--ink);
+  filter: none;
+  transform: translate(-1px, -1px);
+}
+
+.proto-c[data-felt="brand"] .proto-c-red {
+  background-color: #d62839;
+  color: #fff;
+}
+
+.proto-c[data-felt="brand"] .proto-c-black {
+  background-color: var(--ink);
+  color: #fff;
+}
+
+.proto-c[data-felt="brand"] .proto-c-red:hover:not(:disabled),
+.proto-c[data-felt="brand"] .proto-c-black:hover:not(:disabled) {
+  background-color: var(--sun);
+  color: var(--ink);
+}
+
+.proto-c[data-felt="brand"] .proto-c-zero {
+  border-radius: 8px 0 0 8px;
+  background-color: #1b8a3e;
+  color: #fff;
+}
+
+.proto-c[data-felt="brand"] .proto-c-zero:hover:not(:disabled) {
+  background-color: var(--sun);
+  color: var(--ink);
+}
+
+.proto-c[data-felt="brand"] .proto-c-outside {
+  font-family: var(--font-ui);
+  font-weight: 800;
+}
+
+.proto-c[data-felt="brand"] .proto-c-diamond-red,
+.proto-c[data-felt="brand"] .proto-c-diamond-black {
+  background-image: none;
+}
+
+.proto-c[data-felt="brand"] .proto-c-diamond-red {
+  background-color: #d62839;
+  color: #fff;
+}
+
+.proto-c[data-felt="brand"] .proto-c-diamond-black {
+  background-color: var(--ink);
+  color: #fff;
+}
+
+.proto-c[data-felt="brand"] .proto-c-diamond-red:hover:not(:disabled),
+.proto-c[data-felt="brand"] .proto-c-diamond-black:hover:not(:disabled) {
+  background-color: var(--sun);
+  color: var(--ink);
+}
+
+/* A cell with chips on it reads as "selected" in sun yellow. */
+.proto-c[data-felt="brand"] .proto-c-outside:has(.proto-c-chip-on-cell) {
+  background-color: var(--sun);
+  color: var(--ink);
+}
+
+/* Winning cells: a flat sun-yellow pulse, no glow. */
+.proto-c[data-felt="brand"] .proto-c-cell.is-win {
+  z-index: 3;
+  filter: none;
+  animation: proto-c-sun 800ms steps(1, end) infinite;
+}
+
+@keyframes proto-c-sun {
+  0%,
+  49% {
+    box-shadow: inset 0 0 0 4px var(--sun);
+  }
+  50%,
+  100% {
+    box-shadow:
+      inset 0 0 0 4px var(--sun),
+      inset 0 0 0 7px var(--ink);
+  }
+}
+
+/* Chips: ink outline and hard shadow. */
+.proto-c[data-felt="brand"] .proto-c-chip {
+  border: 3px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.proto-c[data-felt="brand"] .proto-c-chip-on-cell.is-win {
+  filter: none;
+  box-shadow:
+    0 0 0 3px var(--sun),
+    0 0 0 5px var(--ink);
+  transform: scale(1.2);
+}
+
+.proto-c[data-felt="brand"] .proto-c-rack-chip[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 3px var(--sun),
+    0 0 0 5px var(--ink),
+    4px 7px 0 5px var(--ink);
+}
+
+/* Multiplier badges as small brutalist tags. */
+.proto-c[data-felt="brand"] .proto-c-mult {
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.proto-c[data-felt="brand"] .proto-c-mult-corner {
+  box-shadow: 1px 1px 0 var(--ink);
+}

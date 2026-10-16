@@ -1,6 +1,6 @@
 // PROTOTYPE — throwaway, see branch prototype/12-roulette-table
 import { formatCredits, type RouletteSelection, roulette } from "@casino/shared";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { BallWheel } from "./BallWheel";
 import "./prototype.css";
 import "./prototype-c.css";
@@ -12,16 +12,16 @@ import {
   multiplierOf,
   payoutsByOutcome,
   pocketColor,
+  prefersReducedMotion,
   type Round,
   selectionKey,
   selectionLabel,
   shortCredits,
-  signedCredits,
   totalStake,
   useCountUp,
   useStubTable,
 } from "./useStubTable";
-import { WHEEL_THEME_IDS, WHEEL_THEMES, type WheelThemeId } from "./wheelSceneBall";
+import { isWheelThemeId, WHEEL_THEME_IDS, WHEEL_THEMES, type WheelThemeId } from "./wheelSceneBall";
 
 const CHIP_VALUES = [1, 5, 10, 25, 100] as const;
 
@@ -44,24 +44,40 @@ const GRID_ROWS = [3, 2, 1].map((offset) => Array.from({ length: 12 }, (_, c) =>
 const DOZENS = [1, 2, 3] as const;
 
 // ---------------------------------------------------------------------------------------
-// Wheel theme persistence
+// Look persistence (wheel and felt)
 // ---------------------------------------------------------------------------------------
 
-const THEME_KEY = "proto-c-wheel-theme";
+const WHEEL_KEY = "proto-c-wheel-theme";
+const FELT_KEY = "proto-c-felt-theme";
 
-function loadTheme(): WheelThemeId {
+type FeltTheme = "brand" | "classic";
+const FELTS: { id: FeltTheme; label: string; swatch: string }[] = [
+  {
+    id: "brand",
+    label: "Casino Cloud",
+    swatch: "linear-gradient(135deg, #f1ecff 50%, #141414 50%)",
+  },
+  { id: "classic", label: "Clásico", swatch: "linear-gradient(135deg, #0b6b3a 50%, #d62839 50%)" },
+];
+
+function isFeltTheme(value: unknown): value is FeltTheme {
+  return value === "brand" || value === "classic";
+}
+
+/** A stored value that no longer exists falls back to the default. */
+function loadChoice<T extends string>(key: string, valid: (v: unknown) => v is T, fallback: T): T {
   try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved && saved in WHEEL_THEMES) return saved as WheelThemeId;
+    const saved = localStorage.getItem(key);
+    if (valid(saved)) return saved;
   } catch {
     // Storage can be blocked; fall back to the default look.
   }
-  return "classic";
+  return fallback;
 }
 
-function saveTheme(id: WheelThemeId) {
+function saveChoice(key: string, value: string) {
   try {
-    localStorage.setItem(THEME_KEY, id);
+    localStorage.setItem(key, value);
   } catch {
     // Not persisted; the choice still applies for this visit.
   }
@@ -180,38 +196,107 @@ function MultBadge({ selection, className }: { selection: RouletteSelection; cla
 }
 
 // ---------------------------------------------------------------------------------------
-// Result: a token, a signed amount and the winning bets, no sentence
+// Result: token, then +won, then -staked, then the net; no sentence
 // ---------------------------------------------------------------------------------------
 
+type Step = 0 | 1 | 2;
+const STEP_MS = 700;
+
+function Counter({
+  value,
+  format,
+  className,
+}: {
+  value: bigint;
+  format: (value: bigint) => string;
+  className?: string;
+}) {
+  const shown = useCountUp(value, true, 650);
+  return <span className={cx("amount", className)}>{format(shown)}</span>;
+}
+
 function Result({ round }: { round: Round }) {
-  const net = useCountUp(round.net, true, 900);
   const color = pocketColor(round.number);
   const wins = round.bets.filter((bet) => roulette.payout(bet, { number: round.number }) > 0n);
   const tag = round.net > 0n ? "¡Gana!" : round.payout > 0n ? "Parcial" : "Pierde";
+  const [step, setStep] = useState<Step>(() =>
+    prefersReducedMotion() ? 2 : round.payout > 0n ? 0 : 1,
+  );
+  useEffect(() => {
+    if (step >= 2) return;
+    const id = window.setTimeout(() => setStep((current) => (current + 1) as Step), STEP_MS);
+    return () => window.clearTimeout(id);
+  }, [step]);
+  const done = step === 2;
+  const netTone = round.net >= 0n ? "is-up" : "is-down";
+
   return (
     <div className={cx("proto-c-result", round.net > 0n ? "is-win" : "is-loss")}>
       <span className={cx("proto-c-token", `pocket-${color}`)}>{round.number}</span>
       <div className="proto-c-result-body">
-        <div className="proto-c-result-line">
-          <CoinIcon />
-          <span className={cx("proto-c-result-amount amount", net >= 0n ? "is-up" : "is-down")}>
-            {signedWhole(net)}
-          </span>
-          <span className="proto-c-tag">{tag}</span>
-        </div>
-        {wins.length > 0 && (
-          <ul className="proto-c-wins" aria-label="Apuestas ganadoras">
-            {wins.map((bet) => (
-              <li key={selectionKey(bet.selection)} className="proto-c-win-chip">
-                {shortLabel(bet.selection)}
-                <MultBadge selection={bet.selection} />
-              </li>
-            ))}
-          </ul>
+        {step === 0 && (
+          <div className="proto-c-result-line proto-c-step">
+            <CoinIcon />
+            <Counter
+              value={round.payout}
+              format={(v) => `+${wholeCredits(v)}`}
+              className="proto-c-result-amount is-up"
+            />
+          </div>
         )}
+        {step === 1 && (
+          <div className="proto-c-result-line proto-c-step">
+            {round.payout > 0n && (
+              <span className="proto-c-step-small is-up amount">+{wholeCredits(round.payout)}</span>
+            )}
+            <Counter
+              value={round.stake}
+              format={(v) => `−${wholeCredits(v)}`}
+              className="proto-c-result-amount is-down"
+            />
+          </div>
+        )}
+        {done && (
+          <div className="proto-c-result-line proto-c-step">
+            <CoinIcon />
+            <span className="proto-c-eq">=</span>
+            <Counter
+              value={round.net}
+              format={signedWhole}
+              className={cx("proto-c-result-amount", netTone)}
+            />
+            <span className="proto-c-tag">{tag}</span>
+          </div>
+        )}
+        <div className="proto-c-result-meta">
+          {done && (
+            <span className="proto-c-breakdown amount" aria-hidden="true">
+              <span className="is-up">+{wholeCredits(round.payout)}</span>{" "}
+              <span className="is-down">−{wholeCredits(round.stake)}</span>
+            </span>
+          )}
+          {wins.length > 0 && (
+            <ul className="proto-c-wins" aria-label="Apuestas ganadoras">
+              {wins.map((bet) => (
+                <li key={selectionKey(bet.selection)} className="proto-c-win-chip">
+                  {shortLabel(bet.selection)}
+                  <MultBadge selection={bet.selection} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+      {!done && (
+        <button
+          type="button"
+          className="proto-c-result-skip"
+          aria-label="Mostrar el resultado final"
+          onClick={() => setStep(2)}
+        />
+      )}
       <span className="proto-sr-only">
-        {`Salió el ${round.number}, ${COLOR_NAMES[color]}. Resultado neto: ${signedCredits(round.net)} créditos.`}
+        {`Salió el ${round.number}, ${COLOR_NAMES[color]}. Recibió ${wholeCredits(round.payout)} créditos, apostó ${wholeCredits(round.stake)} créditos. Resultado neto: ${signedWhole(round.net)} créditos.`}
       </span>
     </div>
   );
@@ -222,7 +307,12 @@ export function VariantC() {
   const { balance, spinning, round } = table;
   const [chip, setChip] = useState<(typeof CHIP_VALUES)[number]>(5);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [wheelTheme, setWheelTheme] = useState<WheelThemeId>(loadTheme);
+  const [wheelTheme, setWheelTheme] = useState<WheelThemeId>(() =>
+    loadChoice(WHEEL_KEY, isWheelThemeId, "brand"),
+  );
+  const [feltTheme, setFeltTheme] = useState<FeltTheme>(() =>
+    loadChoice(FELT_KEY, isFeltTheme, "brand"),
+  );
 
   const settled = round !== null;
 
@@ -261,7 +351,12 @@ export function VariantC() {
 
   function pickTheme(id: WheelThemeId) {
     setWheelTheme(id);
-    saveTheme(id);
+    saveChoice(WHEEL_KEY, id);
+  }
+
+  function pickFelt(id: FeltTheme) {
+    setFeltTheme(id);
+    saveChoice(FELT_KEY, id);
   }
 
   const resultNumber = round?.number ?? null;
@@ -314,7 +409,7 @@ export function VariantC() {
   }
 
   return (
-    <div className="proto-c">
+    <div className="proto-c" data-felt={feltTheme}>
       <header className="proto-c-head">
         <h1>Ruleta</h1>
         <p>
@@ -387,22 +482,44 @@ export function VariantC() {
             <li title="Apuesta total">
               <span className="proto-sr-only">Apuesta total</span>
               <ChipStackIcon />
-              <span className="amount">{wholeCredits(shownTotal)}</span>
+              <span className="proto-c-stat">
+                <span className="proto-c-cap" aria-hidden="true">
+                  Apostado
+                </span>
+                <span className="amount">{wholeCredits(shownTotal)}</span>
+              </span>
             </li>
-            <li className="is-hot" title="Ganancia máxima posible">
-              <span className="proto-sr-only">Ganancia máxima posible</span>
+            <li className="is-hot" title="Ganancia máxima si acierta todo lo posible en un giro">
+              <span className="proto-sr-only">
+                Ganancia máxima si acierta todo lo posible en un giro
+              </span>
               <TrophyIcon />
-              <span className="amount">{wholeCredits(shownMax)}</span>
+              <span className="proto-c-stat">
+                <span className="proto-c-cap" aria-hidden="true">
+                  hasta
+                </span>
+                <span className="amount">{wholeCredits(shownMax)}</span>
+              </span>
             </li>
             <li title="Número de apuestas">
               <span className="proto-sr-only">Número de apuestas</span>
               <TicketIcon />
-              <span className="amount">{activeBets.length}</span>
+              <span className="proto-c-stat">
+                <span className="proto-c-cap" aria-hidden="true">
+                  Apuestas
+                </span>
+                <span className="amount">{activeBets.length}</span>
+              </span>
             </li>
             <li className={cx(afterBetting < 0n && "is-negative")} title="Saldo tras apostar">
               <span className="proto-sr-only">Saldo tras apostar</span>
               <WalletIcon />
-              <span className="amount">{wholeCredits(afterBetting)}</span>
+              <span className="proto-c-stat">
+                <span className="proto-c-cap" aria-hidden="true">
+                  Saldo
+                </span>
+                <span className="amount">{wholeCredits(afterBetting)}</span>
+              </span>
             </li>
           </ul>
           {total > balance && (
@@ -471,6 +588,21 @@ export function VariantC() {
                 {value}
               </button>
             ))}
+            <fieldset className="proto-c-felt-themes">
+              <legend className="proto-sr-only">Estilo de la mesa</legend>
+              {FELTS.map((felt) => (
+                <button
+                  key={felt.id}
+                  type="button"
+                  className="proto-c-theme-dot"
+                  style={{ "--swatch": felt.swatch } as CSSProperties}
+                  aria-pressed={feltTheme === felt.id}
+                  aria-label={`Mesa ${felt.label}`}
+                  title={felt.label}
+                  onClick={() => pickFelt(felt.id)}
+                />
+              ))}
+            </fieldset>
           </div>
 
           <div className="proto-c-controls">
