@@ -565,3 +565,311 @@
     transform: translate(-2px, -2px);
   }
 }
+
+/* ---------- Variant C iteration 2: themes, multiplier badges, visual result/summary ---------- */
+.proto-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.proto-c-wheel-wrap {
+  position: relative;
+  align-self: center;
+  width: min(100%, 400px, calc(100vh - 500px));
+  min-width: 240px;
+}
+
+.proto-c-wheel {
+  width: 100%;
+  min-width: 0;
+}
+
+.proto-c-themes {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.proto-c-theme-dot {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-spring);
+}
+
+.proto-c-theme-dot:hover {
+  transform: scale(1.2);
+}
+
+.proto-c-theme-dot[aria-pressed="true"] {
+  outline: 3px solid var(--sun);
+  outline-offset: 1px;
+  transform: scale(1.15);
+}
+
+/* Multiplier badges, coloured by risk. */
+.proto-c-mult {
+  display: inline-block;
+  padding: 0 6px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-amount);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.proto-c-mult-2 {
+  background: #12a594;
+  color: #fff;
+}
+
+.proto-c-mult-3 {
+  background: #f5a524;
+  color: var(--ink);
+}
+
+.proto-c-mult-36 {
+  background: #ff2e63;
+  color: #fff;
+}
+
+.proto-c-cell::after {
+  content: none;
+}
+
+.proto-c-mult-tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 10;
+  font-size: 0.85rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(4px) scale(0.9);
+  transition:
+    opacity 120ms ease,
+    transform 160ms var(--ease-spring);
+}
+
+.proto-c-cell:hover .proto-c-mult-tip,
+.proto-c-cell:focus-visible .proto-c-mult-tip {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.proto-c-mult-corner {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  z-index: 2;
+  padding: 0 3px;
+  border-width: 1.5px;
+  font-size: 0.58rem;
+  pointer-events: none;
+}
+
+/* Result: token + signed amount + winning chips. */
+.proto-c-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+}
+
+.proto-c-hint {
+  font-size: 0.9rem;
+}
+
+.proto-c-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 12px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-sm);
+  animation: proto-c-banner-in 400ms var(--ease-spring) both;
+}
+
+.proto-c-result.is-win {
+  background: var(--sun);
+}
+
+.proto-c-token {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--chalk);
+  color: #fff;
+  font-family: var(--font-amount);
+  font-size: 1.5rem;
+  font-weight: 700;
+  animation: proto-c-pop 520ms var(--ease-spring) both;
+}
+
+.proto-c-token-wait {
+  background: var(--ink);
+  animation: proto-c-wait 700ms ease-in-out infinite alternate;
+}
+
+@keyframes proto-c-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(-160deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.2) rotate(8deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes proto-c-wait {
+  to {
+    transform: scale(1.1) rotate(10deg);
+  }
+}
+
+.proto-c-result-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.proto-c-result-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.proto-c-icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.proto-c-coin {
+  width: 26px;
+  height: 26px;
+}
+
+.proto-c-result-amount {
+  font-size: 2.1rem;
+  line-height: 1;
+}
+
+.proto-c-result-amount.is-up {
+  color: #0a7a3e;
+}
+
+.proto-c-result-amount.is-down {
+  color: #d62839;
+}
+
+.proto-c-tag {
+  margin-left: auto;
+  padding: 1px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.proto-c-wins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 46px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.proto-c-win-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-family: var(--font-amount);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.proto-c-win-chip .proto-c-mult {
+  border-width: 1.5px;
+  font-size: 0.62rem;
+}
+
+/* Summary: icon + number pairs. */
+.proto-c-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 6px 4px;
+  list-style: none;
+}
+
+.proto-c-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 4px;
+  border-right: 2px dashed rgb(20 20 20 / 25%);
+  font-size: 1rem;
+}
+
+.proto-c-summary li:last-child {
+  border-right: 0;
+}
+
+.proto-c-summary .amount {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proto-c-summary .is-hot,
+.proto-c-summary .is-hot .proto-c-icon {
+  color: #ff2e63;
+}
+
+.proto-c-summary .is-negative {
+  color: #d62839;
+  animation: pulse 600ms ease-in-out infinite alternate;
+}

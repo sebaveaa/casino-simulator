@@ -1,6 +1,6 @@
 // PROTOTYPE — throwaway, see branch prototype/12-roulette-table
 import { useCallback, useEffect, useRef } from "react";
-import { type BallWheelScene, createBallWheelScene } from "./wheelSceneBall";
+import { type BallWheelScene, createBallWheelScene, type WheelThemeId } from "./wheelSceneBall";
 
 export interface BallWheelProps {
   /** Pocket the server already drew; the wheel only animates to it. */
@@ -8,6 +8,8 @@ export interface BallWheelProps {
   /** Changes on every new result, so the same number twice in a row still spins. */
   spinId: number;
   onSpinEnd: () => void;
+  /** Look of the wheel; changing it redraws the static layers without remounting. */
+  theme?: WheelThemeId;
 }
 
 function prefersReducedMotion(): boolean {
@@ -17,7 +19,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /** European roulette wheel with a ball, drawn with PixiJS. It never decides a result. */
-export function BallWheel({ target, spinId, onSpinEnd }: BallWheelProps) {
+export function BallWheel({ target, spinId, onSpinEnd, theme = "classic" }: BallWheelProps) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<BallWheelScene | null>(null);
   const failed = useRef(false);
@@ -25,6 +27,8 @@ export function BallWheel({ target, spinId, onSpinEnd }: BallWheelProps) {
   const handledSpin = useRef(0);
   const onEnd = useRef(onSpinEnd);
   onEnd.current = onSpinEnd;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   const run = useCallback((pocket: number, id: number) => {
     handledSpin.current = id;
@@ -45,13 +49,14 @@ export function BallWheel({ target, spinId, onSpinEnd }: BallWheelProps) {
     if (!element) return;
     let cancelled = false;
     failed.current = false;
-    createBallWheelScene(element).then(
+    createBallWheelScene(element, themeRef.current).then(
       (created) => {
         if (cancelled) {
           created.destroy();
           return;
         }
         scene.current = created;
+        created.setTheme(themeRef.current);
         const waiting = pending.current;
         pending.current = null;
         if (waiting) run(waiting.target, waiting.spinId);
@@ -72,6 +77,10 @@ export function BallWheel({ target, spinId, onSpinEnd }: BallWheelProps) {
       scene.current = null;
     };
   }, [run]);
+
+  useEffect(() => {
+    scene.current?.setTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     if (target === null || spinId === handledSpin.current) return;
