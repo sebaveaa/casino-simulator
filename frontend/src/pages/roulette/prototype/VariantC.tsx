@@ -311,7 +311,7 @@ export function VariantC() {
     loadChoice(WHEEL_KEY, isWheelThemeId, "brand"),
   );
   const [feltTheme, setFeltTheme] = useState<FeltTheme>(() =>
-    loadChoice(FELT_KEY, isFeltTheme, "brand"),
+    loadChoice(FELT_KEY, isFeltTheme, "classic"),
   );
 
   const settled = round !== null;
