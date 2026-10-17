@@ -1,39 +1,39 @@
 import {
-  formatCredits,
-  type PocketColor,
-  parseAmount,
-  pocketColor,
+  type RouletteBet,
   type RouletteBetResponse,
   type RouletteSelection,
+  totalStake,
+  validateSpin,
 } from "@casino/shared";
-import { type FormEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ApiError, useApi } from "../api";
-import { BALANCE_LOADING, useBalance, useRefreshBalance } from "../app/useBalance";
-import { creditsToAmount } from "./creditsInput";
+import {
+  BALANCE_LOADING,
+  useBalance,
+  useBalanceAmount,
+  useRefreshBalance,
+} from "../app/useBalance";
+import {
+  betsFromResponse,
+  type Chip,
+  chipsFromBets,
+  doubleChips,
+  maxWin,
+  placeChip,
+  stacksOf,
+  toRequest,
+  undoChip,
+} from "./roulette/betSlip";
+import { ChipRack } from "./roulette/ChipRack";
+import { type ChipValue, chipAmount, DEFAULT_CHIP } from "./roulette/chips";
+import { FairnessDetails } from "./roulette/FairnessDetails";
+import { shortCredits } from "./roulette/money";
+import { HISTORY_LIMIT, type HistoryEntry, ResultHistory } from "./roulette/ResultHistory";
+import { RouletteTable } from "./roulette/RouletteTable";
 import { RouletteWheel } from "./roulette/RouletteWheel";
-
-const COLOR_NAMES: Record<PocketColor, string> = { red: "rojo", black: "negro", green: "verde" };
-
-const NUMBERS = Array.from({ length: 37 }, (_, n) => n);
-
-const OUTSIDE_BETS: { label: string; selection: RouletteSelection }[] = [
-  { label: "Rojo", selection: { type: "color", color: "red" } },
-  { label: "Negro", selection: { type: "color", color: "black" } },
-  { label: "Par", selection: { type: "parity", parity: "even" } },
-  { label: "Impar", selection: { type: "parity", parity: "odd" } },
-  { label: "1ª docena (1-12)", selection: { type: "dozen", dozen: 1 } },
-  { label: "2ª docena (13-24)", selection: { type: "dozen", dozen: 2 } },
-  { label: "3ª docena (25-36)", selection: { type: "dozen", dozen: 3 } },
-];
-
-function sameSelection(a: RouletteSelection | null, b: RouletteSelection | null): boolean {
-  return a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b);
-}
-
-function describeSelection(selection: RouletteSelection): string {
-  if (selection.type === "straight") return `Número ${selection.number}`;
-  return OUTSIDE_BETS.find((bet) => sameSelection(bet.selection, selection))?.label ?? "";
-}
+import { SpinResult } from "./roulette/SpinResult";
+import { SpinSummary } from "./roulette/SpinSummary";
+import { TableControls } from "./roulette/TableControls";
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -45,195 +45,187 @@ function errorMessage(error: unknown): string {
   return "Ocurrió un error inesperado. Intente de nuevo.";
 }
 
-type Round = { response: RouletteBetResponse };
+/** A spin the server already settled, with the bets it was made of. */
+type Round = { response: RouletteBetResponse; bets: RouletteBet[] };
 
-/** Roulette table: the server draws the number, the wheel only animates it (README §4.2). */
+/** "idle": chips can be placed; "revealed": the wheel stopped and the result is on screen. */
+type Phase = "idle" | "submitting" | "spinning" | "revealed";
+
+/**
+ * Roulette table. The server draws the number and settles the money; the wheel and the result
+ * only show what the response already says (README §4.2).
+ */
 export function RoulettePage() {
   const api = useApi();
-  const balance = useBalance();
+  const balanceText = useBalance();
+  const balance = useBalanceAmount();
   const refreshBalance = useRefreshBalance();
 
-  const [stakeText, setStakeText] = useState("10");
-  const [selection, setSelection] = useState<RouletteSelection | null>(null);
-  const [fieldError, setFieldError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [spinning, setSpinning] = useState(false);
+  const [chipValue, setChipValue] = useState<ChipValue>(DEFAULT_CHIP);
+  const [chips, setChips] = useState<Chip[]>([]);
   const [round, setRound] = useState<Round | null>(null);
-  const [revealed, setRevealed] = useState(false);
+  const [lastBets, setLastBets] = useState<RouletteBet[]>([]);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [spinId, setSpinId] = useState(0);
 
-  // One Idempotency-Key per bet: retrying the same bet after a network failure reuses it.
+  // One Idempotency-Key per distinct request: retrying the same bets after a network failure
+  // reuses it, so the server charges once.
   const pendingKey = useRef<{ signature: string; key: string } | null>(null);
 
-  const busy = submitting || spinning;
+  const busy = phase === "submitting" || phase === "spinning";
+  // After a spin the chips stay on the felt for the result, but no longer count as a bet.
+  const settled = round !== null;
+  const activeBets = settled ? [] : stacksOf(chips);
+  const tableBets = round ? round.bets : activeBets;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  const total = totalStake(activeBets);
+  const balanceAfter = balance === null ? null : balance - total;
+  const overBalance = balanceAfter !== null && balanceAfter < 0n;
+  const validSlip = activeBets.length === 0 || validateSpin(activeBets);
+  const canSpin = !busy && !settled && activeBets.length > 0 && validSlip && !overBalance;
+  const problem = overBalance
+    ? "La apuesta total supera su saldo."
+    : validSlip
+      ? null
+      : "La apuesta no es válida.";
+
+  /** Changes the chips; the first change after a spin starts a fresh slip. */
+  function edit(next: (previous: Chip[]) => Chip[]) {
     if (busy) return;
-    const stake = creditsToAmount(stakeText);
-    if (stake === null) {
-      setFieldError("Ingrese una apuesta mayor que cero, con hasta dos decimales.");
-      return;
-    }
-    if (selection === null) {
-      setFieldError("Elija a qué desea apostar.");
-      return;
-    }
-    setFieldError(null);
     setError(null);
+    if (round) {
+      setRound(null);
+      setPhase("idle");
+      setChips(next([]));
+    } else {
+      setChips(next);
+    }
+  }
 
-    const signature = JSON.stringify({ bets: [{ stake, selection }] });
+  function place(selection: RouletteSelection) {
+    edit((previous) => placeChip(previous, selection, chipAmount(chipValue)));
+  }
+
+  async function spin() {
+    if (!canSpin) return;
+    setError(null);
+    const request = toRequest(activeBets);
+    const signature = JSON.stringify(request);
     if (pendingKey.current?.signature !== signature) {
       pendingKey.current = { signature, key: crypto.randomUUID() };
     }
     const { key } = pendingKey.current;
 
-    setSubmitting(true);
+    setPhase("submitting");
     try {
-      const response = await api.placeRouletteBet({ bets: [{ stake, selection }] }, key);
+      const response = await api.placeRouletteBet(request, key);
       pendingKey.current = null;
-      setRound({ response });
-      setRevealed(false);
-      setSpinning(true);
+      const bets = betsFromResponse(response.bets);
+      setRound({ response, bets });
+      setLastBets(bets);
+      setPhase("spinning");
       setSpinId((id) => id + 1);
     } catch (caught) {
       if (!(caught instanceof ApiError && caught.code === "network")) pendingKey.current = null;
       setError(errorMessage(caught));
-    } finally {
-      setSubmitting(false);
+      setPhase("idle");
     }
   }
 
   function onSpinEnd() {
-    setSpinning(false);
-    setRevealed(true);
+    setPhase("revealed");
+    if (round) {
+      const entry = { id: round.response.betId, number: round.response.result.number };
+      setHistory((previous) =>
+        previous.some((item) => item.id === entry.id)
+          ? previous
+          : [entry, ...previous].slice(0, HISTORY_LIMIT),
+      );
+    }
     void refreshBalance();
   }
 
-  const result = round && revealed ? round : null;
-  const won = result ? parseAmount(result.response.payout) > 0n : false;
+  const revealed = round !== null && phase === "revealed";
+  const spinLabel =
+    phase === "submitting" ? "Enviando…" : phase === "spinning" ? "Girando…" : "Girar";
 
   return (
     <div className="roulette">
-      <h1>Ruleta</h1>
+      <header className="roulette-head">
+        <h1>Ruleta</h1>
+        <p className="roulette-balance">
+          Saldo:{" "}
+          <strong className="amount" data-loading={balanceText === BALANCE_LOADING || undefined}>
+            {balanceText}
+          </strong>{" "}
+          créditos
+        </p>
+      </header>
 
-      <p className="roulette-balance">
-        Saldo:{" "}
-        <strong className="amount" data-loading={balance === BALANCE_LOADING || undefined}>
-          {balance}
-        </strong>{" "}
-        créditos
-      </p>
+      <div className="roulette-main">
+        <section className="roulette-left" aria-label="Rueda y resumen">
+          <div className="roulette-wheel-wrap">
+            <RouletteWheel
+              target={round ? round.response.result.number : null}
+              spinId={spinId}
+              onSpinEnd={onSpinEnd}
+            />
+          </div>
 
-      <div className="roulette-layout">
-        <section className="wallet-card roulette-stage" aria-label="Rueda">
-          <RouletteWheel
-            target={round ? round.response.result.number : null}
-            spinId={spinId}
-            onSpinEnd={onSpinEnd}
-          />
-          <div aria-live="polite" role="status" className="roulette-result">
-            {result && (
+          <ResultHistory entries={history} />
+
+          <div role="status" aria-live="polite" className="roulette-status">
+            {phase === "spinning" && (
               <>
-                <p className="roulette-number">
-                  Salió el{" "}
-                  <strong className={`pocket pocket-${pocketColor(result.response.result.number)}`}>
-                    {result.response.result.number}
-                  </strong>{" "}
-                  ({COLOR_NAMES[pocketColor(result.response.result.number)]}).
-                </p>
-                <p className={won ? "wallet-ok" : "wallet-error"}>
-                  {won
-                    ? `Ganaste ${formatCredits(parseAmount(result.response.payout))} créditos.`
-                    : `Perdiste ${formatCredits(parseAmount(result.response.stake))} créditos.`}
-                </p>
+                <span className="roulette-token roulette-token-wait" aria-hidden="true">
+                  ?
+                </span>
+                <span className="roulette-sr-only">Girando…</span>
               </>
             )}
+            {revealed && <SpinResult key={round.response.betId} response={round.response} />}
+            {round === null && phase !== "submitting" && (
+              <p className="roulette-hint">Elija una ficha y haga su apuesta.</p>
+            )}
           </div>
-          {result && (
-            <details className="roulette-fairness">
-              <summary>Datos de equidad</summary>
-              <dl>
-                <dt>Hash del server seed</dt>
-                <dd className="amount">{result.response.fairness.serverSeedHash}</dd>
-                <dt>Client seed</dt>
-                <dd className="amount">{result.response.fairness.clientSeed}</dd>
-                <dt>Nonce</dt>
-                <dd className="amount">{result.response.fairness.nonce}</dd>
-              </dl>
-            </details>
-          )}
-        </section>
 
-        <form className="wallet-card roulette-form" onSubmit={submit} noValidate>
-          <label htmlFor="roulette-stake">Apuesta en créditos</label>
-          <input
-            id="roulette-stake"
-            className="wallet-input"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            value={stakeText}
-            onChange={(e) => setStakeText(e.target.value)}
-            disabled={busy}
-            aria-invalid={fieldError ? true : undefined}
-            aria-describedby={fieldError ? "roulette-error" : undefined}
+          <SpinSummary
+            staked={shortCredits(total)}
+            maxWin={shortCredits(maxWin(activeBets))}
+            betCount={activeBets.length}
+            balanceAfter={balanceAfter === null ? balanceText : shortCredits(balanceAfter)}
+            insufficient={overBalance}
           />
 
-          <fieldset className="roulette-fieldset">
-            <legend>Número</legend>
-            <div className="roulette-numbers">
-              {NUMBERS.map((n) => {
-                const choice: RouletteSelection = { type: "straight", number: n };
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    className={`roulette-chip pocket-${pocketColor(n)}`}
-                    aria-pressed={sameSelection(selection, choice)}
-                    aria-label={`Número ${n}`}
-                    disabled={busy}
-                    onClick={() => setSelection(choice)}
-                  >
-                    {n}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+          {revealed && <FairnessDetails fairness={round.response.fairness} />}
+        </section>
 
-          <fieldset className="roulette-fieldset">
-            <legend>Apuestas externas</legend>
-            <div className="roulette-outside">
-              {OUTSIDE_BETS.map((bet) => (
-                <button
-                  key={bet.label}
-                  type="button"
-                  className="button button-secondary"
-                  aria-pressed={sameSelection(selection, bet.selection)}
-                  disabled={busy}
-                  onClick={() => setSelection(bet.selection)}
-                >
-                  {bet.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <p className="roulette-chosen">
-            {selection
-              ? `Apuesta elegida: ${describeSelection(selection)}`
-              : "Sin apuesta elegida."}
-          </p>
-
-          <button type="submit" className="button" disabled={busy}>
-            {submitting ? "Enviando…" : spinning ? "Girando…" : "Girar"}
-          </button>
-
-          {fieldError && (
-            <p id="roulette-error" className="wallet-error" role="alert">
-              {fieldError}
+        <section className="roulette-right" aria-label="Mesa">
+          <RouletteTable
+            stacks={tableBets}
+            outcome={revealed ? round.response.result.number : null}
+            disabled={busy}
+            onPlace={place}
+          />
+          <ChipRack selected={chipValue} onSelect={setChipValue} />
+          <TableControls
+            canUndo={!busy && !settled && chips.length > 0}
+            canClear={!busy && (settled || chips.length > 0)}
+            canRepeat={!busy && lastBets.length > 0}
+            canDouble={!busy && !settled && chips.length > 0}
+            canSpin={canSpin}
+            spinLabel={spinLabel}
+            onUndo={() => edit(undoChip)}
+            onClear={() => edit(() => [])}
+            onRepeat={() => edit(() => chipsFromBets(lastBets))}
+            onDouble={() => edit(doubleChips)}
+            onSpin={spin}
+          />
+          {problem && (
+            <p className="roulette-problem" role="alert">
+              {problem}
             </p>
           )}
           {error && (
@@ -241,7 +233,7 @@ export function RoulettePage() {
               {error}
             </p>
           )}
-        </form>
+        </section>
       </div>
     </div>
   );
