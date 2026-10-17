@@ -12,6 +12,7 @@ import {
   type RouletteBetRequest,
   type RouletteBetResponse,
   roulette,
+  selectionKey,
   spinPayouts,
   type Transaction,
   type TransactionHistoryQueryInput,
@@ -26,6 +27,21 @@ import { type ApiClient, ApiError } from "./client";
 const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
 const MOCK_CLIENT_SEED = "mock-client-seed";
+
+/** Same list, compared by value and in order, so key order inside the objects does not matter. */
+function sameBets(a: RouletteBetRequest["bets"], b: RouletteBetRequest["bets"]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((item, i) => {
+      const other = b[i];
+      return (
+        other !== undefined &&
+        parseAmount(item.stake) === parseAmount(other.stake) &&
+        selectionKey(item.selection) === selectionKey(other.selection)
+      );
+    })
+  );
+}
 
 function never(): never {
   throw new Error("A spin always has at least one bet");
@@ -128,7 +144,7 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
       const previous = bets.get(idempotencyKey);
       if (previous) {
         // Same as the backend: a key reused with another list is refused, not replayed.
-        if (JSON.stringify(previous.request) !== JSON.stringify(body)) {
+        if (!sameBets(previous.request.bets, body.bets)) {
           throw new ApiError(
             "conflict",
             "Idempotency-Key was already used for a different bet",

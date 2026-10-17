@@ -159,6 +159,26 @@ describe("mock API client", () => {
     ).rejects.toMatchObject({ code: "conflict", status: 409 });
   });
 
+  it("replays a list whose objects list their keys in another order", async () => {
+    const api = createMockApiClient();
+    const first = await api.placeRouletteBet(
+      {
+        bets: [
+          { stake: "100", selection: { type: "straight", number: 7 } },
+          { stake: "200", selection: { type: "color", color: "red" } },
+        ],
+      },
+      "key-order-0001",
+    );
+    const reordered = [
+      { selection: { number: 7, type: "straight" }, stake: "100" },
+      { selection: { color: "red", type: "color" }, stake: "200" },
+    ] as RouletteBetRequest["bets"];
+    const second = await api.placeRouletteBet({ bets: reordered }, "key-order-0001");
+    expect(second).toEqual(first);
+    expect((await api.listTransactions()).items.filter((t) => t.type === "bet")).toHaveLength(1);
+  });
+
   it("rejects a bet larger than the balance with insufficient_funds", async () => {
     const api = createMockApiClient();
     await expect(
