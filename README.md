@@ -179,11 +179,11 @@ Los asientos **nunca se editan ni se borran**. Una corrección es una nueva tran
 
 ### 3.2 Atomicidad
 
-Descontar la apuesta, registrar la apuesta, calcular el resultado y acreditar el premio ocurren dentro de **una sola transacción de PostgreSQL**. O todo se guarda o nada se guarda. El saldo del jugador se bloquea durante la operación (`SELECT ... FOR UPDATE`) para evitar que dos apuestas simultáneas gasten el mismo dinero (doble gasto).
+Descontar la apuesta, registrar la apuesta, calcular el resultado y acreditar el premio ocurren dentro de **una sola transacción de PostgreSQL**. O todo se guarda o nada se guarda. El saldo del jugador se bloquea durante la operación (`SELECT ... FOR UPDATE`) para evitar que dos apuestas simultáneas gasten el mismo dinero (doble gasto). Una tirada de ruleta con varias selecciones sigue siendo **una sola transacción**: se cobra el total apostado, se resuelve una única vez y se acredita el premio total; si el saldo no alcanza para el total, se rechaza la tirada completa antes de sortear.
 
 ### 3.3 Idempotencia
 
-Cada apuesta lleva una **clave de idempotencia** única (cabecera `Idempotency-Key`). Si el cliente reintenta la misma petición por un fallo de red, el sistema devuelve el resultado original y **no cobra dos veces**.
+Cada apuesta lleva una **clave de idempotencia** única (cabecera `Idempotency-Key`). Si el cliente reintenta la misma petición por un fallo de red, el sistema devuelve el resultado original y **no cobra dos veces**. En la ruleta la clave es **una por tirada**, no una por selección: reutilizarla con una lista distinta (otra selección, otro monto u otro orden) se rechaza con `409 conflict`.
 
 ### 3.4 Modelo de datos (resumen)
 
@@ -236,16 +236,16 @@ erDiagram
            uuid round_id FK "solo animalitos"
            uuid seed_pair_id FK "juegos individuales"
            int nonce
-           bigint stake
-           jsonb selection
+           bigint stake "total apostado"
+           jsonb selection "ruleta: lista de {selection, stake}"
            jsonb actions "decisiones de blackjack"
            jsonb result "resultado, para reintentos y verificador"
-           bigint payout
+           bigint payout "total pagado"
            string status
            timestamp created_at }
 ```
 
-Un `amount` positivo aumenta el saldo del wallet y uno negativo lo reduce; por eso la cuenta de emisión queda en negativo por diseño. La base de datos se encarga de hacer cumplir las reglas del ledger: rechaza cualquier `UPDATE` o `DELETE` sobre `ledger_entries` y `transactions`, y rechaza al hacer `COMMIT` toda transacción cuyos asientos no sumen cero o que tenga menos de dos. Una apuesta puede generar varias transacciones (la del cobro y la del premio; las carreras pagan al liquidarse), por eso la relación `BETS` a `TRANSACTIONS` es de uno a muchos.
+Un `amount` positivo aumenta el saldo del wallet y uno negativo lo reduce; por eso la cuenta de emisión queda en negativo por diseño. La base de datos se encarga de hacer cumplir las reglas del ledger: rechaza cualquier `UPDATE` o `DELETE` sobre `ledger_entries` y `transactions`, y rechaza al hacer `COMMIT` toda transacción cuyos asientos no sumen cero o que tenga menos de dos. Una apuesta puede generar varias transacciones (la del cobro y la del premio; las carreras pagan al liquidarse), por eso la relación `BETS` a `TRANSACTIONS` es de uno a muchos. En la ruleta, una fila de `BETS` representa una **tirada**: `selection` guarda la lista de selecciones con su monto, y `stake` y `payout` son los totales de la tirada.
 
 Los montos se guardan como **enteros** (en la unidad mínima), nunca como decimales flotantes, para evitar errores de redondeo. En el backend (TypeScript), el driver de PostgreSQL devuelve las columnas `bigint` como texto; se convierten a `BigInt` en un único punto de la capa de datos y se serializan como texto en la API, para no perder precisión ni mezclar tipos.
 
@@ -255,7 +255,7 @@ Los montos se guardan como **enteros** (en la unidad mínima), nunca como decima
 
 ### 4.1 Interfaz común
 
-Todos los juegos cumplen el mismo contrato, lo que permite añadir juegos sin tocar el ledger:
+Todos los juegos cumplen el mismo contrato, lo que permite añadir juegos sin tocar el ledger (en la ruleta, `bet` es una sola selección con su monto; la tirada con varias selecciones se construye encima, ver 4.2):
 
 ```
 Game
@@ -288,7 +288,7 @@ sequenceDiagram
     Note over J: el frontend anima la rueda<br/>hasta el número ya decidido
 ```
 
-Todo en una sola petición y una sola transacción. No hay estado entre una apuesta y la siguiente, por eso este patrón escala simplemente añadiendo instancias del backend.
+Todo en una sola petición y una sola transacción. La petición de la ruleta lleva una **lista** de selecciones (`{ bets: [{ stake, selection }] }`, de 1 a 44, sin selecciones repetidas): `resolve` se ejecuta **una vez** por tirada y el `payout` de cada selección se calcula con su propio monto; el premio de la tirada es la suma. La respuesta devuelve el `payout` de cada selección en el orden enviado, más los totales `stake` y `payout`. Las reglas de la tirada (`validateSpin`, `spinPayouts`) también viven en `shared/`. No hay estado entre una apuesta y la siguiente, por eso este patrón escala simplemente añadiendo instancias del backend.
 
 La animación es solo presentación: la rueda o los rodillos se detienen en el resultado que el servidor **ya** devolvió. El cliente nunca simula física ni calcula resultados.
 
@@ -334,7 +334,7 @@ Cada jugador tiene un **par de semillas** activo:
 
 1. El servidor genera un `server_seed` secreto y le muestra al jugador su **hash** (SHA-256) antes de que apueste.
 2. El jugador puede elegir su propio `client_seed` (o se genera uno aleatorio).
-3. Cada apuesta usa un `nonce` que aumenta en 1. El resultado es `HMAC-SHA256(server_seed, client_seed:nonce)`.
+3. Cada apuesta (en la ruleta, cada tirada, aunque tenga varias selecciones) usa un `nonce` que aumenta en 1. El resultado es `HMAC-SHA256(server_seed, client_seed:nonce)`.
 4. Cuando el jugador **rota** su par de semillas, el servidor revela el `server_seed` anterior y crea uno nuevo.
 5. El jugador puede comprobar que el hash coincide y recalcular cada apuesta hecha con ese par.
 
@@ -352,7 +352,7 @@ Como el hash se publicó antes de la primera apuesta, el servidor no puede cambi
 
 ### 5.3 Verificador en el navegador
 
-El frontend incluye una pantalla de verificación que usa la misma función `resolve` del paquete compartido. El jugador pega o selecciona una apuesta, el navegador recalcula el resultado y lo compara con el registrado.
+El frontend incluye una pantalla de verificación que usa la misma función `resolve` del paquete compartido. El jugador pega o selecciona una apuesta, el navegador recalcula el resultado y lo compara con el registrado. En la ruleta se verifica la tirada completa: un único número decide todas sus selecciones.
 
 ---
 

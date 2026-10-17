@@ -77,3 +77,58 @@ export const roulette: Game<RouletteBet, RouletteResult> = {
     return wins(bet.selection, result.number) ? bet.stake * MULTIPLIERS[bet.selection.type] : 0n;
   },
 };
+
+/**
+ * Most selections one spin can carry: every distinct selection the rules allow (37 numbers plus
+ * 7 outside bets). Selections in a spin never repeat, so this is also the cap (README §4.2).
+ */
+export const MAX_SPIN_BETS = POCKET_COUNT + 7;
+
+/** The bets placed on one spin, in the order the player sent them. */
+export type RouletteSpin = readonly RouletteBet[];
+
+/** Canonical text of a selection, equal exactly when two selections bet on the same thing. */
+export function selectionKey(selection: RouletteSelection): string {
+  switch (selection.type) {
+    case "straight":
+      return `straight:${selection.number}`;
+    case "color":
+      return `color:${selection.color}`;
+    case "parity":
+      return `parity:${selection.parity}`;
+    case "dozen":
+      return `dozen:${selection.dozen}`;
+  }
+}
+
+/** Sum of the stakes of a spin. */
+export function totalStake(bets: RouletteSpin): Money {
+  return bets.reduce((sum, bet) => sum + bet.stake, 0n);
+}
+
+/**
+ * Checks a whole spin: 1 to `MAX_SPIN_BETS` legal bets on distinct selections, whose total stake
+ * and total possible payout both fit in a bigint column.
+ */
+export function validateSpin(bets: RouletteSpin): boolean {
+  if (bets.length < 1 || bets.length > MAX_SPIN_BETS) return false;
+  if (!bets.every((bet) => roulette.validateBet(bet))) return false;
+  if (new Set(bets.map((bet) => selectionKey(bet.selection))).size !== bets.length) return false;
+  const possiblePayout = bets.reduce(
+    (sum, bet) => sum + bet.stake * MULTIPLIERS[bet.selection.type],
+    0n,
+  );
+  return totalStake(bets) <= MAX_MONEY && possiblePayout <= MAX_MONEY;
+}
+
+/**
+ * What every bet of a spin returns for one result: `payouts` in the order of `bets`, stake
+ * included, and their `total`. One `resolve` serves all the bets (README §4.2).
+ */
+export function spinPayouts(
+  bets: RouletteSpin,
+  result: RouletteResult,
+): { payouts: Money[]; total: Money } {
+  const payouts = bets.map((bet) => roulette.payout(bet, result));
+  return { payouts, total: payouts.reduce((sum, payout) => sum + payout, 0n) };
+}

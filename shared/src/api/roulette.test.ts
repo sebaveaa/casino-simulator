@@ -9,19 +9,28 @@ const fairness = {
   nonce: 0,
 };
 
+const red = { stake: "100", selection: { type: "color", color: "red" } };
+
 describe("rouletteBetRequestSchema", () => {
-  it("accepts a stake with a selection", () => {
-    const body = { stake: "100", selection: { type: "color", color: "red" } };
+  it("accepts a list of bets, each with its own stake", () => {
+    const body = { bets: [red, { stake: "5", selection: { type: "straight", number: 17 } }] };
     expect(rouletteBetRequestSchema.parse(body)).toEqual(body);
   });
 
+  it("rejects the single-bet shape, an empty list and more than 44 bets", () => {
+    expect(rouletteBetRequestSchema.safeParse(red).success).toBe(false);
+    expect(rouletteBetRequestSchema.safeParse({ bets: [] }).success).toBe(false);
+    const many = Array.from({ length: 45 }, () => red);
+    expect(rouletteBetRequestSchema.safeParse({ bets: many }).success).toBe(false);
+  });
+
   it("rejects a zero stake and an invalid selection", () => {
-    const selection = { type: "color", color: "red" };
-    expect(rouletteBetRequestSchema.safeParse({ stake: "0", selection }).success).toBe(false);
+    expect(rouletteBetRequestSchema.safeParse({ bets: [{ ...red, stake: "0" }] }).success).toBe(
+      false,
+    );
     expect(
       rouletteBetRequestSchema.safeParse({
-        stake: "1",
-        selection: { type: "straight", number: 37 },
+        bets: [{ stake: "1", selection: { type: "straight", number: 37 } }],
       }).success,
     ).toBe(false);
   });
@@ -41,6 +50,8 @@ describe("rouletteBetResponseSchema", () => {
     const body = {
       betId: uuid,
       result: { number: 17 },
+      bets: [{ stake: "100", selection: { type: "color", color: "black" }, payout: "200" }],
+      stake: "100",
       payout: "200",
       balance: "1100",
       fairness,

@@ -3,6 +3,7 @@ import {
   balanceResponseSchema,
   depositResponseSchema,
   pocketColor,
+  type RouletteBetRequest,
   rouletteBetResponseSchema,
   transactionHistoryResponseSchema,
 } from "@casino/shared";
@@ -10,7 +11,9 @@ import { describe, expect, it } from "vitest";
 import { readJwtExpiry } from "../session/jwt";
 import { createMockApiClient } from "./mock";
 
-const bet = { stake: "500", selection: { type: "color", color: "red" } } as const;
+const bet: RouletteBetRequest = {
+  bets: [{ stake: "500", selection: { type: "color", color: "red" } }],
+};
 
 describe("mock API client", () => {
   it("returns responses that satisfy the shared schemas", async () => {
@@ -94,7 +97,7 @@ describe("mock API client", () => {
     const api = createMockApiClient();
     for (let i = 0; i < 200; i++) {
       const res = await api.placeRouletteBet(
-        { stake: "100", selection: { type: "straight", number: 17 } },
+        { bets: [{ stake: "100", selection: { type: "straight", number: 17 } }] },
         `key-straight-${i.toString().padStart(4, "0")}`,
       );
       expect(res.payout).toBe(res.result.number === 17 ? "3600" : "0");
@@ -110,10 +113,59 @@ describe("mock API client", () => {
     expect(bets).toHaveLength(1);
   });
 
+  it("settles several selections with one spin and one pair of movements", async () => {
+    const api = createMockApiClient();
+    const body: RouletteBetRequest = {
+      bets: [
+        { stake: "100", selection: { type: "straight", number: 17 } },
+        { stake: "200", selection: { type: "color", color: "red" } },
+        { stake: "300", selection: { type: "dozen", dozen: 2 } },
+      ],
+    };
+    const res = await api.placeRouletteBet(body, "key-multi-0001");
+    expect(rouletteBetResponseSchema.safeParse(res).success).toBe(true);
+    expect(res.stake).toBe("600");
+    expect(res.bets.map((b) => b.stake)).toEqual(["100", "200", "300"]);
+    const n = res.result.number;
+    const expected = [
+      n === 17 ? 3600n : 0n,
+      pocketColor(n) === "red" ? 400n : 0n,
+      n >= 13 && n <= 24 ? 900n : 0n,
+    ];
+    expect(res.bets.map((b) => b.payout)).toEqual(expected.map(String));
+    const total = expected.reduce((a, b) => a + b, 0n);
+    expect(res.payout).toBe(total.toString());
+    expect(res.balance).toBe((100000n - 600n + total).toString());
+    const moves = (await api.listTransactions()).items;
+    expect(moves.filter((t) => t.type === "bet")).toHaveLength(1);
+    expect(moves.filter((t) => t.type === "payout")).toHaveLength(total > 0n ? 1 : 0);
+  });
+
+  it("rejects an empty or duplicated list and refuses a key reused with another list", async () => {
+    const api = createMockApiClient();
+    const red: RouletteBetRequest["bets"][number] = {
+      stake: "100",
+      selection: { type: "color", color: "red" },
+    };
+    await expect(api.placeRouletteBet({ bets: [] }, "key-multi-0002")).rejects.toMatchObject({
+      code: "invalid_request",
+    });
+    await expect(
+      api.placeRouletteBet({ bets: [red, { ...red, stake: "200" }] }, "key-multi-0003"),
+    ).rejects.toMatchObject({ code: "invalid_request" });
+    await api.placeRouletteBet({ bets: [red] }, "key-multi-0004");
+    await expect(
+      api.placeRouletteBet({ bets: [{ ...red, stake: "200" }] }, "key-multi-0004"),
+    ).rejects.toMatchObject({ code: "conflict", status: 409 });
+  });
+
   it("rejects a bet larger than the balance with insufficient_funds", async () => {
     const api = createMockApiClient();
     await expect(
-      api.placeRouletteBet({ ...bet, stake: "100001" }, "key-00000003"),
+      api.placeRouletteBet(
+        { bets: [{ stake: "100001", selection: { type: "color", color: "red" } }] },
+        "key-00000003",
+      ),
     ).rejects.toMatchObject({ code: "insufficient_funds", status: 422 });
     expect((await api.getBalance()).balance).toBe("100000");
     expect((await api.listTransactions()).items).toHaveLength(0);
