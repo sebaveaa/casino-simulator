@@ -30,7 +30,7 @@ Out of scope: the browser verifier screen (#15), new bet types (splits, columns,
 ## Tasks
 
 - [x] T1 Multi-bet contract end to end: shared spin rules and API schemas with tests; backend route, `placeRouletteBet` and replay with route and integration tests; mock API and tests; `RoulettePage` sends a one-element list (UI unchanged); README sections. Route: delegated (writer trigger: 3+ non-trivial files). Forecast ~450 lines.
-- [ ] T2 Table UI from variant C: classic felt layout, chip rack 1/5/10/25/100, Deshacer/Limpiar/Repetir/Doblar, summary under the wheel (staked, max win, bet count, balance after), x2/x3/x36 badges, stepped result (+won, −staked, = net), legible history, 1440×900 without scroll; page tests. Route: delegated (writer trigger). Forecast ~600 lines.
+- [ ] T2 Table UI from variant C: classic felt layout, chip rack 1/5/10/25/100, Deshacer/Limpiar/Repetir/Doblar, summary under the wheel (staked, max win, bet count, balance after), x2/x3/x36 badges, stepped result (+won, −staked, = net), legible history, 1440×900 without scroll; page tests; the two T1 review suggestions. Route: delegated (writer trigger). Forecast ~600 lines.
 - [ ] T3 Ball wheel: PixiJS ball animation landing on the server number, Casino Cloud theme from the style tokens, reduced-motion fallback; replaces `wheelScene`; pure helpers tested. Route: delegated (writer trigger). Forecast ~450 lines.
 
 ## Acceptance criteria
@@ -56,8 +56,9 @@ Forecast: ~1500 authored lines (T1 ~450, T2 ~600, T3 ~450). Strategy: ask-on-ris
 ## Progress
 
 - Planned. Branch created from `feat/12-roulette-bets` (62d9566). Exploration: delegated mapper.
-- T1 done (this commit, +523/−107 over 13 files, above the ~450 forecast mostly from tests and README): `validateSpin`, `spinPayouts`, `totalStake`, `selectionKey`, `MAX_SPIN_BETS` in shared; request `{ bets }`, response with per-bet payouts and totals; one `bets` row per spin with the list in `selection` (serialized with `JSON.stringify`, since the driver would send a JS array as a PostgreSQL array); ordered replay comparison, 409 otherwise; mock API with the same contract and a 409 on key reuse; page sends a one-element list; README §3.2–§3.4, §4.1–§4.2, §5.1, §5.3. Checks: format, lint, typecheck pass; `TEST_DATABASE_URL=… npm test` (compose Postgres on host port 5433) backend 130, shared 152, frontend 98 passed, integration tests included; `npm run build -w backend` and `-w frontend` pass. Route: delegated writer. Review: deferred to the T1 PR slice.
+- T1 done (this commit, +523/−107 over 13 files, above the ~450 forecast mostly from tests and README): `validateSpin`, `spinPayouts`, `totalStake`, `selectionKey`, `MAX_SPIN_BETS` in shared; request `{ bets }`, response with per-bet payouts and totals; one `bets` row per spin with the list in `selection` (serialized with `JSON.stringify`, since the driver would send a JS array as a PostgreSQL array); ordered replay comparison, 409 otherwise; mock API with the same contract and a 409 on key reuse; page sends a one-element list; README §3.2–§3.4, §4.1–§4.2, §5.1, §5.3. Checks: format, lint, typecheck pass; `TEST_DATABASE_URL=… npm test` (compose Postgres on host port 5433) backend 130, shared 152, frontend 98 passed, integration tests included; `npm run build -w backend` and `-w frontend` pass. Route: delegated writer. Commit f0c594b.
+- T1 review: native review granted by the user; lineage review-a3e62016b2ce649a (medium risk, reliability lens, base 62d9566) approved and acknowledged. Two non-blocking suggestions, carried into T2: R3-mock-replay-key-order (the mock compares requests with `JSON.stringify`, so the same list with fields in another key order gets a false 409) and R3-route-aggregate-overflow-untested (the route's overflow case is a single bet, so the aggregate total-payout check in `validateSpin` is not exercised at the route).
 
 ## Next step
 
-Open the T1 PR into `feat/12-roulette-bets` (awaiting the user's go-ahead), then T2 on a branch from this one.
+Open the T1 PR into `feat/12-roulette-bets` (awaiting the user's go-ahead). T2 on `feat/38-roulette-table`, branched from this one.
