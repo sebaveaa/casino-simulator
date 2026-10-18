@@ -67,15 +67,27 @@ export function readPalette(): Palette {
   };
 }
 
+/** Longest wait for the wheel font before drawing with the fallback. */
+const FONT_TIMEOUT_MS = 1500;
+
 /** Waits for the numbers' font so the first draw does not fall back to a system font. */
-export async function loadWheelFonts(): Promise<void> {
+export async function loadWheelFonts(timeoutMs = FONT_TIMEOUT_MS): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await Promise.all([
-      document.fonts.load("700 12px 'Space Mono'"),
-      document.fonts.load("400 12px 'Space Mono'"),
+    // A load that never settles must not hold the wheel back: past the timeout it draws anyway.
+    await Promise.race([
+      Promise.all([
+        document.fonts.load("700 12px 'Space Mono'"),
+        document.fonts.load("400 12px 'Space Mono'"),
+      ]),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
     ]);
   } catch {
     // The font is cosmetic: draw with the fallback if it cannot load.
+  } finally {
+    clearTimeout(timer);
   }
 }
 
