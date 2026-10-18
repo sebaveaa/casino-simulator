@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { prefersReducedMotion } from "./motion";
 import { createWheelScene, type WheelScene } from "./wheelScene";
 
 export interface RouletteWheelProps {
@@ -9,13 +10,7 @@ export interface RouletteWheelProps {
   onSpinEnd: () => void;
 }
 
-function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === "function"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
-}
-
-/** European roulette wheel drawn with PixiJS. It never decides a result. */
+/** European roulette wheel and ball drawn with PixiJS. It never decides a result. */
 export function RouletteWheel({ target, spinId, onSpinEnd }: RouletteWheelProps) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<WheelScene | null>(null);

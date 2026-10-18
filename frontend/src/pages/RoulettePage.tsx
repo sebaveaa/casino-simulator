@@ -9,6 +9,7 @@ import { useRef, useState } from "react";
 import { ApiError, useApi } from "../api";
 import {
   BALANCE_LOADING,
+  useApplyBalance,
   useBalance,
   useBalanceAmount,
   useRefreshBalance,
@@ -60,6 +61,7 @@ export function RoulettePage() {
   const balanceText = useBalance();
   const balance = useBalanceAmount();
   const refreshBalance = useRefreshBalance();
+  const applyBalance = useApplyBalance();
 
   const [chipValue, setChipValue] = useState<ChipValue>(DEFAULT_CHIP);
   const [chips, setChips] = useState<Chip[]>([]);
@@ -143,6 +145,8 @@ export function RoulettePage() {
           ? previous
           : [entry, ...previous].slice(0, HISTORY_LIMIT),
       );
+      // The balance changes only now, so the header does not give the result away early.
+      applyBalance(round.response.balance);
     }
     void refreshBalance();
   }

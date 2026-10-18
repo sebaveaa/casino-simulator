@@ -179,6 +179,22 @@ describe("mock API client", () => {
     expect((await api.listTransactions()).items.filter((t) => t.type === "bet")).toHaveLength(1);
   });
 
+  it("answers a key reused with a stake that is not an amount with a conflict, not a crash", async () => {
+    const api = createMockApiClient();
+    const red = { stake: "100", selection: { type: "color", color: "red" } } as const;
+    await api.placeRouletteBet({ bets: [red] }, "key-stake-0001");
+    for (const stake of ["abc", "1e2", ""]) {
+      await expect(
+        api.placeRouletteBet({ bets: [{ ...red, stake }] }, "key-stake-0001"),
+      ).rejects.toMatchObject({ code: "conflict", status: 409 });
+    }
+    // A number where the wire carries text, as an untyped caller might send.
+    const numeric = [{ ...red, stake: 100 }] as unknown as RouletteBetRequest["bets"];
+    await expect(api.placeRouletteBet({ bets: numeric }, "key-stake-0001")).rejects.toMatchObject({
+      code: "conflict",
+    });
+  });
+
   it("rejects a bet larger than the balance with insufficient_funds", async () => {
     const api = createMockApiClient();
     await expect(

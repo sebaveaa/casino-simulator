@@ -21,6 +21,8 @@ interface BalanceState {
   balance: Balance;
   /** Re-fetches the balance; it keeps its last value until the answer arrives. */
   refresh: () => Promise<void>;
+  /** Shows a balance the server just returned, without another request. */
+  apply: (balance: string) => void;
 }
 
 const BalanceContext = createContext<BalanceState | null>(null);
@@ -35,6 +37,14 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const userId = useSession()?.user.id ?? null;
   const [balance, setBalance] = useState<Balance>("loading");
+
+  const apply = useCallback((text: string) => {
+    try {
+      setBalance(parseAmount(text));
+    } catch {
+      // An unreadable amount changes nothing; the background refresh will correct it.
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -65,7 +75,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
     };
   }, [api, userId]);
 
-  const value = useMemo(() => ({ balance, refresh }), [balance, refresh]);
+  const value = useMemo(() => ({ balance, refresh, apply }), [balance, refresh, apply]);
   return <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>;
 }
 
@@ -86,6 +96,14 @@ export function useBalanceAmount(): bigint | null {
 /** Returns a function that re-fetches the shared balance. Throws outside a `BalanceProvider`. */
 export function useRefreshBalance(): () => Promise<void> {
   return useBalanceState().refresh;
+}
+
+/**
+ * Returns a function that sets the shared balance from an API amount string, such as the
+ * `balance` of a bet response. Throws outside a `BalanceProvider`.
+ */
+export function useApplyBalance(): (balance: string) => void {
+  return useBalanceState().apply;
 }
 
 function useBalanceState(): BalanceState {

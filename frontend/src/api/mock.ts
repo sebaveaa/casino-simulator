@@ -28,15 +28,27 @@ const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
 const MOCK_CLIENT_SEED = "mock-client-seed";
 
+/** A stake as an amount, or null when it is not one. */
+function stakeAmount(stake: string): bigint | null {
+  try {
+    return parseAmount(stake);
+  } catch {
+    return null;
+  }
+}
+
 /** Same list, compared by value and in order, so key order inside the objects does not matter. */
 function sameBets(a: RouletteBetRequest["bets"], b: RouletteBetRequest["bets"]): boolean {
   return (
     a.length === b.length &&
     a.every((item, i) => {
       const other = b[i];
+      const stake = stakeAmount(item.stake);
+      // A stake that is not an amount never matches, so it cannot replay a saved result.
       return (
         other !== undefined &&
-        parseAmount(item.stake) === parseAmount(other.stake) &&
+        stake !== null &&
+        stake === stakeAmount(other.stake) &&
         selectionKey(item.selection) === selectionKey(other.selection)
       );
     })
