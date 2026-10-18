@@ -14,6 +14,18 @@ import { type ApiClient, ApiError, createMockApiClient } from "../api";
 import { routes } from "../app/routes";
 import { seedSession } from "../test/session";
 
+// Lets one test force the slip check to fail: no slip reachable from the table is invalid, since
+// the felt offers exactly the selections a spin may carry and the stakes stay far below the limits.
+const slipCheck = vi.hoisted(() => ({ reject: false }));
+vi.mock("@casino/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@casino/shared")>();
+  return {
+    ...actual,
+    validateSpin: (bets: Parameters<typeof actual.validateSpin>[0]) =>
+      !slipCheck.reject && actual.validateSpin(bets),
+  };
+});
+
 // jsdom has no WebGL: the wheel reports the end of the spin right away.
 vi.mock("./roulette/RouletteWheel", async () => {
   const { useEffect } = await import("react");
@@ -42,6 +54,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  slipCheck.reject = false;
   cleanup();
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -287,6 +300,23 @@ describe("RoulettePage spin", () => {
     await waitFor(() => expect(getBalance).toHaveBeenCalledTimes(2));
   });
 
+  it("shows the response balance as soon as the wheel stops, before the refresh lands", async () => {
+    // The first read gives the starting balance; the refresh after the spin never answers.
+    const getBalance = vi
+      .fn()
+      .mockResolvedValueOnce({ balance: "100000" })
+      .mockReturnValue(new Promise(() => {}));
+    await renderRoulette({ ...fakeClient(settlingOn(17)), getBalance });
+    chip(5);
+    fireEvent.click(cell("Rojo"));
+    fireEvent.click(spinButton());
+    expect((await screen.findByTestId("spin-net")).textContent).toBe("−5");
+    expect(getBalance).toHaveBeenCalledTimes(2);
+    // 1,000.00 minus the 5 credits lost, in the header and above the table.
+    expect(screen.getAllByText("995.00").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("1,000.00")).toBeNull();
+  });
+
   it("shows the number the server returned, even when local rules would disagree", async () => {
     // 17 is black: a client that computed the outcome itself could not pay this red bet.
     const place = vi.fn<Place>(async (request) => ({
@@ -336,7 +366,8 @@ describe("RoulettePage spin", () => {
     );
     expect(items.map((item) => item.textContent)).toEqual(results.slice(1).reverse().map(String));
     expect(items[0]?.className).toContain("is-latest");
-  });
+    // Thirteen full spins through the page take several seconds under jsdom.
+  }, 30_000);
 });
 
 describe("RoulettePage after a spin", () => {
@@ -380,6 +411,24 @@ describe("RoulettePage after a spin", () => {
 });
 
 describe("RoulettePage errors and retries", () => {
+  it("warns that the bet is not valid and does not send it", async () => {
+    const place = settlingOn(17);
+    await renderRoulette(fakeClient(place));
+    chip(5);
+    fireEvent.click(cell("Rojo"));
+    expect(spinButton().disabled).toBe(false);
+    slipCheck.reject = true;
+    fireEvent.click(cell("Negro"));
+    expect(screen.getByRole("alert").textContent).toBe("La apuesta no es válida.");
+    expect(spinButton().disabled).toBe(true);
+    fireEvent.click(spinButton());
+    expect(place).not.toHaveBeenCalled();
+    slipCheck.reject = false;
+    fireEvent.click(screen.getByRole("button", { name: "Deshacer" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(spinButton().disabled).toBe(false);
+  });
+
   it("shows Saldo insuficiente when the server rejects the spin", async () => {
     const place = vi
       .fn<Place>()

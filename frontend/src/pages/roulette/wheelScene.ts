@@ -1,66 +1,54 @@
-import { pocketColor } from "@casino/shared";
 import type * as Pixi from "pixi.js";
-import { easeOutCubic, POCKET_ANGLE, spinTarget, WHEEL_ORDER } from "./wheelAngles";
-
-export const WHEEL_SIZE = 360;
-const SPIN_TURNS = 5;
-const SPIN_MS = 4500;
-
-const COLORS = { red: 0xd62839, black: 0x141414, green: 0x1b8a3e } as const;
+import {
+  type BallPose,
+  ballAngle,
+  ballOpacity,
+  ballPose,
+  FADE_MS,
+  HOP_END_MS,
+  planBall,
+  RESTING_POSE,
+  reducedBall,
+  TOTAL_MS,
+  WIN_RING_MS,
+  wheelRotation,
+  winRingOpacity,
+} from "./ballMotion";
+import {
+  buildBall,
+  buildBowl,
+  buildWheel,
+  buildWinRing,
+  CENTER,
+  loadWheelFonts,
+  readPalette,
+  SCENE_SIZE,
+} from "./wheelDrawing";
 
 export interface WheelScene {
-  /** Spins to `pocket`; `onEnd` runs when the wheel stops. Replaces a spin in progress. */
+  /**
+   * Spins until the ball rests in `pocket`; `onEnd` runs once, when the wheel stops. With
+   * `instant` there is no physics: the ball just appears in the pocket. Replaces a spin in progress.
+   */
   spinTo(pocket: number, onEnd: () => void, instant: boolean): void;
   destroy(): void;
 }
 
-function buildWheel(pixi: typeof Pixi, radius: number): Pixi.Container {
-  const { Container, Graphics, Text } = pixi;
-  const wheel = new Container();
-  const rim = new Graphics().circle(0, 0, radius + 6).fill(0x141414);
-  wheel.addChild(rim);
+/** Longest frame the animation counts, so a stalled tab does not skip the whole spin. */
+const MAX_FRAME_MS = 100;
 
-  WHEEL_ORDER.forEach((pocket, index) => {
-    const centre = index * POCKET_ANGLE;
-    // Pixi measures arcs from the +x axis; the wheel measures clockwise from the top.
-    const start = centre - POCKET_ANGLE / 2 - Math.PI / 2;
-    const end = centre + POCKET_ANGLE / 2 - Math.PI / 2;
-    const wedge = new Graphics()
-      .moveTo(0, 0)
-      .arc(0, 0, radius, start, end)
-      .closePath()
-      .fill(COLORS[pocketColor(pocket)])
-      .stroke({ width: 1, color: 0xffc933 });
-    wheel.addChild(wedge);
-
-    const label = new Text({
-      text: String(pocket),
-      style: { fill: 0xffffff, fontSize: 14, fontWeight: "700", fontFamily: "monospace" },
-    });
-    label.anchor.set(0.5);
-    label.position.set(Math.sin(centre) * radius * 0.85, -Math.cos(centre) * radius * 0.85);
-    label.rotation = centre;
-    wheel.addChild(label);
-  });
-
-  wheel.addChild(
-    new Graphics()
-      .circle(0, 0, radius * 0.45)
-      .fill(0xf1ecff)
-      .stroke({ width: 3, color: 0x141414 }),
-  );
-  return wheel;
-}
-
-/** Mounts the PixiJS wheel in `host`. Only this module touches PixiJS (needs WebGL/canvas). */
+/**
+ * Mounts the PixiJS ball wheel in `host`. Only this module touches PixiJS (needs WebGL/canvas).
+ * The ball is positioned from the target pocket, so it can only ever rest where the server said.
+ */
 export async function createWheelScene(host: HTMLElement): Promise<WheelScene> {
   // Loaded on demand: PixiJS stays out of the main bundle and out of the other pages.
   const pixi = await import("pixi.js");
-  const { Application, Graphics } = pixi;
-  const app = new Application();
+  await loadWheelFonts();
+  const app = new pixi.Application();
   await app.init({
-    width: WHEEL_SIZE,
-    height: WHEEL_SIZE,
+    width: SCENE_SIZE,
+    height: SCENE_SIZE,
     backgroundAlpha: 0,
     antialias: true,
     resolution: window.devicePixelRatio || 1,
@@ -71,45 +59,96 @@ export async function createWheelScene(host: HTMLElement): Promise<WheelScene> {
   app.canvas.style.height = "100%";
   host.appendChild(app.canvas);
 
-  const radius = WHEEL_SIZE / 2 - 24;
-  const wheel = buildWheel(pixi, radius);
-  wheel.position.set(WHEEL_SIZE / 2, WHEEL_SIZE / 2);
-  app.stage.addChild(wheel);
+  const palette = readPalette();
+  const wheel = buildWheel(pixi, palette);
+  wheel.position.set(CENTER, CENTER);
+  const { shadow, body } = buildBall(pixi, palette);
+  const ball = new pixi.Container();
+  ball.addChild(shadow, body);
+  ball.visible = false;
+  app.stage.addChild(buildBowl(pixi, palette), wheel, ball);
 
-  // Pointer at the top, over the rim.
-  const pointer = new Graphics()
-    .poly([WHEEL_SIZE / 2 - 12, 0, WHEEL_SIZE / 2 + 12, 0, WHEEL_SIZE / 2, 26])
-    .fill(0xff5a36)
-    .stroke({ width: 3, color: 0x141414 });
-  app.stage.addChild(pointer);
-
+  let ring: Pixi.Container | null = null;
   let stopCurrent: (() => void) | null = null;
+
+  function clearRing() {
+    ring?.destroy({ children: true });
+    ring = null;
+  }
+
+  function placeBall(pocket: number, pose: BallPose) {
+    const angle = ballAngle(pocket, pose.offset, wheel.rotation);
+    const x = CENTER + Math.sin(angle) * pose.radius;
+    const y = CENTER - Math.cos(angle) * pose.radius;
+    const scale = 1 + 0.45 * pose.height;
+    body.position.set(x, y);
+    body.scale.set(scale);
+    // Hard offset shadow, like the app's buttons: it grows with the hop but never blurs.
+    shadow.position.set(x + 3 + 4 * pose.height, y + 3 + 4 * pose.height);
+    shadow.scale.set(scale);
+  }
+
+  /** Runs `frame` on every tick with the time since the spin started; stops when it returns true. */
+  function animate(frame: (elapsed: number) => boolean) {
+    let elapsed = 0;
+    const tick = () => {
+      elapsed += Math.min(app.ticker.deltaMS, MAX_FRAME_MS);
+      if (frame(elapsed)) stop();
+    };
+    const stop = () => {
+      app.ticker.remove(tick);
+      stopCurrent = null;
+    };
+    stopCurrent = stop;
+    app.ticker.add(tick);
+  }
 
   return {
     spinTo(pocket, onEnd, instant) {
       stopCurrent?.();
-      const from = wheel.rotation;
-      const to = spinTarget(from, pocket, instant ? 0 : SPIN_TURNS);
-      if (instant) {
-        wheel.rotation = to;
+      clearRing();
+      ball.visible = true;
+      ball.alpha = 0;
+      ring = buildWinRing(pixi, palette, pocket);
+      wheel.addChild(ring);
+
+      let ended = false;
+      const end = () => {
+        if (ended) return;
+        ended = true;
         onEnd();
+      };
+
+      if (instant) {
+        // Reduced motion: no physics. The ball fades into the target pocket.
+        placeBall(pocket, RESTING_POSE);
+        animate((elapsed) => {
+          const resting = reducedBall(elapsed);
+          ball.alpha = resting.opacity;
+          if (elapsed < FADE_MS) return false;
+          if (ring) ring.alpha = 0.5;
+          end();
+          return true;
+        });
         return;
       }
-      let elapsed = 0;
-      const tick = () => {
-        elapsed += app.ticker.deltaMS;
-        wheel.rotation = from + (to - from) * easeOutCubic(elapsed / SPIN_MS);
-        if (elapsed >= SPIN_MS) {
-          stop();
-          onEnd();
+
+      const plan = planBall(Math.random);
+      const from = wheel.rotation;
+      animate((elapsed) => {
+        wheel.rotation = wheelRotation(from, Math.min(elapsed, TOTAL_MS));
+        ball.alpha = ballOpacity(elapsed);
+        placeBall(pocket, elapsed < HOP_END_MS ? ballPose(elapsed, plan) : RESTING_POSE);
+        if (elapsed < TOTAL_MS) return false;
+        end();
+        const sinceStop = elapsed - TOTAL_MS;
+        if (ring && sinceStop < WIN_RING_MS) {
+          ring.alpha = winRingOpacity(sinceStop);
+          return false;
         }
-      };
-      const stop = () => {
-        app.ticker.remove(tick);
-        stopCurrent = null;
-      };
-      stopCurrent = stop;
-      app.ticker.add(tick);
+        clearRing();
+        return true;
+      });
     },
     destroy() {
       stopCurrent?.();
