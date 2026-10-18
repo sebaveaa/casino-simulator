@@ -122,6 +122,14 @@ describe("roulette bet route", () => {
       },
       // The total possible payout would not fit in a bigint column.
       { bets: [{ stake: "9223372036854775807", selection: { type: "color", color: "red" } }] },
+      // Each bet fits on its own (36 x 250000000000000000 < MAX_MONEY), but the payouts of the
+      // two together do not: only the aggregate check of the spin catches it.
+      {
+        bets: [
+          { stake: "250000000000000000", selection: { type: "straight", number: 1 } },
+          { stake: "250000000000000000", selection: { type: "straight", number: 2 } },
+        ],
+      },
     ]) {
       const res = await bet(app, payload, headers);
       expect(res.statusCode).toBe(400);
