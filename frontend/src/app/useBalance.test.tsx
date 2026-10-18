@@ -6,7 +6,7 @@ import { type ApiClient, ApiProvider, createMockApiClient } from "../api";
 import { createSessionStore, SessionProvider } from "../session";
 import { seedSession } from "../test/session";
 import { routes } from "./routes";
-import { BalanceProvider, useBalance, useRefreshBalance } from "./useBalance";
+import { BalanceProvider, useApplyBalance, useBalance, useRefreshBalance } from "./useBalance";
 
 beforeEach(() => {
   seedSession();
@@ -84,6 +84,32 @@ describe("balance", () => {
     });
     expect(screen.getByText("1,005.00")).toBeTruthy();
     expect(getBalance).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a balance applied from a response at once, without another request", async () => {
+    const client = createMockApiClient();
+    const getBalance = vi.spyOn(client, "getBalance");
+    let apply: (balance: string) => void = () => {};
+    function Probe() {
+      apply = useApplyBalance();
+      return <output>{useBalance()}</output>;
+    }
+    render(
+      <ApiProvider client={client}>
+        <SessionProvider store={createSessionStore()}>
+          <BalanceProvider>
+            <Probe />
+          </BalanceProvider>
+        </SessionProvider>
+      </ApiProvider>,
+    );
+    expect(await screen.findByText("1,000.00")).toBeTruthy();
+    act(() => apply("123456"));
+    expect(screen.getByText("1,234.56")).toBeTruthy();
+    // An unreadable amount leaves the balance as it was.
+    act(() => apply("not an amount"));
+    expect(screen.getByText("1,234.56")).toBeTruthy();
+    expect(getBalance).toHaveBeenCalledTimes(1);
   });
 
   it("does not fetch the balance while logged out", () => {

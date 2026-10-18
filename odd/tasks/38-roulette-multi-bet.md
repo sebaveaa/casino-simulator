@@ -1,0 +1,77 @@
+# 38-roulette-multi-bet
+
+Issue: https://github.com/sebaveaa/casino-simulator/issues/38
+Branch: feat/38-roulette (tracker from `main` after #37); slices on `feat/38-roulette-multi-bet`, `feat/38-roulette-table`, `feat/38-roulette-ball-wheel`
+Status: done
+
+## Objective
+
+Several roulette bets on one spin, and the table redesign settled by the UI prototype on `prototype/12-roulette-table` (variant C: classic felt, stackable chips, ball wheel in the Casino Cloud theme).
+
+## Why
+
+`POST /games/roulette/bets` takes one selection per request, so the table allows a single bet and never shows the total staked or the possible win.
+
+## Scope
+
+In scope: multi-selection spin rules in `shared/`, the bet contract and endpoint, the mock API, the table UI from variant C, the ball-animated wheel with the Casino Cloud theme, README §3.2–§3.4, §4.1–§4.2, §5.1, §5.3.
+
+Out of scope: the browser verifier screen (#15), new bet types (splits, columns, high/low), the Clásica/Lujo wheel themes and the brand felt from the prototype, slots.
+
+## Design decisions
+
+- `Game<RouletteBet, RouletteResult>` stays as is: one selection is still a valid `Game`, and `resolve` ignores the bet. A spin layer in `shared/src/games/roulette.ts` adds `validateSpin` (1..44 bets, distinct selections, each bet valid, total stake and total payout within `MAX_MONEY`) and `spinPayouts` (per-bet payout and total).
+- Request: `{ bets: [{ stake, selection }] }`. Response: `{ betId, result, bets: [{ stake, selection, payout }], stake, payout, balance, fairness }` with totals as strings. The 44-bet cap is the number of distinct selections the rules allow (37 numbers + 7 outside bets).
+- One spin = one `bets` row, one seed-pair draw, one nonce. `bets.selection` (jsonb) stores the list; `stake` and `payout` hold the totals. No migration: PR #37 is not merged, so no deployed row holds the single-selection shape.
+- Ledger: one `bet` transfer for the total stake and one `payout` transfer for the total payout (skipped when 0), as today. Entries still sum to zero per transaction.
+- Idempotency: one key per spin. Replay compares the stored list with the request in order; any difference answers 409 `conflict`.
+- Insufficient funds for the total stake rejects the whole spin before the draw.
+
+## Tasks
+
+- [x] T1 Multi-bet contract end to end: shared spin rules and API schemas with tests; backend route, `placeRouletteBet` and replay with route and integration tests; mock API and tests; `RoulettePage` sends a one-element list (UI unchanged); README sections. Route: delegated (writer trigger: 3+ non-trivial files). Forecast ~450 lines.
+- [x] T2 Table UI from variant C: classic felt layout, chip rack 1/5/10/25/100, Deshacer/Limpiar/Repetir/Doblar, summary under the wheel (staked, max win, bet count, balance after), x2/x3/x36 badges, stepped result (+won, −staked, = net), legible history, 1440×900 without scroll; page tests; the two T1 review suggestions. Route: delegated (writer trigger). Forecast ~600 lines.
+- [x] T3 Ball wheel: PixiJS ball animation landing on the server number, Casino Cloud theme from the style tokens, reduced-motion fallback; replaces `wheelScene`; pure helpers tested. Route: delegated (writer trigger). Forecast ~450 lines.
+
+## Acceptance criteria
+
+Issue #38 criteria, all of them.
+
+## Checks
+
+`npm run lint`, `npm run typecheck`, `npm test` (with `TEST_DATABASE_URL` against the compose Postgres after `npm run migrate`), `npm run build -w backend`, `npm run build -w frontend`.
+
+## TDD
+
+Mode: off. Source: carried from the user's choice on #12, #11, #10 and #9 (no project-level setting). Runner: Vitest.
+
+## Review
+
+Native review only for large feature merges (user preference); work units are left unreviewed until the feature PR.
+
+## Delivery
+
+Forecast: ~1500 authored lines (T1 ~450, T2 ~600, T3 ~450). Strategy: ask-on-risk. Chain strategy: feature-branch-chain (user's choice, 2026-10-17). The user then asked to open the PRs and merge them with admin rights (2026-10-18): #37 (#12) was merged into `main` first, the slices were rebased onto it, and each slice PR targeted the tracker `feat/38-roulette` with squash merges: T1 #39, T2 #40 (`size:exception`, ~2,100 lines), T3 #41. The tracker PR into `main` closes #38.
+
+## Progress
+
+- Planned. Branch created from `feat/12-roulette-bets` (62d9566). Exploration: delegated mapper.
+- T1 done (this commit, +523/−107 over 13 files, above the ~450 forecast mostly from tests and README): `validateSpin`, `spinPayouts`, `totalStake`, `selectionKey`, `MAX_SPIN_BETS` in shared; request `{ bets }`, response with per-bet payouts and totals; one `bets` row per spin with the list in `selection` (serialized with `JSON.stringify`, since the driver would send a JS array as a PostgreSQL array); ordered replay comparison, 409 otherwise; mock API with the same contract and a 409 on key reuse; page sends a one-element list; README §3.2–§3.4, §4.1–§4.2, §5.1, §5.3. Checks: format, lint, typecheck pass; `TEST_DATABASE_URL=… npm test` (compose Postgres on host port 5433) backend 130, shared 152, frontend 98 passed, integration tests included; `npm run build -w backend` and `-w frontend` pass. Route: delegated writer. Commit f0c594b.
+- T1 review: native review granted by the user; lineage review-a3e62016b2ce649a (medium risk, reliability lens, base 62d9566) approved and acknowledged. Two non-blocking suggestions, carried into T2: R3-mock-replay-key-order (the mock compares requests with `JSON.stringify`, so the same list with fields in another key order gets a false 409) and R3-route-aggregate-overflow-untested (the route's overflow case is a single bet, so the aggregate total-payout check in `validateSpin` is not exercised at the route).
+
+- T2 on `feat/38-roulette-table` (from T1 at 98ac31a). Route: delegated writer, plus an inline refactor of `useBalance` (the writer read the formatted balance text back into a bigint; the provider now keeps the amount and derives the text).
+  - 81b6031: the two T1 review suggestions (mock replay compares per bet; route test for an aggregate payout overflow).
+  - Table UI commit (~2,130 authored lines: +1,259/−344 tracked, 870 in 16 new files; ~680 of them CSS and ~600 tests): `RoulettePage` is now a container over `pages/roulette/` (pure `betSlip`, `chips`, `selections`, `money`, `motion` helpers with tests; `RouletteTable`, `ChipRack`, `TableControls`, `SpinSummary`, `SpinResult`, `ResultHistory`, `FairnessDetails`, `MultBadge`, `SummaryIcons`); classic felt, chip stacking, Deshacer/Limpiar/Repetir/Doblar, summary under the wheel, x2/x3/x36 badges, stepped result, history, visible alert when the stake exceeds the balance or the spin is invalid; chips stay on the felt after a spin but a new slip starts on the next edit; Girar is not blocked while the balance is unknown (the server enforces it). Checks: format, lint, typecheck pass; `TEST_DATABASE_URL=… npm test` backend 130, shared 152, frontend 128 passed; `npm run build -w frontend` passes (existing pixi chunk warning). Not verified: the 1440×900 fit and the animations (no browser).
+  - Size: far over the ~600 forecast. One slicing pass: the review follow-ups split out; the table, result and history share the page state and styles, so no cohesive split keeps each part under budget without an interim UI. Reported to the user with a `size:exception` recommendation for the T2 PR.
+
+- T2 review: native review granted by the user; lineage review-33d1404da0432ecc (medium risk, reliability lens, base f0c594b, 2,531 changed lines) approved and acknowledged. Non-blocking findings, carried into T3: R3-stale-balance-after-spin (WARNING: the balance refreshes only after the wheel stops, so a slip edited before the refresh lands compares against the pre-spin balance; the server still refuses an unaffordable spin), R3-invalid-slip-untested (the "La apuesta no es válida." path has no page test), R3-mock-replay-numeric-stake (the mock's `sameBets` assumes stakes parse; harmless today).
+
+- T3 on `feat/38-roulette-ball-wheel` (from T2 at f6cfdd5), ~780 authored lines. User feedback on T2: the wheel must carry the page's Casino Cloud style (the reason for T3), and dev accounts vanish on every restart (cause: the Vite dev server without `VITE_API_URL` uses the in-memory mock API; answered with the real-backend command, no code change). Pure `ballMotion.ts` (ball plan, pose, wheel rotation, fades, reduced motion; tests: lands on the target for all 37 pockets × 5 seeds × 3 start rotations, monotonic track phase, no jumps); `wheelDrawing.ts` (Casino Cloud layers from the `:root` tokens with fallbacks, Space Mono loaded before drawing); `wheelScene.ts` rewritten on the same contract; `RouletteWheel` uses `motion.ts`. T2 findings: the spin response's balance is applied to the shared balance when the wheel stops, then refreshed in the background (`useApplyBalance`); the invalid-slip alert is tested by mocking `validateSpin` (no table slip can fail it: the felt offers only the 44 legal selections); the mock's `sameBets` treats an unparseable stake as different. The 13-spin history test from T2 timed out at 5 s under load; it now has a 30 s timeout. Checks: lint, typecheck pass; `TEST_DATABASE_URL=… npm test` backend 130, shared 152, frontend 146 passed; `npm run build -w frontend` passes (pixi in its own lazy chunk). Not verified: the animation and the look (no browser, no WebGL in jsdom). Route: delegated writer, plus the inline test timeout.
+
+- T3 commit 3ef81c4. Review: native review granted by the user; lineage review-b47e85568f18e658 (medium risk, reliability lens, base 661b9d1, 938 changed lines) approved and acknowledged. R3-001 (WARNING: `createWheelScene` awaited the font load, so a load that never settles would leave the wheel and the spin waiting) fixed inline in the next commit: the wait races a 1.5 s timeout, with tests for load, timeout and failure (frontend 149 passed). R3-002 (SUGGESTION on the landing-test loop in `ballMotion.test.ts`) left as is.
+
+- Delivery: #37 merged into `main` (98e38f6); #39, #40 and #41 merged into the tracker with green CI (lint, typecheck, test, Conventional Commit title).
+
+## Next step
+
+None: merge the tracker PR into `main`. The visual check of the table and the wheel in a browser is still pending with the user.

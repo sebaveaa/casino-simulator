@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { MAX_MONEY } from "../money";
 import { computeOutcome, createRng } from "../rng";
 import {
+  MAX_SPIN_BETS,
   pocketColor,
   type RouletteBet,
   type RouletteSelection,
   roulette,
   rouletteResultSchema,
   rouletteSelectionSchema,
+  selectionKey,
+  spinPayouts,
+  totalStake,
+  validateSpin,
 } from "./roulette";
 
 describe("rouletteSelectionSchema", () => {
@@ -145,5 +151,97 @@ describe("roulette.resolve", () => {
   it("stays within 0 to 36", () => {
     const rng = { int: (max: number) => max - 1 };
     expect(roulette.resolve(bet({ type: "color", color: "red" }), rng)).toEqual({ number: 36 });
+  });
+});
+
+describe("validateSpin", () => {
+  const straight = (number: number, stake = 100n) => bet({ type: "straight", number }, stake);
+  const red = bet({ type: "color", color: "red" });
+
+  it("accepts a mix of inside and outside bets", () => {
+    expect(validateSpin([straight(17), red, bet({ type: "dozen", dozen: 2 }, 50n)])).toBe(true);
+  });
+
+  it("accepts every distinct selection at once", () => {
+    const all: RouletteBet[] = [
+      ...Array.from({ length: 37 }, (_, n) => straight(n)),
+      red,
+      bet({ type: "color", color: "black" }),
+      bet({ type: "parity", parity: "odd" }),
+      bet({ type: "parity", parity: "even" }),
+      bet({ type: "dozen", dozen: 1 }),
+      bet({ type: "dozen", dozen: 2 }),
+      bet({ type: "dozen", dozen: 3 }),
+    ];
+    expect(all).toHaveLength(MAX_SPIN_BETS);
+    expect(validateSpin(all)).toBe(true);
+  });
+
+  it("rejects an empty spin and one with more than 44 bets", () => {
+    expect(validateSpin([])).toBe(false);
+    const tooMany = Array.from({ length: MAX_SPIN_BETS + 1 }, (_, n) => straight(n % 37));
+    expect(validateSpin(tooMany)).toBe(false);
+  });
+
+  it("rejects the same selection twice, whatever the stakes", () => {
+    expect(validateSpin([straight(17), straight(17, 5n)])).toBe(false);
+    expect(validateSpin([red, { ...red, stake: 1n }])).toBe(false);
+  });
+
+  it("rejects a spin holding an invalid bet", () => {
+    expect(validateSpin([red, straight(17, 0n)])).toBe(false);
+    expect(validateSpin([red, straight(37)])).toBe(false);
+  });
+
+  it("rejects a spin whose total stake or total payout would not fit in a bigint column", () => {
+    // Each bet is valid alone (payout 2 x stake fits); together the payouts overflow.
+    const half = MAX_MONEY / 2n;
+    expect(roulette.validateBet(bet({ type: "color", color: "red" }, half))).toBe(true);
+    expect(
+      validateSpin([
+        bet({ type: "color", color: "red" }, half),
+        bet({ type: "parity", parity: "odd" }, half),
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe("selectionKey", () => {
+  it("is equal exactly for selections that bet on the same thing", () => {
+    expect(selectionKey({ type: "straight", number: 3 })).toBe(
+      selectionKey({ type: "straight", number: 3 }),
+    );
+    expect(selectionKey({ type: "straight", number: 3 })).not.toBe(
+      selectionKey({ type: "straight", number: 4 }),
+    );
+    expect(selectionKey({ type: "dozen", dozen: 1 })).not.toBe(
+      selectionKey({ type: "color", color: "red" }),
+    );
+  });
+});
+
+describe("totalStake and spinPayouts", () => {
+  const spin: RouletteBet[] = [
+    bet({ type: "straight", number: 17 }, 100n),
+    bet({ type: "color", color: "black" }, 200n),
+    bet({ type: "color", color: "red" }, 300n),
+    bet({ type: "dozen", dozen: 2 }, 400n),
+  ];
+
+  it("sums the stakes", () => {
+    expect(totalStake(spin)).toBe(1000n);
+  });
+
+  it("pays each bet by its own multiplier on pocket 17, in order", () => {
+    expect(spinPayouts(spin, { number: 17 })).toEqual({
+      payouts: [3600n, 400n, 0n, 1200n],
+      total: 5200n,
+    });
+  });
+
+  it("loses every outside bet on zero", () => {
+    const outside = spin.slice(1);
+    expect(spinPayouts(outside, { number: 0 })).toEqual({ payouts: [0n, 0n, 0n], total: 0n });
+    expect(spinPayouts(spin, { number: 0 }).total).toBe(0n);
   });
 });

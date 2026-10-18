@@ -12,10 +12,14 @@ import {
   type RouletteBetRequest,
   type RouletteBetResponse,
   roulette,
+  selectionKey,
+  spinPayouts,
   type Transaction,
   type TransactionHistoryQueryInput,
   type TransactionHistoryResponse,
   toAmount,
+  totalStake,
+  validateSpin,
 } from "@casino/shared";
 import { createUnsignedJwt } from "../session/jwt";
 import { type ApiClient, ApiError } from "./client";
@@ -24,13 +28,44 @@ const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
 const MOCK_CLIENT_SEED = "mock-client-seed";
 
+/** A stake as an amount, or null when it is not one. */
+function stakeAmount(stake: string): bigint | null {
+  try {
+    return parseAmount(stake);
+  } catch {
+    return null;
+  }
+}
+
+/** Same list, compared by value and in order, so key order inside the objects does not matter. */
+function sameBets(a: RouletteBetRequest["bets"], b: RouletteBetRequest["bets"]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((item, i) => {
+      const other = b[i];
+      const stake = stakeAmount(item.stake);
+      // A stake that is not an amount never matches, so it cannot replay a saved result.
+      return (
+        other !== undefined &&
+        stake !== null &&
+        stake === stakeAmount(other.stake) &&
+        selectionKey(item.selection) === selectionKey(other.selection)
+      );
+    })
+  );
+}
+
+function never(): never {
+  throw new Error("A spin always has at least one bet");
+}
+
 function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }
 
 /**
- * In-memory `ApiClient` for developing screens without a backend. Roulette bets run the shared
- * rules (`roulette.validateBet/resolve/payout`) over a fixed mock seed pair, so payouts match
+ * In-memory `ApiClient` for developing screens without a backend. Roulette spins run the shared
+ * rules (`validateSpin`, `roulette.resolve`, `spinPayouts`) over a fixed mock seed pair, so payouts match
  * the real API; only the seeds and persistence are fake.
  */
 export function createMockApiClient(options: { delayMs?: number } = {}): ApiClient {
@@ -38,7 +73,7 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
   let balance = STARTING_BALANCE;
   const transactions: Transaction[] = [];
   const deposits = new Map<string, DepositResponse>();
-  const bets = new Map<string, RouletteBetResponse>();
+  const bets = new Map<string, { request: RouletteBetRequest; response: RouletteBetResponse }>();
 
   // email -> account. Passwords are kept in plain text: this is a dev-only stand-in.
   const users = new Map<string, { id: string; password: string }>();
@@ -119,12 +154,26 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
     ): Promise<RouletteBetResponse> {
       await sleep(delayMs);
       const previous = bets.get(idempotencyKey);
-      if (previous) return { ...previous, balance: toAmount(balance) };
-      const bet = { stake: parseAmount(body.stake), selection: body.selection };
-      if (!roulette.validateBet(bet)) {
+      if (previous) {
+        // Same as the backend: a key reused with another list is refused, not replayed.
+        if (!sameBets(previous.request.bets, body.bets)) {
+          throw new ApiError(
+            "conflict",
+            "Idempotency-Key was already used for a different bet",
+            409,
+          );
+        }
+        return { ...previous.response, balance: toAmount(balance) };
+      }
+      const spin = body.bets.map(({ stake, selection }) => ({
+        stake: parseAmount(stake),
+        selection,
+      }));
+      if (!validateSpin(spin)) {
         throw new ApiError("invalid_request", "Invalid roulette bet", 400);
       }
-      if (bet.stake > balance) {
+      const stake = totalStake(spin);
+      if (stake > balance) {
         throw new ApiError("insufficient_funds", "Insufficient funds", 422);
       }
       const seed = {
@@ -132,11 +181,11 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
         clientSeed: MOCK_CLIENT_SEED,
         nonce: bets.size,
       };
-      const result = roulette.resolve(bet, createRng(await computeOutcome(seed)));
-      const payout = roulette.payout(bet, result);
+      const result = roulette.resolve(spin[0] ?? never(), createRng(await computeOutcome(seed)));
+      const { payouts, total: payout } = spinPayouts(spin, result);
       const betId = crypto.randomUUID();
-      balance -= bet.stake;
-      record("bet", -bet.stake, betId);
+      balance -= stake;
+      record("bet", -stake, betId);
       if (payout > 0n) {
         balance += payout;
         record("payout", payout, betId);
@@ -144,6 +193,8 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
       const response: RouletteBetResponse = {
         betId,
         result,
+        bets: body.bets.map((item, i) => ({ ...item, payout: toAmount(payouts[i] ?? 0n) })),
+        stake: toAmount(stake),
         payout: toAmount(payout),
         balance: toAmount(balance),
         fairness: {
@@ -153,7 +204,7 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
           nonce: seed.nonce,
         },
       };
-      bets.set(idempotencyKey, response);
+      bets.set(idempotencyKey, { request: body, response });
       return response;
     },
   };

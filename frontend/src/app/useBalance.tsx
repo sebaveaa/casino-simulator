@@ -14,10 +14,15 @@ import { useSession } from "../session";
 /** Balance text while the request is pending. */
 export const BALANCE_LOADING = "…";
 
+/** The balance in minor units, or why it is not known. */
+type Balance = bigint | "loading" | "unavailable";
+
 interface BalanceState {
-  text: string;
-  /** Re-fetches the balance; the text keeps its last value until the answer arrives. */
+  balance: Balance;
+  /** Re-fetches the balance; it keeps its last value until the answer arrives. */
   refresh: () => Promise<void>;
+  /** Shows a balance the server just returned, without another request. */
+  apply: (balance: string) => void;
 }
 
 const BalanceContext = createContext<BalanceState | null>(null);
@@ -31,49 +36,74 @@ const BalanceContext = createContext<BalanceState | null>(null);
 export function BalanceProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const userId = useSession()?.user.id ?? null;
-  const [text, setText] = useState(BALANCE_LOADING);
+  const [balance, setBalance] = useState<Balance>("loading");
+
+  const apply = useCallback((text: string) => {
+    try {
+      setBalance(parseAmount(text));
+    } catch {
+      // An unreadable amount changes nothing; the background refresh will correct it.
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
       const res = await api.getBalance();
-      setText(formatCredits(parseAmount(res.balance)));
+      setBalance(parseAmount(res.balance));
     } catch {
-      setText("--");
+      setBalance("unavailable");
     }
   }, [api]);
 
   useEffect(() => {
     if (userId === null) {
-      setText("--");
+      setBalance("unavailable");
       return;
     }
-    setText(BALANCE_LOADING);
+    setBalance("loading");
     let active = true;
     api
       .getBalance()
       .then((res) => {
-        if (active) setText(formatCredits(parseAmount(res.balance)));
+        if (active) setBalance(parseAmount(res.balance));
       })
       .catch(() => {
-        if (active) setText("--");
+        if (active) setBalance("unavailable");
       });
     return () => {
       active = false;
     };
   }, [api, userId]);
 
-  const value = useMemo(() => ({ text, refresh }), [text, refresh]);
+  const value = useMemo(() => ({ balance, refresh, apply }), [balance, refresh, apply]);
   return <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>;
 }
 
 /** Returns the formatted balance. Throws outside a `BalanceProvider`. */
 export function useBalance(): string {
-  return useBalanceState().text;
+  const { balance } = useBalanceState();
+  if (balance === "loading") return BALANCE_LOADING;
+  if (balance === "unavailable") return "--";
+  return formatCredits(balance);
+}
+
+/** The balance in minor units, or `null` while it loads or when it is unavailable. */
+export function useBalanceAmount(): bigint | null {
+  const { balance } = useBalanceState();
+  return typeof balance === "bigint" ? balance : null;
 }
 
 /** Returns a function that re-fetches the shared balance. Throws outside a `BalanceProvider`. */
 export function useRefreshBalance(): () => Promise<void> {
   return useBalanceState().refresh;
+}
+
+/**
+ * Returns a function that sets the shared balance from an API amount string, such as the
+ * `balance` of a bet response. Throws outside a `BalanceProvider`.
+ */
+export function useApplyBalance(): (balance: string) => void {
+  return useBalanceState().apply;
 }
 
 function useBalanceState(): BalanceState {
