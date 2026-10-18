@@ -2,6 +2,7 @@ import {
   authResponseSchema,
   balanceResponseSchema,
   depositResponseSchema,
+  pocketColor,
   rouletteBetResponseSchema,
   transactionHistoryResponseSchema,
 } from "@casino/shared";
@@ -73,18 +74,49 @@ describe("mock API client", () => {
     expect((await api.listTransactions()).items).toHaveLength(1);
   });
 
-  it("charges the stake for a bet and lists it first", async () => {
+  it("pays bets with the shared roulette rules and records bet and payout movements", async () => {
     const api = createMockApiClient();
-    await api.deposit({ amount: "100" }, "key-00000001");
-    const res = await api.placeRouletteBet(bet, "key-00000002");
-    expect(res.balance).toBe("99600");
-    expect(res.payout).toBe("0");
-    expect(res.result.number).toBeGreaterThanOrEqual(0);
-    expect(res.result.number).toBeLessThanOrEqual(36);
-    const [latest] = (await api.listTransactions()).items;
-    expect(latest?.type).toBe("bet");
-    expect(latest?.amount).toBe("-500");
-    expect(latest?.betId).toBe(res.betId);
+    let balance = 100000n;
+    for (let i = 0; i < 20; i++) {
+      const res = await api.placeRouletteBet(bet, `key-bet-${i.toString().padStart(4, "0")}`);
+      const won = pocketColor(res.result.number) === "red";
+      expect(res.payout).toBe(won ? "1000" : "0");
+      balance += (won ? 1000n : 0n) - 500n;
+      expect(res.balance).toBe(balance.toString());
+      expect(res.result.number).toBeGreaterThanOrEqual(0);
+      expect(res.result.number).toBeLessThanOrEqual(36);
+    }
+    const [latest] = (await api.listTransactions({ limit: 1 })).items;
+    expect(["bet", "payout"]).toContain(latest?.type);
+  });
+
+  it("pays a winning straight bet 36 times the stake", async () => {
+    const api = createMockApiClient();
+    for (let i = 0; i < 200; i++) {
+      const res = await api.placeRouletteBet(
+        { stake: "100", selection: { type: "straight", number: 17 } },
+        `key-straight-${i.toString().padStart(4, "0")}`,
+      );
+      expect(res.payout).toBe(res.result.number === 17 ? "3600" : "0");
+    }
+  });
+
+  it("charges once when a bet is retried with the same idempotency key", async () => {
+    const api = createMockApiClient();
+    const first = await api.placeRouletteBet(bet, "key-00000002");
+    const second = await api.placeRouletteBet(bet, "key-00000002");
+    expect(second).toEqual(first);
+    const bets = (await api.listTransactions()).items.filter((t) => t.type === "bet");
+    expect(bets).toHaveLength(1);
+  });
+
+  it("rejects a bet larger than the balance with insufficient_funds", async () => {
+    const api = createMockApiClient();
+    await expect(
+      api.placeRouletteBet({ ...bet, stake: "100001" }, "key-00000003"),
+    ).rejects.toMatchObject({ code: "insufficient_funds", status: 422 });
+    expect((await api.getBalance()).balance).toBe("100000");
+    expect((await api.listTransactions()).items).toHaveLength(0);
   });
 
   it("honors the history limit", async () => {

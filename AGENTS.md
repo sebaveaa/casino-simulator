@@ -28,15 +28,15 @@ Stack and folder layout: README §11 and §12.
 - `npm run format`: Biome check with fixes applied.
 - `npm run typecheck`: `tsc` in every workspace.
 - `npm test`: Vitest in every workspace.
-- `TEST_DATABASE_URL=postgres://casino:casino@127.0.0.1:5432/casino npm test`: also runs the PostgreSQL integration tests (skipped otherwise). Start the database with `docker compose up -d` and run `npm run migrate` first.
+- `TEST_DATABASE_URL=postgres://casino:casino@127.0.0.1:5432/casino npm test`: also runs the PostgreSQL integration tests (skipped otherwise). Start the database with `docker compose up -d postgres redis` and run `npm run migrate` first.
 - `cp .env.example .env`: local settings (gitignored).
-- `docker compose up -d`: PostgreSQL and Redis. If host port 5432 is taken, set `POSTGRES_PORT` in `.env` and match it in `DATABASE_URL`.
+- `docker compose up -d --build`: the whole stack (PostgreSQL, Redis, one-shot `migrate`, `app`, `worker`, `web`); `docker compose ps` shows `healthy` once it is up. Portal at http://localhost:8080, API at http://localhost:3000. If host port 5432 is taken, set `POSTGRES_PORT` in `.env` and match it in `DATABASE_URL`.
+- `docker compose up -d postgres redis`: only the databases, for running the backend and UI from source.
 - `npm run migrate`: apply pending database migrations to `DATABASE_URL`. The image runs them with `node backend/dist/migrate.js`.
-- `npm run dev -w backend`: backend with reload, reads `.env`.
-- `npm run dev -w frontend`: Vite dev server at http://127.0.0.1:5173. It uses the in-memory mock API unless `VITE_API_URL` points at a backend, e.g. `VITE_API_URL=http://localhost:3000 npm run dev -w frontend`.
+- `npm run dev -w backend`: backend with reload, reads `.env`. It needs port 3000, so run `docker compose stop app` first if the stack is up.
+- `npm run dev -w frontend`: Vite dev server at http://127.0.0.1:5173. It uses the in-memory mock API unless `VITE_API_URL` points at a backend, e.g. `VITE_API_URL=http://localhost:3000 npm run dev -w frontend` against the API from `docker compose up -d --build app`.
 - `docker build -t casino-cloud .`: the backend image; `PROCESS_ROLE` picks `api` or `worker`.
 - `docker build -f frontend/Dockerfile -t casino-cloud-web .`: the frontend image (nginx); the build context is the repo root.
-- `docker compose --profile app up --build`: whole stack in containers, with the portal at http://localhost:8080 and the API at http://localhost:3000.
 
 CI runs lint, typecheck and test on every PR.
 

@@ -27,13 +27,25 @@ services:
       timeout: 3s
       retries: 10
 
-  # Whole stack in containers: `docker compose --profile app up --build`.
-  app:
-    profiles: ["app"]
+  # `docker compose up --build` starts everything. `docker compose ps` shows "healthy" on
+  # postgres, redis, app and web once the stack is up; `migrate` runs once and exits 0.
+  # One image serves migrate, app and worker, so it is built once.
+  migrate:
+    image: casino-cloud:local
     build: .
+    command: ["node", "backend/dist/migrate.js"]
+    restart: "no"
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://casino:casino@postgres:5432/casino
+
+  app:
+    image: casino-cloud:local
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     environment:
@@ -45,20 +57,50 @@ services:
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
       PROCESS_ROLE: api
     ports:
+      # If a local `npm run dev -w backend` needs port 3000, stop this service first: `docker compose stop app`.
       - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Background processes (README §12): race lifecycle and settlement land here.
+  worker:
+    image: casino-cloud:local
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://casino:casino@postgres:5432/casino
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: local-dev-only-not-a-real-secret-change-me
+      APP_ENV: development
+      # Required by the shared config even though the worker serves no HTTP.
+      ALLOWED_ORIGINS: http://localhost:8080
+      PROCESS_ROLE: worker
 
   # Web portal: http://localhost:8080.
   web:
-    profiles: ["app"]
     build:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        # Empty selects the in-memory mock API until the backend routes land (#9, #10, #12).
-        # The browser calls the API from the host, so a real value is http://localhost:3000.
-        VITE_API_URL: ""
+        # Vite inlines this at build time and the browser calls the API from the host.
+        # Empty would select the in-memory mock API instead.
+        VITE_API_URL: http://localhost:3000
+    depends_on:
+      app:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   postgres-data:
