@@ -1,14 +1,19 @@
 import {
   computeOutcome,
   createRng,
-  type RouletteBet,
+  parseAmount,
   type RouletteBetResponse,
   type RouletteResult,
+  type RouletteSpin,
   roulette,
+  rouletteBetItemSchema,
   rouletteResultSchema,
-  rouletteSelectionSchema,
+  selectionKey,
+  spinPayouts,
   toAmount,
+  totalStake,
 } from "@casino/shared";
+import { z } from "zod";
 import type { Db } from "../../db/database";
 import { AppError } from "../../platform/errors";
 import type { SeedPairService } from "../../rng/seed-pair-service";
@@ -16,9 +21,13 @@ import { InsufficientFundsError, scopedKey, type WalletService } from "../../wal
 
 export type RouletteBetDeps = { wallet: WalletService; seedPairs: SeedPairService };
 
+/** What `bets.selection` holds for a spin: the list as requested, stakes as strings. */
+const storedBetsSchema = z.array(rouletteBetItemSchema);
+
 /**
- * Places one roulette bet inside the caller's transaction (README §3.2, §4.2). Everything the
- * bet changes (nonce, bet row, both ledger transactions) commits or rolls back together.
+ * Places one roulette spin (one or more selections, one draw) inside the caller's transaction
+ * (README §3.2, §4.2). Everything the spin changes (nonce, bet row, both ledger transactions)
+ * commits or rolls back together.
  *
  * Order matters: the wallet is locked first (wallets -> users -> seed_pairs, see
  * `SeedPairService.draw`), and only then is the idempotency key looked up, so two requests with
@@ -27,23 +36,28 @@ export type RouletteBetDeps = { wallet: WalletService; seedPairs: SeedPairServic
 export async function placeRouletteBet(
   trx: Db,
   { wallet, seedPairs }: RouletteBetDeps,
-  input: { userId: string; idempotencyKey: string; bet: RouletteBet },
+  input: { userId: string; idempotencyKey: string; bets: RouletteSpin },
 ): Promise<RouletteBetResponse> {
-  const { userId, idempotencyKey, bet } = input;
+  const { userId, idempotencyKey, bets } = input;
   const betKey = scopedKey("roulette-bet", userId, idempotencyKey);
 
   const balance = await wallet.lockBalance(trx, userId);
 
   const existing = await wallet.findTransaction(trx, betKey);
-  if (existing) return replay(trx, wallet, userId, existing.betId, bet);
+  if (existing) return replay(trx, wallet, userId, existing.betId, bets);
 
-  // Checked before `draw`, so a bet the player cannot afford burns no nonce. The transfer still
-  // enforces it, and the transaction rolls back either way.
-  if (balance < bet.stake) throw new InsufficientFundsError();
+  // The whole spin is refused when the total stake is out of reach. Checked before `draw`, so it
+  // burns no nonce; the transfer still enforces it, and the transaction rolls back either way.
+  const stake = totalStake(bets);
+  if (balance < stake) throw new InsufficientFundsError();
 
   const draw = await seedPairs.draw(trx, userId);
-  const result: RouletteResult = roulette.resolve(bet, createRng(await computeOutcome(draw.seed)));
-  const payout = roulette.payout(bet, result);
+  // One draw settles every selection: `resolve` ignores the bet, so any of them serves.
+  const result: RouletteResult = roulette.resolve(
+    bets[0] ?? never(),
+    createRng(await computeOutcome(draw.seed)),
+  );
+  const { payouts, total: payout } = spinPayouts(bets, result);
 
   const { id: betId } = await trx
     .insertInto("bets")
@@ -52,8 +66,9 @@ export async function placeRouletteBet(
       game: roulette.id,
       seed_pair_id: draw.seedPairId,
       nonce: draw.nonce,
-      stake: bet.stake,
-      selection: bet.selection,
+      stake,
+      // Serialized by hand: the driver would send a JS array as a PostgreSQL array, not jsonb.
+      selection: JSON.stringify(storeBets(bets)),
       result,
       payout,
       status: "settled",
@@ -65,7 +80,7 @@ export async function placeRouletteBet(
   await wallet.transfer(trx, {
     from: { userId },
     to: "house",
-    amount: bet.stake,
+    amount: stake,
     type: "bet",
     idempotencyKey: betKey,
     betId,
@@ -85,6 +100,8 @@ export async function placeRouletteBet(
   return {
     betId,
     result,
+    bets: responseBets(bets, payouts),
+    stake: toAmount(stake),
     payout: toAmount(payout),
     balance: toAmount(await wallet.getBalance(trx, userId)),
     fairness: {
@@ -97,15 +114,16 @@ export async function placeRouletteBet(
 }
 
 /**
- * Rebuilds the original response from the stored bet. Only the balance is current. A key reused
- * with a different stake or selection is a client bug, so it is refused instead of replayed.
+ * Rebuilds the original response from the stored spin. Only the balance is current. A key reused
+ * with a different list (another stake, selection, or order) is a client bug, so it is refused
+ * instead of replayed.
  */
 async function replay(
   trx: Db,
   wallet: WalletService,
   userId: string,
   betId: string | null,
-  bet: RouletteBet,
+  bets: RouletteSpin,
 ): Promise<RouletteBetResponse> {
   const row = betId
     ? await trx
@@ -116,7 +134,6 @@ async function replay(
           "b.nonce",
           "b.result",
           "b.payout",
-          "b.stake",
           "b.selection",
           "s.id as seedPairId",
           "s.server_seed_hash",
@@ -129,17 +146,21 @@ async function replay(
     : undefined;
   const result = rouletteResultSchema.safeParse(row?.result);
   if (!row || row.nonce === null || row.payout === null || !result.success) {
-    // The key was used for something other than a settled roulette bet.
+    // The key was used for something other than a settled roulette spin.
     throw new AppError("conflict", "Idempotency-Key was already used for another operation");
   }
-  const selection = rouletteSelectionSchema.safeParse(row.selection);
-  if (row.stake !== bet.stake || !selection.success || !sameSelection(selection.data, bet)) {
+  const stored = storedBetsSchema.safeParse(row.selection);
+  if (!stored.success || !sameBets(stored.data, bets)) {
     throw new AppError("conflict", "Idempotency-Key was already used for a different bet");
   }
+  // The payouts are a pure function of the stored list and the stored result.
+  const { payouts, total } = spinPayouts(bets, result.data);
   return {
     betId: row.id,
     result: result.data,
-    payout: toAmount(row.payout),
+    bets: responseBets(bets, payouts),
+    stake: toAmount(totalStake(bets)),
+    payout: toAmount(total),
     balance: toAmount(await wallet.getBalance(trx, userId)),
     fairness: {
       seedPairId: row.seedPairId,
@@ -150,11 +171,33 @@ async function replay(
   };
 }
 
-/** Field by field, so the key order jsonb stores does not matter. */
-function sameSelection(stored: RouletteBet["selection"], bet: RouletteBet): boolean {
-  const requested: Record<string, unknown> = bet.selection;
+function storeBets(bets: RouletteSpin): z.infer<typeof storedBetsSchema> {
+  return bets.map((bet) => ({ stake: toAmount(bet.stake), selection: bet.selection }));
+}
+
+function responseBets(bets: RouletteSpin, payouts: bigint[]): RouletteBetResponse["bets"] {
+  return bets.map((bet, i) => ({
+    stake: toAmount(bet.stake),
+    selection: bet.selection,
+    payout: toAmount(payouts[i] ?? 0n),
+  }));
+}
+
+/** Same length, and the same stake and selection at every position. */
+function sameBets(stored: z.infer<typeof storedBetsSchema>, bets: RouletteSpin): boolean {
   return (
-    Object.keys(stored).length === Object.keys(requested).length &&
-    Object.entries(stored).every(([field, value]) => requested[field] === value)
+    stored.length === bets.length &&
+    stored.every((item, i) => {
+      const bet = bets[i];
+      return (
+        bet !== undefined &&
+        parseAmount(item.stake) === bet.stake &&
+        selectionKey(item.selection) === selectionKey(bet.selection)
+      );
+    })
   );
+}
+
+function never(): never {
+  throw new Error("A spin always has at least one bet");
 }

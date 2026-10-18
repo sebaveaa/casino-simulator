@@ -1,3 +1,4 @@
+import type { RouletteBetResponse } from "@casino/shared";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,9 +30,11 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const BET_RESPONSE = {
+const BET_RESPONSE: RouletteBetResponse = {
   betId: "11111111-1111-4111-8111-111111111111",
   result: { number: 17 },
+  bets: [{ stake: "1000", selection: { type: "color", color: "red" }, payout: "0" }],
+  stake: "1000",
   payout: "0",
   balance: "99000",
   fairness: {
@@ -40,7 +43,7 @@ const BET_RESPONSE = {
     clientSeed: "client",
     nonce: 3,
   },
-} as const;
+};
 
 function fakeClient(placeRouletteBet: ApiClient["placeRouletteBet"]): ApiClient {
   return { ...createMockApiClient(), placeRouletteBet };
@@ -64,8 +67,7 @@ describe("RoulettePage", () => {
     chooseAndSpin("Rojo", "12.5");
     await waitFor(() => expect(place).toHaveBeenCalledTimes(1));
     expect(place.mock.calls[0]?.[0]).toEqual({
-      stake: "1250",
-      selection: { type: "color", color: "red" },
+      bets: [{ stake: "1250", selection: { type: "color", color: "red" } }],
     });
     expect(place.mock.calls[0]?.[1]).toMatch(/^[0-9a-f-]{36}$/);
   });
@@ -75,11 +77,11 @@ describe("RoulettePage", () => {
     renderRoulette(fakeClient(place));
     chooseAndSpin("Número 7");
     await waitFor(() => expect(place).toHaveBeenCalledTimes(1));
-    expect(place.mock.calls[0]?.[0].selection).toEqual({ type: "straight", number: 7 });
+    expect(place.mock.calls[0]?.[0].bets[0]?.selection).toEqual({ type: "straight", number: 7 });
     await screen.findByText(/Perdiste/);
     chooseAndSpin("2ª docena (13-24)");
     await waitFor(() => expect(place).toHaveBeenCalledTimes(2));
-    expect(place.mock.calls[1]?.[0].selection).toEqual({ type: "dozen", dozen: 2 });
+    expect(place.mock.calls[1]?.[0].bets[0]?.selection).toEqual({ type: "dozen", dozen: 2 });
   });
 
   it("shows the number the server returned, even when local rules would disagree", async () => {
@@ -97,7 +99,9 @@ describe("RoulettePage", () => {
   });
 
   it("shows a loss with the stake, the fairness data and refreshes the balance", async () => {
-    const place = vi.fn<ApiClient["placeRouletteBet"]>().mockResolvedValue({ ...BET_RESPONSE });
+    const place = vi
+      .fn<ApiClient["placeRouletteBet"]>()
+      .mockResolvedValue({ ...BET_RESPONSE, stake: "500" });
     const getBalance = vi.fn().mockResolvedValue({ balance: "99000" });
     renderRoulette({ ...fakeClient(place), getBalance });
     await waitFor(() => expect(getBalance).toHaveBeenCalledTimes(1));
@@ -118,7 +122,7 @@ describe("RoulettePage", () => {
   });
 
   it("disables the button while the bet is pending", async () => {
-    let resolveBet: (value: typeof BET_RESPONSE) => void = () => {};
+    let resolveBet: (value: RouletteBetResponse) => void = () => {};
     const place = vi.fn<ApiClient["placeRouletteBet"]>().mockReturnValue(
       new Promise((resolve) => {
         resolveBet = resolve;

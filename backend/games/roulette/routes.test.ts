@@ -34,6 +34,8 @@ function fakeTokens(known: string[]): TokenService {
 const response: RouletteBetResponse = {
   betId: randomUUID(),
   result: { number: 7 },
+  bets: [{ stake: "100", selection: { type: "color", color: "red" }, payout: "0" }],
+  stake: "100",
   payout: "0",
   balance: "900",
   fairness: {
@@ -62,7 +64,8 @@ async function build() {
   return app;
 }
 
-const validBody = { stake: "100", selection: { type: "color", color: "red" } };
+const red = { stake: "100", selection: { type: "color", color: "red" } };
+const validBody = { bets: [red] };
 
 function bet(app: FastifyInstance, payload: unknown, headers: Record<string, string> = {}) {
   return app.inject({
@@ -102,10 +105,23 @@ describe("roulette bet route", () => {
     const headers = { "idempotency-key": randomUUID() };
     for (const payload of [
       {},
-      { stake: "0", selection: { type: "color", color: "red" } },
-      { stake: "-5", selection: { type: "color", color: "red" } },
-      { stake: "100", selection: { type: "straight", number: 37 } },
-      { stake: "100", selection: { type: "split" } },
+      red,
+      { bets: [] },
+      { bets: [{ ...red, stake: "0" }] },
+      { bets: [{ ...red, stake: "-5" }] },
+      { bets: [{ stake: "100", selection: { type: "straight", number: 37 } }] },
+      { bets: [{ stake: "100", selection: { type: "split" } }] },
+      // The same selection twice is one bet too many.
+      { bets: [red, { ...red, stake: "5" }] },
+      // 45 bets: more than the 44 distinct selections the rules allow.
+      {
+        bets: Array.from({ length: 45 }, (_, n) => ({
+          ...red,
+          selection: { type: "straight", number: n % 37 },
+        })),
+      },
+      // The total possible payout would not fit in a bigint column.
+      { bets: [{ stake: "9223372036854775807", selection: { type: "color", color: "red" } }] },
     ]) {
       const res = await bet(app, payload, headers);
       expect(res.statusCode).toBe(400);
@@ -124,7 +140,25 @@ describe("roulette bet route", () => {
     expect(placeRouletteBet).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
       userId,
       idempotencyKey: key,
-      bet: { stake: 100n, selection: validBody.selection },
+      bets: [{ stake: 100n, selection: red.selection }],
     });
+  });
+
+  it("hands over every selection of the spin in order", async () => {
+    vi.mocked(placeRouletteBet).mockResolvedValue(response);
+    const app = await build();
+    const straight = { stake: "50", selection: { type: "straight", number: 17 } };
+    const res = await bet(app, { bets: [straight, red] }, { "idempotency-key": randomUUID() });
+    expect(res.statusCode).toBe(201);
+    expect(placeRouletteBet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        bets: [
+          { stake: 50n, selection: straight.selection },
+          { stake: 100n, selection: red.selection },
+        ],
+      }),
+    );
   });
 });

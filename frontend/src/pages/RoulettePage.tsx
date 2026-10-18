@@ -45,7 +45,7 @@ function errorMessage(error: unknown): string {
   return "Ocurrió un error inesperado. Intente de nuevo.";
 }
 
-type Round = { response: RouletteBetResponse; stake: string };
+type Round = { response: RouletteBetResponse };
 
 /** Roulette table: the server draws the number, the wheel only animates it (README §4.2). */
 export function RoulettePage() {
@@ -83,7 +83,7 @@ export function RoulettePage() {
     setFieldError(null);
     setError(null);
 
-    const signature = JSON.stringify({ stake, selection });
+    const signature = JSON.stringify({ bets: [{ stake, selection }] });
     if (pendingKey.current?.signature !== signature) {
       pendingKey.current = { signature, key: crypto.randomUUID() };
     }
@@ -91,9 +91,9 @@ export function RoulettePage() {
 
     setSubmitting(true);
     try {
-      const response = await api.placeRouletteBet({ stake, selection }, key);
+      const response = await api.placeRouletteBet({ bets: [{ stake, selection }] }, key);
       pendingKey.current = null;
-      setRound({ response, stake });
+      setRound({ response });
       setRevealed(false);
       setSpinning(true);
       setSpinId((id) => id + 1);
@@ -146,7 +146,7 @@ export function RoulettePage() {
                 <p className={won ? "wallet-ok" : "wallet-error"}>
                   {won
                     ? `Ganaste ${formatCredits(parseAmount(result.response.payout))} créditos.`
-                    : `Perdiste ${formatCredits(BigInt(result.stake))} créditos.`}
+                    : `Perdiste ${formatCredits(parseAmount(result.response.stake))} créditos.`}
                 </p>
               </>
             )}
