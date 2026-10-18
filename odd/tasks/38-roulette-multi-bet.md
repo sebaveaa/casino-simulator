@@ -1,8 +1,8 @@
 # 38-roulette-multi-bet
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/38
-Branch: feat/38-roulette-multi-bet (from `feat/12-roulette-bets` at 62d9566; PR #37 into `main` is still open)
-Status: planned
+Branch: feat/38-roulette (tracker from `main` after #37); slices on `feat/38-roulette-multi-bet`, `feat/38-roulette-table`, `feat/38-roulette-ball-wheel`
+Status: done
 
 ## Objective
 
@@ -51,7 +51,7 @@ Native review only for large feature merges (user preference); work units are le
 
 ## Delivery
 
-Forecast: ~1500 authored lines (T1 ~450, T2 ~600, T3 ~450). Strategy: ask-on-risk. Chain strategy: feature-branch-chain (user's choice, 2026-10-17). One PR per task: T1 → `feat/12-roulette-bets`, T2 → T1's branch, T3 → T2's branch.
+Forecast: ~1500 authored lines (T1 ~450, T2 ~600, T3 ~450). Strategy: ask-on-risk. Chain strategy: feature-branch-chain (user's choice, 2026-10-17). The user then asked to open the PRs and merge them with admin rights (2026-10-18): #37 (#12) was merged into `main` first, the slices were rebased onto it, and each slice PR targeted the tracker `feat/38-roulette` with squash merges: T1 #39, T2 #40 (`size:exception`, ~2,100 lines), T3 #41. The tracker PR into `main` closes #38.
 
 ## Progress
 
@@ -70,6 +70,8 @@ Forecast: ~1500 authored lines (T1 ~450, T2 ~600, T3 ~450). Strategy: ask-on-ris
 
 - T3 commit 3ef81c4. Review: native review granted by the user; lineage review-b47e85568f18e658 (medium risk, reliability lens, base 661b9d1, 938 changed lines) approved and acknowledged. R3-001 (WARNING: `createWheelScene` awaited the font load, so a load that never settles would leave the wheel and the spin waiting) fixed inline in the next commit: the wait races a 1.5 s timeout, with tests for load, timeout and failure (frontend 149 passed). R3-002 (SUGGESTION on the landing-test loop in `ballMotion.test.ts`) left as is.
 
+- Delivery: #37 merged into `main` (98e38f6); #39, #40 and #41 merged into the tracker with green CI (lint, typecheck, test, Conventional Commit title).
+
 ## Next step
 
-Visual check of the table and wheel by the user; open the T1, T2 and T3 PRs (awaiting the user's go-ahead).
+None: merge the tracker PR into `main`. The visual check of the table and the wheel in a browser is still pending with the user.
