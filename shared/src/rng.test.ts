@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeOutcome, createRng, hashServerSeed, sha256Sync } from "./rng";
+import { computeOutcome, computeRoundOutcome, createRng, hashServerSeed, sha256Sync } from "./rng";
 
 const encoder = new TextEncoder();
 const hex = (bytes: Uint8Array) =>
@@ -174,4 +174,13 @@ describe("createRng", () => {
       expect(() => createRng(bad)).toThrow(RangeError);
     },
   );
+});
+
+describe("computeRoundOutcome", () => {
+  it("is HMAC-SHA256 keyed by the server seed over the round id", async () => {
+    const expected = await hmacHex(encoder.encode("seed"), encoder.encode("round"));
+    const outcome = await computeRoundOutcome("seed", "round");
+    expect(outcome).toBe(expected);
+    expect(outcome).toMatch(/^[0-9a-f]{64}$/);
+  });
 });
