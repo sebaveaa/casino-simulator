@@ -54,7 +54,7 @@ services:
       JWT_SECRET: local-dev-only-not-a-real-secret-change-me
       APP_ENV: development
       PORT: "3000"
-      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080
       PROCESS_ROLE: api
     ports:
       # If a local `npm run dev -w backend` needs port 3000, stop this service first: `docker compose stop app`.
