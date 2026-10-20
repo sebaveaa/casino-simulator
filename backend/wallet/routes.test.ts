@@ -19,7 +19,13 @@ import { stubServices } from "../platform/services";
 import { postgresWalletService } from "./postgres-wallet-service";
 import type { TransactionPage, TransactionRecord, WalletService } from "./wallet-service";
 
-const config = { appEnv: "production" as const, allowedOrigins: [] };
+const config = {
+  appEnv: "production" as const,
+  allowedOrigins: [],
+  raceDurationMs: 10_000,
+  raceMinStake: 1n,
+  raceMaxStake: 1000n,
+};
 const checks = { postgres: async () => true, redis: async () => true };
 
 /** Treats the bearer token as the user id; tokens outside `known` are invalid. */

@@ -7,7 +7,13 @@ import { AppError } from "./errors";
 import type { ModuleRoutes } from "./routes";
 import { stubServices } from "./services";
 
-const config = { appEnv: "production" as const, allowedOrigins: [] };
+const config = {
+  appEnv: "production" as const,
+  allowedOrigins: [],
+  raceDurationMs: 10_000,
+  raceMinStake: 1n,
+  raceMaxStake: 1000n,
+};
 const pass = async () => true;
 
 const routes: ModuleRoutes[] = [

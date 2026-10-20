@@ -17,7 +17,13 @@ import { placeRouletteBet } from "./place-bet";
 // only has to validate the request and hand it over.
 vi.mock("./place-bet", () => ({ placeRouletteBet: vi.fn() }));
 
-const config = { appEnv: "production" as const, allowedOrigins: [] };
+const config = {
+  appEnv: "production" as const,
+  allowedOrigins: [],
+  raceDurationMs: 10_000,
+  raceMinStake: 1n,
+  raceMaxStake: 1000n,
+};
 const checks = { postgres: async () => true, redis: async () => true };
 const userId = "11111111-1111-4111-8111-111111111111";
 

@@ -5,7 +5,13 @@ import { type AppDeps, buildApp } from "./app";
 import { createLogger } from "./logger";
 import { stubServices } from "./services";
 
-const config = { appEnv: "production" as const, allowedOrigins: ["http://localhost:5173"] };
+const config = {
+  appEnv: "production" as const,
+  allowedOrigins: ["http://localhost:5173"],
+  raceDurationMs: 10_000,
+  raceMinStake: 1n,
+  raceMaxStake: 1000n,
+};
 const pass = async () => true;
 const fail = async () => false;
 const boom = async (): Promise<boolean> => {

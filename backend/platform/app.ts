@@ -5,13 +5,13 @@ import { createAuthGuard } from "../auth/guard";
 import type { Db } from "../db/database";
 import type { Config } from "./config";
 import { registerErrorHandlers } from "./errors";
-import { type ModuleRoutes, moduleRoutes } from "./routes";
+import { type ModuleRoutes, moduleRoutes, type RaceSettings } from "./routes";
 import type { Services } from "./services";
 
 export type HealthCheck = () => Promise<boolean>;
 
 export type AppDeps = {
-  config: Pick<Config, "appEnv" | "allowedOrigins">;
+  config: Pick<Config, "appEnv" | "allowedOrigins"> & RaceSettings;
   checks: {
     postgres: HealthCheck;
     redis: HealthCheck;
@@ -64,7 +64,16 @@ export async function buildApp({
 
   const requireAuth = createAuthGuard(services.tokens);
   for (const register of routes) {
-    await register(app, { db, services, requireAuth });
+    await register(app, {
+      db,
+      services,
+      requireAuth,
+      config: {
+        raceDurationMs: config.raceDurationMs,
+        raceMinStake: config.raceMinStake,
+        raceMaxStake: config.raceMaxStake,
+      },
+    });
   }
 
   return app;
