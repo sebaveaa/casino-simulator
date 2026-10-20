@@ -1,9 +1,9 @@
 import { type Money, type RaceBetResponse, races, toAmount } from "@casino/shared";
 import { sql } from "kysely";
-import { z } from "zod";
 import type { Db } from "../../db/database";
 import { AppError } from "../../platform/errors";
 import { InsufficientFundsError, scopedKey, type WalletService } from "../../wallet/wallet-service";
+import { raceSelectionSchema } from "./selection";
 
 export type RaceBetDeps = { wallet: WalletService };
 
@@ -16,9 +16,6 @@ export type RaceBetInput = {
   /** Inclusive stake bounds, from the config. */
   limits: { min: Money; max: Money };
 };
-
-/** What `bets.selection` holds for a race bet. */
-const storedSelectionSchema = z.object({ animal: z.number().int() });
 
 /**
  * Places one race bet inside the caller's transaction (README §3.2). The bet row and the ledger
@@ -124,7 +121,7 @@ async function replay(
         .where("game", "=", races.id)
         .executeTakeFirst()
     : undefined;
-  const selection = storedSelectionSchema.safeParse(row?.selection);
+  const selection = raceSelectionSchema.safeParse(row?.selection);
   if (!row || row.round_id === null || !selection.success) {
     throw new AppError("conflict", "Idempotency-Key was already used for another operation");
   }
