@@ -12,7 +12,6 @@ import { App } from "../App";
 import { type ApiClient, ApiError, createMockApiClient } from "../api";
 import { routes } from "../app/routes";
 import { seedSession } from "../test/session";
-import { RACE_ANIMATION_MS } from "./RacesPage";
 
 // The real track needs WebGL and has its own tests. This stand-in exposes what the page passes and
 // lets a test end the animation.
@@ -42,6 +41,9 @@ const ROUND_A = "11111111-1111-4111-8111-111111111111";
 const ROUND_B = "22222222-2222-4222-8222-222222222222";
 const HASH = "ab".repeat(32);
 const SEED = "revealed-server-seed";
+/** What the fake server reports as its race settings. */
+const RACE_DURATION_MS = 10_000;
+const LIMITS = { minStake: "100", maxStake: "100000" };
 const ORDER = [2, 0, 4, 1, 3];
 /** The server clock runs one hour ahead of the browser in these tests. */
 const SERVER_AHEAD_MS = 3_600_000;
@@ -87,8 +89,16 @@ function resolvedRound(id = ROUND_A, settlesInMs = 4_000): RaceRound {
 function current(
   round: RaceRound | null,
   myBet: CurrentRaceResponse["myBet"] = null,
+  settings: Partial<Pick<CurrentRaceResponse, "limits" | "raceDurationMs">> = {},
 ): CurrentRaceResponse {
-  return { round, myBet, now: iso(serverNow()) };
+  return {
+    round,
+    myBet,
+    now: iso(serverNow()),
+    limits: LIMITS,
+    raceDurationMs: RACE_DURATION_MS,
+    ...settings,
+  };
 }
 
 /**
@@ -201,8 +211,22 @@ describe("RacesPage open round", () => {
     expect(await screen.findByText("00:25")).toBeTruthy();
     const track = screen.getByTestId("track");
     expect(Math.abs(Number(track.dataset.clock) - serverNow())).toBeLessThan(2_000);
-    expect(track.dataset.duration).toBe(String(RACE_ANIMATION_MS));
-    expect(RACE_ANIMATION_MS).toBe(10_000);
+    expect(track.dataset.duration).toBe(String(RACE_DURATION_MS));
+  });
+
+  it("takes the animation length from the server, not from a constant", async () => {
+    const api = raceApi(current(openRound(), null, { raceDurationMs: 6_000 }));
+    await renderRaces(api.client);
+    await screen.findByText("00:25");
+    expect(screen.getByTestId("track").dataset.duration).toBe("6000");
+  });
+
+  it("shows the server's stake limits in the hint", async () => {
+    const api = raceApi(
+      current(openRound(), null, { limits: { minStake: "500", maxStake: "2000" } }),
+    );
+    await renderRaces(api.client);
+    expect(await screen.findByText(/Mínimo 5, máximo 20 créditos\./)).toBeTruthy();
   });
 
   it("ticks the countdown every second and stops at zero", async () => {
@@ -331,10 +355,35 @@ describe("RacesPage betting", () => {
     for (const value of ["0", "2.5", "abc", "1001"]) {
       bet("Tortuga", value);
       expect(
-        await screen.findByText("Ingrese un número entero de créditos entre 1 y 1000."),
+        await screen.findByText("Ingrese un número entero de créditos entre 1 y 1,000."),
       ).toBeTruthy();
     }
     expect(api.placeRaceBet).not.toHaveBeenCalled();
+  });
+
+  it("validates the amount against the limits the server reported", async () => {
+    const api = raceApi(
+      current(openRound(), null, { limits: { minStake: "500", maxStake: "2000" } }),
+    );
+    await renderRaces(api.client);
+    for (const value of ["4", "21"]) {
+      bet("Tortuga", value);
+      expect(
+        await screen.findByText("Ingrese un número entero de créditos entre 5 y 20."),
+      ).toBeTruthy();
+    }
+    expect(api.placeRaceBet).not.toHaveBeenCalled();
+    bet("Tortuga", "20");
+    await screen.findByText("Apuesta registrada: Tortuga, 20 créditos");
+    expect(api.placeRaceBet.mock.calls[0]?.[0].stake).toBe("2000");
+  });
+
+  it("offers no bet before the first answer arrives", async () => {
+    const api = raceApi(current(openRound()));
+    api.getCurrentRace.mockImplementation(() => new Promise(() => {}));
+    await renderRaces(api.client);
+    expect(statusText()).toContain("Cargando la carrera…");
+    expect(screen.queryByRole("button", { name: "Apostar" })).toBeNull();
   });
 
   it("asks for an animal before betting", async () => {
@@ -412,7 +461,7 @@ describe("RacesPage round lifecycle", () => {
     const balanceCalls = api.getBalance.mock.calls.length;
     api.emit({ type: "settled", roundId: ROUND_A });
 
-    expect(await screen.findByText("Ganó 45 créditos")).toBeTruthy();
+    expect(await screen.findByText("Cobró 45 créditos (apuesta incluida)")).toBeTruthy();
     expect(screen.getByText("Ganador: Zorro")).toBeTruthy();
     await waitFor(() => expect(api.getBalance.mock.calls.length).toBeGreaterThan(balanceCalls));
     expect((await screen.findAllByText("1,035.00")).length).toBeGreaterThan(0);
@@ -469,10 +518,10 @@ describe("RacesPage round lifecycle", () => {
       ),
     );
     api.emit({ type: "settled", roundId: ROUND_A });
-    await screen.findByText("Ganó 45 créditos");
+    await screen.findByText("Cobró 45 créditos (apuesta incluida)");
 
     api.emit({ type: "opened", round: openRound(ROUND_B, 29_500) });
-    expect(screen.queryByText("Ganó 45 créditos")).toBeNull();
+    expect(screen.queryByText("Cobró 45 créditos (apuesta incluida)")).toBeNull();
     expect(screen.queryByText(/Apuesta registrada/)).toBeNull();
     expect(screen.getByText("00:30")).toBeTruthy();
     expect(betButton().disabled).toBe(false);
@@ -488,7 +537,7 @@ describe("RacesPage round lifecycle", () => {
     const track = screen.getByTestId("track");
     expect(track.dataset.order).toBe(ORDER.join(","));
     expect(track.dataset.started).toBe(
-      String(Date.parse(round.settlesAt as string) - RACE_ANIMATION_MS),
+      String(Date.parse(round.settlesAt as string) - RACE_DURATION_MS),
     );
     expect(screen.queryByRole("button", { name: "Apostar" })).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
@@ -599,22 +648,164 @@ describe("RacesPage live stream", () => {
   });
 });
 
+describe("RacesPage watchdog for lost events", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  it("recovers a lost closed event two seconds after closesAt", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 3_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:03");
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+
+    api.setRace(current({ ...openRound(ROUND_A, -2_000), status: "closed" }));
+    await advance(4_000);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+    await advance(2_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(statusText()).toContain("Apuestas cerradas"));
+  });
+
+  it("recovers a lost result and settled pair after settlesAt plus two seconds", async () => {
+    const round = resolvedRound(ROUND_A, 3_000);
+    const api = raceApi(current(round, { animal: 2, stake: "1000", payout: null }));
+    await renderRaces(api.client);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+
+    api.setRace(
+      current({ ...round, status: "settled" }, { animal: 2, stake: "1000", payout: "4500" }),
+    );
+    await advance(4_000);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+    await advance(2_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Cobró 45 créditos (apuesta incluida)")).toBeTruthy();
+  });
+
+  it("expects a closed round to end after the race duration when settlesAt is unknown", async () => {
+    const api = raceApi(
+      current({ ...openRound(ROUND_A, -1_000), status: "closed" }, null, { raceDurationMs: 6_000 }),
+    );
+    await renderRaces(api.client);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+    // closesAt + 6 s + 2 s is 7 s away.
+    await advance(6_000);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+    await advance(2_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+  });
+
+  it("retries every five seconds while the page is still behind", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 1_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:01");
+    // The server keeps answering "open": the closed event never shows up either.
+    await advance(3_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+    await advance(4_000);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(2);
+    await advance(1_500);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(3));
+    await advance(5_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(4));
+
+    // Once the server moves on, the retries stop.
+    api.setRace(current({ ...openRound(ROUND_A, -9_000), status: "closed" }));
+    await advance(5_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(statusText()).toContain("Apuestas cerradas"));
+    const calls = api.getCurrentRace.mock.calls.length;
+    await advance(4_000);
+    expect(api.getCurrentRace.mock.calls.length).toBe(calls);
+  });
+
+  it("covers a null snapshot that left a stale open round on screen", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 1_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:01");
+    api.setRace(current(null));
+    await advance(3_500);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+    await advance(5_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(3));
+  });
+
+  it("never overlaps fetches", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 1_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:01");
+    let calls = 0;
+    api.getCurrentRace.mockImplementation(() => {
+      calls += 1;
+      return new Promise(() => {});
+    });
+    await advance(30_000);
+    expect(calls).toBe(1);
+  });
+
+  it("does not fetch extra while the events arrive on time", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 3_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:03");
+    await advance(3_000);
+    api.emit({ type: "closed", roundId: ROUND_A });
+    await advance(500);
+    api.emit({
+      type: "result",
+      roundId: ROUND_A,
+      result: { winner: 2, order: ORDER },
+      serverSeed: SEED,
+    });
+    await advance(RACE_DURATION_MS);
+    api.emit({ type: "settled", roundId: ROUND_A });
+    await advance(60_000);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears its timers on unmount", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 3_000)));
+    const view = await renderRaces(api.client);
+    await screen.findByText("00:03");
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(30_000);
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not raise an unhandled rejection when the fetch fails", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 1_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:01");
+    api.getCurrentRace.mockRejectedValue(new Error("offline"));
+    await advance(3_500);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+    await advance(5_000);
+    await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(3));
+    expect(screen.queryByText("No se pudo cargar la carrera.")).toBeNull();
+  });
+});
+
 describe("RacesPage with the mock API", () => {
   it("plays a whole round: bet, race, settlement and the next round", async () => {
-    const client = createMockApiClient({ race: { windowMs: 400, durationMs: 300 } });
+    const client = createMockApiClient({
+      race: { windowMs: 400, durationMs: 300, intermissionMs: 300 },
+    });
     await renderRaces(client);
     await screen.findAllByText("1,000.00");
     bet("Guepardo", "5");
     expect(await screen.findByText("Apuesta registrada: Guepardo, 5 créditos")).toBeTruthy();
     expect(screen.getAllByText("995.00").length).toBeGreaterThan(0);
     const outcome = await screen.findByText(
-      /^(Ganó 22\.50 créditos|Perdió 5 créditos)$/,
+      /^(Cobró 22\.50 créditos \(apuesta incluida\)|Perdió 5 créditos)$/,
       undefined,
       {
         timeout: 3_000,
       },
     );
-    const won = outcome.textContent?.startsWith("Ganó");
+    const won = outcome.textContent?.startsWith("Cobró");
     await waitFor(() =>
       expect(screen.getAllByText(won ? "1,017.50" : "995.00").length).toBeGreaterThan(0),
     );

@@ -9,7 +9,7 @@ function playerLine(settled: boolean, myBet: MyBet | null): { text: string; win:
   if (!myBet) return { text: "No apostó en esta carrera.", win: false };
   if (myBet.payout === null) return { text: "Calculando su resultado…", win: false };
   if (parseAmount(myBet.payout) > 0n)
-    return { text: `Ganó ${creditsText(myBet.payout)}`, win: true };
+    return { text: `Cobró ${creditsText(myBet.payout)} (apuesta incluida)`, win: true };
   return { text: `Perdió ${creditsText(myBet.stake)}`, win: false };
 }
 

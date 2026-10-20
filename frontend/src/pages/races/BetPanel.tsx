@@ -1,6 +1,6 @@
 import type { CSSProperties, FormEvent } from "react";
 import { animals } from "./animals";
-import { MAX_STAKE_CREDITS, MIN_STAKE_CREDITS } from "./stake";
+import { limitsInCredits, type StakeLimits } from "./stake";
 
 function hexColor(color: number): string {
   return `#${color.toString(16).padStart(6, "0")}`;
@@ -12,6 +12,8 @@ export interface BetPanelProps {
   /** Nothing can be changed or sent: a bet is already placed, or betting closed. */
   locked: boolean;
   submitting: boolean;
+  /** The server's stake limits; null while they are unknown (the form stays locked). */
+  limits: StakeLimits | null;
   fieldError: string | null;
   error: string | null;
   onSelect: (animal: number) => void;
@@ -25,13 +27,14 @@ export function BetPanel({
   amountText,
   locked,
   submitting,
+  limits,
   fieldError,
   error,
   onSelect,
   onAmountChange,
   onSubmit,
 }: BetPanelProps) {
-  const disabled = locked || submitting;
+  const disabled = locked || submitting || limits === null;
   const message = fieldError ?? error;
   return (
     <form className="races-form" onSubmit={onSubmit} noValidate>
@@ -84,8 +87,10 @@ export function BetPanel({
         </button>
       </div>
       <p id="race-stake-hint" className="races-hint">
-        Mínimo {MIN_STAKE_CREDITS.toString()}, máximo {MAX_STAKE_CREDITS.toString()} créditos. Si su
-        animal gana, recibe 4,5 veces lo apostado.
+        {limits
+          ? `Mínimo ${limitsInCredits(limits).min}, máximo ${limitsInCredits(limits).max} créditos. `
+          : ""}
+        Si su animal gana, recibe 4,5 veces lo apostado.
       </p>
       {message && (
         <p id="race-bet-error" className="wallet-error races-error" role="alert">

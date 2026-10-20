@@ -1,11 +1,5 @@
 import type { CurrentRaceResponse, RaceEvent, RaceRound, RoundStatus } from "@casino/shared";
 
-/**
- * How long the race animation lasts. Same default as the backend `RACE_DURATION_SECONDS` (10):
- * the server settles the round when the animation ends.
- */
-export const RACE_ANIMATION_MS = 10_000;
-
 /** How many replaced rounds are remembered to drop their late events. */
 const PAST_ROUNDS_KEPT = 20;
 
@@ -24,6 +18,13 @@ export interface MyBet {
 export interface RaceState {
   /** True once the first `getCurrentRace` answered. */
   loaded: boolean;
+  /** The stake limits (minor units) of the latest `getCurrentRace`; null until it answers. */
+  limits: { minStake: string; maxStake: string } | null;
+  /**
+   * How long the race animation lasts, from the latest `getCurrentRace`; null until it answers.
+   * The server settles the round when the animation ends.
+   */
+  raceDurationMs: number | null;
   round: RaceRound | null;
   myBet: MyBet | null;
   /** Server-clock time at which the track animation starts; null when there is no result. */
@@ -44,6 +45,8 @@ export type RaceAction =
 
 export const initialRaceState: RaceState = {
   loaded: false,
+  limits: null,
+  raceDurationMs: null,
   round: null,
   myBet: null,
   startedAtMs: null,
@@ -60,12 +63,13 @@ function laterStatus(a: RoundStatus, b: RoundStatus): RoundStatus {
 
 /**
  * When the animation of `round` starts. A fetched round carries `settlesAt`, the end of the
- * animation, so a late joiner sees only what is left of it (or the finish line). Without it, a
- * live result starts now and a settled round shows the final positions (null).
+ * animation, so a late joiner sees only what is left of it (or the finish line). Without it (or
+ * before the animation length is known), a live result starts now and a settled round shows the
+ * final positions (null).
  */
-function startOf(round: RaceRound, nowMs: number): number | null {
+function startOf(round: RaceRound, nowMs: number, durationMs: number | null): number | null {
   if (!round.result) return null;
-  if (round.settlesAt) return Date.parse(round.settlesAt) - RACE_ANIMATION_MS;
+  if (round.settlesAt && durationMs !== null) return Date.parse(round.settlesAt) - durationMs;
   return round.status === "settled" ? null : nowMs;
 }
 
@@ -102,7 +106,13 @@ function replaceRound(
   const pastRoundIds = state.round
     ? [...state.pastRoundIds, state.round.id].slice(-PAST_ROUNDS_KEPT)
     : state.pastRoundIds;
-  return { ...state, round, myBet, startedAtMs: startOf(round, nowMs), pastRoundIds };
+  return {
+    ...state,
+    round,
+    myBet,
+    startedAtMs: startOf(round, nowMs, state.raceDurationMs),
+    pastRoundIds,
+  };
 }
 
 /** Applies a report of the round on screen (same id) or of a newer one. */
@@ -119,7 +129,7 @@ function applyRound(
       ...state,
       round: merged,
       myBet: mergeBet(state.myBet, myBet),
-      startedAtMs: state.startedAtMs ?? startOf(merged, nowMs),
+      startedAtMs: state.startedAtMs ?? startOf(merged, nowMs, state.raceDurationMs),
     };
   }
   if (isStale(state, round)) return state;
@@ -163,8 +173,8 @@ function applyEvent(state: RaceState, event: RaceEvent, nowMs: number): RaceStat
 export function raceReducer(state: RaceState, action: RaceAction): RaceState {
   switch (action.type) {
     case "snapshot": {
-      const { round, myBet } = action.response;
-      const loaded = { ...state, loaded: true };
+      const { round, myBet, limits, raceDurationMs } = action.response;
+      const loaded = { ...state, loaded: true, limits, raceDurationMs };
       // "No round" never wipes one on screen: a settled outcome stays until the next `opened`.
       if (!round) return loaded;
       return applyRound(loaded, round, myBet, action.nowMs);

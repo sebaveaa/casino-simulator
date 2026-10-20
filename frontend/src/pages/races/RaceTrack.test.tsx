@@ -81,6 +81,55 @@ describe("RaceTrack with a working scene", () => {
     expect(fake.frames.size).toBe(0);
   });
 
+  it("resets and animates again for a second race, calling onFinish for each", async () => {
+    const fake = fakeScene();
+    mocks.create.mockResolvedValue(fake.scene);
+    let t = 1000;
+    const onFinish = vi.fn();
+    const props = { durationMs: 8000, now: () => t, onFinish };
+    const { rerender } = render(<RaceTrack order={ORDER} startedAtMs={1000} {...props} />);
+    await flush();
+    t = 20_000;
+    act(() => fake.tick());
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(fake.frames.size).toBe(0);
+
+    // The next round: a new order and start time. The cars go back to the line and run again.
+    const nextOrder = [0, 1, 2, 3, 4];
+    t = 30_000;
+    rerender(<RaceTrack order={nextOrder} startedAtMs={30_000} {...props} />);
+    expect(fake.frames.size).toBe(1);
+    act(() => fake.tick());
+    expect(fake.scene.setPositions).toHaveBeenLastCalledWith([0, 0, 0, 0, 0]);
+    expect(onFinish).toHaveBeenCalledTimes(1);
+
+    t = 50_000;
+    act(() => fake.tick());
+    expect(fake.scene.setPositions).toHaveBeenLastCalledWith([1, 1, 1, 1, 1]);
+    expect(onFinish).toHaveBeenCalledTimes(2);
+    expect(fake.frames.size).toBe(0);
+  });
+
+  it("starts the race when the order arrives after mount", async () => {
+    const fake = fakeScene();
+    mocks.create.mockResolvedValue(fake.scene);
+    let t = 1000;
+    const onFinish = vi.fn();
+    const props = { durationMs: 8000, now: () => t, onFinish };
+    const { rerender } = render(<RaceTrack order={null} startedAtMs={null} {...props} />);
+    await flush();
+    expect(fake.frames.size).toBe(0);
+
+    rerender(<RaceTrack order={ORDER} startedAtMs={1000} {...props} />);
+    expect(fake.frames.size).toBe(1);
+    t = 5000;
+    act(() => fake.tick());
+    expect(onFinish).not.toHaveBeenCalled();
+    t = 20_000;
+    act(() => fake.tick());
+    expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the final positions at once for a late joiner", async () => {
     const fake = fakeScene();
     mocks.create.mockResolvedValue(fake.scene);

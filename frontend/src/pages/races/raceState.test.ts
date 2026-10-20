@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   initialRaceState,
   type MyBet,
-  RACE_ANIMATION_MS,
   type RaceAction,
   type RaceState,
   raceReducer,
@@ -15,6 +14,8 @@ const ID_C = "33333333-3333-4333-8333-333333333333";
 const HASH = "ab".repeat(32);
 const SEED = "revealed-server-seed";
 const RESULT = { winner: 2, order: [2, 0, 4, 1, 3] };
+const DURATION = 10_000;
+const LIMITS = { minStake: "100", maxStake: "100000" };
 const NOW = Date.parse("2026-01-01T00:00:10.000Z");
 
 function round(id: string, opensAtSeconds: number, extra: Partial<RaceRound> = {}): RaceRound {
@@ -33,10 +34,17 @@ function snapshot(
   r: RaceRound | null,
   myBet: CurrentRaceResponse["myBet"] = null,
   nowMs = NOW,
+  raceDurationMs = DURATION,
 ): RaceAction {
   return {
     type: "snapshot",
-    response: { round: r, myBet, now: new Date(nowMs).toISOString() },
+    response: {
+      round: r,
+      myBet,
+      now: new Date(nowMs).toISOString(),
+      limits: LIMITS,
+      raceDurationMs,
+    },
     nowMs,
   };
 }
@@ -69,6 +77,36 @@ const opened = (r: RaceRound): RaceAction => ({
 const BET: MyBet = { animal: 1, stake: "500", payout: null };
 
 describe("raceReducer status", () => {
+  it("knows no limits or race duration until the first snapshot", () => {
+    expect(initialRaceState.limits).toBeNull();
+    expect(initialRaceState.raceDurationMs).toBeNull();
+  });
+
+  it("keeps the limits and race duration of the latest snapshot, even with no round", () => {
+    const first = run(initialRaceState, snapshot(null));
+    expect(first.limits).toEqual(LIMITS);
+    expect(first.raceDurationMs).toBe(DURATION);
+    const second = run(first, snapshot(round(ID_A, 0), null, NOW, 6_000));
+    expect(second.raceDurationMs).toBe(6_000);
+  });
+
+  it("starts a fetched animation at settlesAt minus the server's race duration", () => {
+    const resolved = round(ID_A, 0, {
+      status: "resolved",
+      result: RESULT,
+      serverSeed: SEED,
+      settlesAt: new Date(NOW + 4_000).toISOString(),
+    });
+    const state = run(initialRaceState, snapshot(resolved, null, NOW, 6_000));
+    expect(state.startedAtMs).toBe(NOW + 4_000 - 6_000);
+  });
+
+  it("starts a live result at the given server time", () => {
+    const state = run(initialRaceState, snapshot(round(ID_A, 0)), resultEvent(ID_A, NOW + 1_234));
+    expect(state.startedAtMs).toBe(NOW + 1_234);
+    expect(state.raceDurationMs).toBe(DURATION);
+  });
+
   it("never moves a round back to an earlier status", () => {
     const start = run(initialRaceState, snapshot(round(ID_A, 0)), closed(ID_A), resultEvent(ID_A));
     expect(start.round?.status).toBe("resolved");
@@ -211,7 +249,7 @@ describe("raceReducer events", () => {
           status: "resolved",
           result: RESULT,
           serverSeed: SEED,
-          settlesAt: new Date(NOW + 2_000 + RACE_ANIMATION_MS).toISOString(),
+          settlesAt: new Date(NOW + 2_000 + DURATION).toISOString(),
         }),
         null,
         NOW + 4_000,

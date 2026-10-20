@@ -15,10 +15,9 @@ import { Countdown } from "./races/Countdown";
 import { RaceFairness } from "./races/RaceFairness";
 import { RaceOutcome } from "./races/RaceOutcome";
 import { RaceTrack } from "./races/RaceTrack";
-import { initialRaceState, RACE_ANIMATION_MS, raceReducer } from "./races/raceState";
-import { creditsText, stakeFromCredits } from "./races/stake";
-
-export { RACE_ANIMATION_MS };
+import { initialRaceState, raceReducer } from "./races/raceState";
+import { creditsText, limitsInCredits, stakeFromCredits } from "./races/stake";
+import { useRaceWatchdog } from "./races/useRaceWatchdog";
 
 /** Stake suggested in a fresh form, in credits. */
 const DEFAULT_STAKE = "10";
@@ -119,6 +118,15 @@ export function RacesPage() {
     };
   }, [api, sync, serverNow]);
 
+  // Events can be lost: ask the server when a phase overstays its expected end (README §6).
+  useRaceWatchdog({
+    round,
+    raceDurationMs: race.raceDurationMs,
+    now: serverNow,
+    refresh: sync,
+    enabled: race.loaded,
+  });
+
   // The reducer asks for a fetch when an event shows the page missed something.
   useEffect(() => {
     if (race.syncRequest > 0) void sync();
@@ -148,7 +156,8 @@ export function RacesPage() {
 
   const winner = round?.result?.winner ?? null;
   const outcomeVisible = winner !== null && (status === "settled" || finishedRoundId === roundId);
-  const bettingOpen = status === "open" && expiredRoundId !== roundId;
+  const limits = race.limits;
+  const bettingOpen = status === "open" && expiredRoundId !== roundId && limits !== null;
   const formShown = status === "open";
   const nextRoundNotice = round !== null && (status !== "open" || myBet !== null);
 
@@ -160,10 +169,14 @@ export function RacesPage() {
       setFieldError("Elija un animal antes de apostar.");
       return;
     }
-    const stake = stakeFromCredits(amountText);
+    const stake = stakeFromCredits(amountText, limits);
     if (stake === null) {
       setError(null);
-      setFieldError("Ingrese un número entero de créditos entre 1 y 1000.");
+      setFieldError(
+        limits
+          ? `Ingrese un número entero de créditos entre ${limitsInCredits(limits).min} y ${limitsInCredits(limits).max}.`
+          : "Aún no se conocen los límites de la apuesta.",
+      );
       return;
     }
     setFieldError(null);
@@ -297,7 +310,7 @@ export function RacesPage() {
           <RaceTrack
             order={round?.result?.order ?? null}
             startedAtMs={race.startedAtMs}
-            durationMs={RACE_ANIMATION_MS}
+            durationMs={race.raceDurationMs ?? 0}
             now={serverNow}
             onFinish={() => setFinishedRoundId(roundId)}
           />
@@ -315,6 +328,7 @@ export function RacesPage() {
               amountText={amountText}
               locked={!bettingOpen || myBet !== null}
               submitting={submitting}
+              limits={limits}
               fieldError={fieldError}
               error={error}
               onSelect={(animal) => {
