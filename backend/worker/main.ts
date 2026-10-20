@@ -1,9 +1,9 @@
 import { createDatabase } from "../db/database";
 import type { Config } from "../platform/config";
 import { createPostgresPool } from "../platform/postgres";
-import { createRedisClient } from "../platform/redis";
+import { createRedisClient, pingRedis } from "../platform/redis";
 import type { Stoppable } from "../platform/run";
-import { createMemoryRaceEventBus } from "../realtime/race-events";
+import { createRedisRaceEventBus } from "../realtime/redis-race-events";
 import { postgresWalletService } from "../wallet/postgres-wallet-service";
 import { startLoop } from "./loop";
 import { advanceRaces } from "./race-cycle";
@@ -16,11 +16,19 @@ export async function startWorker(config: Config): Promise<Stoppable> {
   const pool = createPostgresPool(config, (error) => console.error("postgres pool error:", error));
   const redis = createRedisClient(config, (error) => console.error("redis error:", error));
   const db = createDatabase(pool);
-  // In-process for now; the Redis bus that reaches the API replaces it in the realtime task.
-  const events = createMemoryRaceEventBus();
+  const events = createRedisRaceEventBus(redis, {
+    onError: (error) => console.error("race event bus error:", error),
+  });
 
   const loop = startLoop(
-    () => advanceRaces(db, { wallet: postgresWalletService, events, config }),
+    () =>
+      advanceRaces(db, {
+        wallet: postgresWalletService,
+        events,
+        config,
+        // No Redis, no live broadcast: new races wait, existing bets still settle.
+        canOpenRound: () => pingRedis(redis),
+      }),
     {
       intervalMs: RACE_TICK_INTERVAL_MS,
       onError: (error) => console.error("race tick failed:", error),
@@ -30,6 +38,7 @@ export async function startWorker(config: Config): Promise<Stoppable> {
   return {
     stop: async () => {
       await loop.stop();
+      await events.close();
       redis.disconnect();
       // Kysely ends the pool; ending it again throws "Called end on pool more than once".
       await db.destroy();

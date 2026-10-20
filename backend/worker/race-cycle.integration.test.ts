@@ -238,6 +238,47 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("advanceRaces", () => {
     expect(JSON.stringify(event)).not.toContain(round.server_seed);
   });
 
+  it("opens a round when canOpenRound allows it", async () => {
+    await tick({ canOpenRound: async () => true });
+    expect((await onlyRound()).status).toBe("open");
+  });
+
+  it("opens no round while canOpenRound says no, and opens one once it says yes", async () => {
+    await tick({ canOpenRound: async () => false });
+    expect(await rounds()).toEqual([]);
+    expect(published).toEqual([]);
+
+    await tick({ canOpenRound: async () => true });
+    expect((await onlyRound()).status).toBe("open");
+  });
+
+  it("never pauses closing, resolving or settling when canOpenRound says no", async () => {
+    const canOpenRound = async () => false;
+    const roundId = await openRound();
+    await placeBets(roundId, 5, 2);
+
+    advanceBy(WINDOW_MS);
+    await tick({ canOpenRound });
+    expect((await onlyRound()).status).toBe("closed");
+    advanceBy(5);
+    await tick({ canOpenRound });
+    expect((await onlyRound()).status).toBe("resolved");
+    advanceBy(DURATION_MS);
+    await tick({ canOpenRound });
+
+    expect((await onlyRound()).status).toBe("settled");
+    const pending = await db
+      .selectFrom("bets")
+      .select("id")
+      .where("status", "=", "pending")
+      .execute();
+    expect(pending).toEqual([]);
+    expect(published.at(-1)).toEqual({ type: "settled", roundId });
+    // Settled, and still nothing new opens while Redis is down.
+    await tick({ canOpenRound });
+    expect(await rounds()).toHaveLength(1);
+  });
+
   it("uses the database clock when no clock is given", async () => {
     const before = (await sql<{ t: Date }>`select clock_timestamp() as t`.execute(db)).rows[0]?.t;
     await advanceRaces(db, deps);

@@ -35,6 +35,12 @@ export type RaceCycleDeps = {
   settlementBatchSize?: number;
   /** Overrides {@link CLOSE_LOCK_TIMEOUT_MS}; tests use a short one. */
   closeLockTimeoutMs?: number;
+  /**
+   * Asked only before opening a new round; false skips the tick. The worker passes a Redis
+   * health check: without live broadcast no new race opens, while bets already placed still
+   * close, resolve and settle. Defaults to always true.
+   */
+  canOpenRound?: () => Promise<boolean>;
 };
 
 export type Clock = () => Date | Promise<Date>;
@@ -114,6 +120,9 @@ async function step(trx: Db, deps: RaceCycleDeps, readClock: Clock): Promise<Rac
 }
 
 async function openRound(trx: Db, deps: RaceCycleDeps, now: Date): Promise<RaceEvent[]> {
+  // Before the advisory lock, so a slow check never holds it.
+  if (deps.canOpenRound && !(await deps.canOpenRound())) return [];
+
   // Scoped to the current schema so isolated test schemas do not contend with each other.
   const lock = await sql<{ acquired: boolean }>`
     select pg_try_advisory_xact_lock(hashtext('casino:races:open:' || current_schema())) as acquired`.execute(

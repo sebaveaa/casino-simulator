@@ -2,6 +2,7 @@ import { stubTokenService } from "../auth/stub";
 import type { TokenService } from "../auth/token-service";
 import type { PaymentProvider } from "../payments/payment-provider";
 import { stubPaymentProvider } from "../payments/stub";
+import { createMemoryRaceEventBus, type RaceEventBus } from "../realtime/race-events";
 import type { SeedPairService } from "../rng/seed-pair-service";
 import { stubSeedPairService } from "../rng/stub";
 import { stubWalletService } from "../wallet/stub";
@@ -13,6 +14,7 @@ export type Services = {
   payments: PaymentProvider;
   seedPairs: SeedPairService;
   tokens: TokenService;
+  raceEvents: RaceEventBus;
 };
 
 export const stubServices: Services = {
@@ -20,4 +22,5 @@ export const stubServices: Services = {
   payments: stubPaymentProvider,
   seedPairs: stubSeedPairService,
   tokens: stubTokenService,
+  raceEvents: createMemoryRaceEventBus(),
 };
