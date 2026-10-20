@@ -226,6 +226,7 @@ describe("mock API client", () => {
 describe("mock API client races", () => {
   const WINDOW = 30000;
   const DURATION = 10000;
+  const INTERMISSION = 5000;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -235,7 +236,9 @@ describe("mock API client races", () => {
   });
 
   function setup() {
-    const api = createMockApiClient({ race: { windowMs: WINDOW, durationMs: DURATION } });
+    const api = createMockApiClient({
+      race: { windowMs: WINDOW, durationMs: DURATION, intermissionMs: INTERMISSION },
+    });
     const events: RaceEvent[] = [];
     const unwatch = api.watchRaces((e) => events.push(e));
     return { api, events, unwatch };
@@ -252,6 +255,25 @@ describe("mock API client races", () => {
     await vi.advanceTimersByTimeAsync(ms);
     return api.getCurrentRace();
   }
+
+  it("reports the stake limits and the race duration with the current race", async () => {
+    const { api, unwatch } = setup();
+    const current = await api.getCurrentRace();
+    expect(current.limits).toEqual({ minStake: "100", maxStake: "100000" });
+    expect(current.raceDurationMs).toBe(DURATION);
+    unwatch();
+  });
+
+  it("keeps a settled round current for 8 seconds by default before opening the next", async () => {
+    const api = createMockApiClient({ race: { windowMs: WINDOW, durationMs: DURATION } });
+    const round = await openRound(api);
+    await step(api, WINDOW);
+    await step(api, DURATION);
+    expect((await step(api, 7999)).round).toMatchObject({ id: round.id, status: "settled" });
+    const next = (await step(api, 1)).round;
+    expect(next?.status).toBe("open");
+    expect(next?.id).not.toBe(round.id);
+  });
 
   it("does not start any timer until it is used", () => {
     createMockApiClient();
@@ -283,7 +305,7 @@ describe("mock API client races", () => {
     const winner = resolved?.result?.winner;
     const expected = winner === 0 ? 99900n + racePayout(100n) : 99900n;
     expect((await api.getBalance()).balance).toBe(expected.toString());
-    // Like the backend, the settled round stays current, with the payout, for durationMs.
+    // Like the backend, the settled round stays current, with the payout, for the intermission.
     expect(settled.round).toMatchObject({
       id: round.id,
       status: "settled",
@@ -296,8 +318,13 @@ describe("mock API client races", () => {
       payout: (winner === 0 ? racePayout(100n) : 0n).toString(),
     });
 
+    // It is still current just before the intermission ends, and the next round opens right at it.
+    expect((await step(api, INTERMISSION - 1)).round).toMatchObject({
+      id: round.id,
+      status: "settled",
+    });
     // Then the next round opens and the old bet is not carried over.
-    const next = await step(api, DURATION);
+    const next = await step(api, 1);
     expect(next.round?.status).toBe("open");
     expect(next.round?.id).not.toBe(round.id);
     expect(next.myBet).toBeNull();

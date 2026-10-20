@@ -110,7 +110,8 @@ Las carreras de animalitos son un evento compartido: todos los jugadores deben v
 
 - El flujo en vivo es **unidireccional** (servidor → cliente). El jugador nunca necesita enviar nada por ese canal.
 - Las apuestas siguen entrando por **REST**, donde ya están resueltas la autenticación, la validación y la idempotencia (sección 3.3). Mover las apuestas a un socket obligaría a reimplementar todo eso.
-- SSE es HTTP normal: atraviesa balanceadores y proxies sin configuración especial, y el navegador **reconecta solo** (`EventSource`).
+- SSE es HTTP normal: atraviesa balanceadores y proxies sin configuración especial.
+- El cliente consume el flujo con `fetch` y la cabecera `Authorization: Bearer`, en lugar de `EventSource`, porque `EventSource` no permite enviar cabeceras y el canal exige el mismo token que la API (sección 8). Como `EventSource` no se usa, la **reconexión la implementa el propio cliente**, con espera creciente entre intentos.
 - Si en el futuro se necesitara comunicación bidireccional (por ejemplo, un chat), se cambiaría a WebSockets sin tocar el resto del diseño.
 
 **Problema con varias instancias del backend:** cada jugador está conectado a *una* instancia, pero el evento lo genera el worker, que no sabe qué instancia tiene a quién. La solución es **Redis pub/sub**:
@@ -124,16 +125,16 @@ sequenceDiagram
     participant J1 as Jugadores en #1
     participant J2 as Jugadores en #2
 
-    W->>R: PUBLISH race:{id} "cerrada"
+    W->>R: PUBLISH races "cerrada"
     R-->>B1: mensaje
     R-->>B2: mensaje
     B1-->>J1: evento SSE
     B2-->>J2: evento SSE
 ```
 
-Eventos publicados por ronda: `abierta` (con `closes_at` y el hash de la semilla), `cerrada`, `resultado` (con el animal ganador y la semilla revelada) y `liquidada`.
+Todos los eventos viajan por **un único canal de Redis, `races`**: solo hay una ronda activa a la vez, así que no hace falta un canal por ronda; cada evento lleva el identificador de su ronda. Eventos publicados por ronda: `abierta` (con `closes_at` y el hash de la semilla), `cerrada`, `resultado` (con el animal ganador y la semilla revelada) y `liquidada`.
 
-**Reconexión:** los eventos de SSE no son la fuente de verdad. Al conectarse o reconectarse, el cliente pide el estado actual de la ronda por REST (`GET /races/current`) y luego sigue escuchando. Si se pierde un evento, no se pierde nada importante.
+**Reconexión:** los eventos de SSE no son la fuente de verdad. El cliente reconecta por sí mismo cuando se corta el flujo y, **en cada conexión** (la primera incluida), vuelve a pedir el estado actual de la ronda por REST (`GET /races/current`) y luego sigue escuchando. Además, si una fase se alarga más de lo esperado (por ejemplo, una ronda abierta pasa 2 segundos de su `closes_at` sin que llegue el evento `cerrada`), el cliente vuelve a consultar `GET /races/current`, y lo repite cada 5 segundos mientras siga atrasado. Si se pierde un evento, no se pierde nada importante.
 
 **Consecuencia para el diseño:** el backend sigue sin guardar estado de negocio, pero las conexiones SSE abiertas sí son un estado en memoria. Si una instancia cae, sus clientes reconectan a otra y recuperan el estado por REST. Ver sección 6.
 
@@ -302,13 +303,16 @@ stateDiagram-v2
     Abierta --> Cerrada: vence la ventana de apuestas
     Cerrada --> Corrida: worker ejecuta la carrera (RNG)
     Corrida --> Liquidada: worker paga a todos los ganadores
-    Liquidada --> [*]
+    Liquidada --> [*]: pausa entre rondas (RACE_INTERMISSION_SECONDS)
 ```
 
 1. **Abierta:** el worker crea la ronda, guarda el hash de su semilla y publica el evento `abierta`. Los jugadores apuestan por un animal vía REST. Cada apuesta descuenta el saldo al instante (misma transacción atómica de 3.2) y queda *pendiente*. La API rechaza apuestas si `now() >= closes_at`, comprobado contra PostgreSQL; Redis solo sirve la cuenta regresiva.
 2. **Cerrada:** no se aceptan más apuestas. Se publica `cerrada`.
 3. **Corrida:** el worker calcula el resultado con el RNG verificable y publica `resultado` con la semilla revelada. El frontend anima la carrera hasta ese orden de llegada.
-4. **Liquidada:** el worker recorre las apuestas pendientes y acredita los premios por lotes, de forma idempotente (si el worker falla a medias y se reinicia, no paga dos veces). Se publica `liquidada` y cada jugador consulta su saldo actualizado.
+4. **Liquidada:** el worker espera a que termine la animación de la carrera (`RACE_DURATION_SECONDS` segundos después de publicar el resultado), recorre las apuestas pendientes y acredita los premios por lotes, de forma idempotente (si el worker falla a medias y se reinicia, no paga dos veces). Se publica `liquidada` y cada jugador consulta su saldo actualizado.
+5. **Pausa entre rondas:** tras la liquidación, el worker no abre la siguiente ronda hasta que pasen `RACE_INTERMISSION_SECONDS` segundos (por defecto 8). Durante esa pausa la ronda liquidada sigue siendo la "actual" que devuelve `GET /races/current`, de modo que los jugadores ven el resultado y su premio antes de que aparezca la nueva ronda.
+
+**Nombres de los estados.** En el texto y en el diagrama los estados llevan nombres en español; en la base de datos (`game_rounds.status`), en la API y en el código son `open` (abierta), `closed` (cerrada), `resolved` (corrida, con el resultado ya calculado) y `settled` (liquidada).
 
 Este es el punto de mayor carga del sistema: un pico de apuestas justo antes del cierre, la difusión de eventos a todos los conectados y la liquidación masiva simultánea.
 
@@ -372,9 +376,9 @@ El frontend incluye una pantalla de verificación que usa la misma función `res
 |---|---|
 | **Redis** | Ruleta y tragamonedas siguen funcionando (solo usan PostgreSQL). Blackjack sigue, más lento, reconstruyendo las manos desde PostgreSQL. Animalitos pausa la apertura de nuevas carreras porque no hay difusión en vivo; las apuestas ya hechas se liquidan igual. No se pierde dinero. |
 | **PostgreSQL** | El sistema **no acepta apuestas** (falla cerrado). Es preferible detener el juego que arriesgar la consistencia del dinero. |
-| **Una instancia del backend** | El balanceador envía las peticiones a otra instancia. Los clientes con SSE abierto en la instancia caída reconectan automáticamente a otra y piden el estado actual por REST. |
+| **Una instancia del backend** | El balanceador envía las peticiones a otra instancia. Los clientes con SSE abierto en la instancia caída reconectan por sí mismos a otra y piden el estado actual por REST. |
 | **El worker a medias** | Al reiniciar retoma las rondas no liquidadas; la idempotencia evita pagos dobles. |
-| **La conexión del jugador** | `EventSource` reconecta solo. Si estaba en una mano de blackjack, la retoma desde el estado guardado. |
+| **La conexión del jugador** | El cliente SSE (basado en `fetch`) reconecta por sí mismo con espera creciente y vuelve a pedir el estado actual por REST; si aun así se pierde un evento, una consulta de respaldo a `GET /races/current` lo recupera. Si estaba en una mano de blackjack, la retoma desde el estado guardado. |
 
 ---
 
@@ -427,7 +431,7 @@ flowchart LR
 - Autenticación con tokens; la lógica de autorización vive en el backend.
 - El canal SSE exige autenticación igual que la API; un jugador solo recibe eventos públicos de la carrera, nunca datos de otros jugadores.
 - **Secretos fuera del repositorio:** solo variables de entorno; el repo incluye `.env.example` sin valores reales.
-- Límite de tasa (*rate limiting*) por usuario, apoyado en Redis, y límite de conexiones SSE simultáneas por usuario.
+- Límite de tasa (*rate limiting*) por usuario, apoyado en Redis, y límite de conexiones SSE simultáneas por usuario. Hoy el límite de conexiones SSE es de 3 por usuario **en cada proceso de la API** (el contador vive en memoria), así que con N instancias un usuario puede llegar a 3 × N conexiones; y el límite de tasa aún no está implementado en las rutas de apuestas.
 - Validación estricta de entradas en la API (esquemas Zod).
 - El cliente nunca decide resultados ni saldos.
 
@@ -511,7 +515,8 @@ Las credenciales reales **nunca** se suben al repositorio. Ver `.env.example`.
 | `ALLOWED_ORIGINS` | Orígenes permitidos para el frontend (CORS) |
 | `PROCESS_ROLE` | `api` o `worker`: la misma imagen Docker arranca uno u otro proceso |
 | `RACE_BETTING_WINDOW_SECONDS` | Segundos que una ronda de carreras acepta apuestas (por defecto 30) |
-| `RACE_DURATION_SECONDS` | Segundos que dura la animación de la carrera (por defecto 10) |
+| `RACE_DURATION_SECONDS` | Segundos que dura la animación de la carrera; el worker liquida la ronda cuando pasan desde el resultado (por defecto 10) |
+| `RACE_INTERMISSION_SECONDS` | Segundos entre la liquidación de una ronda y la apertura de la siguiente; 0 abre la siguiente de inmediato (por defecto 8) |
 | `RACE_MIN_STAKE` | Apuesta mínima por ronda, en unidades menores (100 por crédito; por defecto 100 = 1 crédito) |
 | `RACE_MAX_STAKE` | Apuesta máxima por ronda, en unidades menores (por defecto 100000 = 1000 créditos); no puede ser menor que la mínima |
 

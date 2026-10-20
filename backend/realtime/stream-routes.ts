@@ -35,21 +35,27 @@ export function createStreamRoutes({
       if (count >= MAX_STREAMS_PER_USER) {
         throw new AppError("invalid_request", "Too many open streams", 429);
       }
-      openStreams.set(userId, count + 1);
-
       // Take over the socket; keep the headers Fastify and CORS already set on the reply.
       reply.hijack();
       const raw = reply.raw;
       const inherited = Object.fromEntries(
         Object.entries(reply.getHeaders()).filter(([, value]) => value !== undefined),
       ) as Record<string, string | number | string[]>;
-      raw.writeHead(200, {
-        ...inherited,
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-        "x-accel-buffering": "no",
-      });
+      try {
+        raw.writeHead(200, {
+          ...inherited,
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+          "x-accel-buffering": "no",
+        });
+      } catch (error) {
+        // The slot is counted only once the stream is established, so a failure here leaks none.
+        request.log.warn({ err: error }, "race stream could not start");
+        raw.destroy();
+        return;
+      }
+      openStreams.set(userId, count + 1);
 
       let finished = false;
       let unsubscribe: (() => void) | undefined;
@@ -89,9 +95,19 @@ export function createStreamRoutes({
       send(": connected\n\n");
       unsubscribe = services.raceEvents.subscribe((event) => {
         // Defensive, on the raw event (the schema would strip it): only `result` reveals the seed.
-        if (event.type !== "result" && "serverSeed" in event) return;
+        // Dropped events are logged without their body: it may carry the seed of a live round.
+        if (typeof event === "object" && event !== null) {
+          if (event.type !== "result" && "serverSeed" in event) {
+            request.log.warn("race event dropped: a seed outside a result event");
+            return;
+          }
+        }
         const parsed = raceEventSchema.safeParse(event);
-        if (!parsed.success) return;
+        if (!parsed.success) {
+          const fields = parsed.error.issues.map((issue) => issue.path.join(".") || "(event)");
+          request.log.warn({ fields }, "race event dropped: it does not match the event schema");
+          return;
+        }
         send(`data: ${JSON.stringify(parsed.data)}\n\n`);
       });
       if (finished) unsubscribe();

@@ -30,6 +30,7 @@ describe("loadConfig", () => {
     const config = loadConfig(validEnv);
     expect(config.raceWindowMs).toBe(30_000);
     expect(config.raceDurationMs).toBe(10_000);
+    expect(config.raceIntermissionMs).toBe(8000);
     expect(config.raceMinStake).toBe(100n);
     expect(config.raceMaxStake).toBe(100000n);
   });
@@ -39,13 +40,25 @@ describe("loadConfig", () => {
       ...validEnv,
       RACE_BETTING_WINDOW_SECONDS: "5",
       RACE_DURATION_SECONDS: "2",
+      RACE_INTERMISSION_SECONDS: "3",
       RACE_MIN_STAKE: "10",
       RACE_MAX_STAKE: "500",
     });
     expect(config.raceWindowMs).toBe(5000);
     expect(config.raceDurationMs).toBe(2000);
+    expect(config.raceIntermissionMs).toBe(3000);
     expect(config.raceMinStake).toBe(10n);
     expect(config.raceMaxStake).toBe(500n);
+  });
+
+  it("accepts a zero RACE_INTERMISSION_SECONDS and rejects a negative or fractional one", () => {
+    expect(loadConfig({ ...validEnv, RACE_INTERMISSION_SECONDS: "0" }).raceIntermissionMs).toBe(0);
+    expect(() => loadConfig({ ...validEnv, RACE_INTERMISSION_SECONDS: "-1" })).toThrow(
+      /RACE_INTERMISSION_SECONDS/,
+    );
+    expect(() => loadConfig({ ...validEnv, RACE_INTERMISSION_SECONDS: "1.5" })).toThrow(
+      /RACE_INTERMISSION_SECONDS/,
+    );
   });
 
   it("rejects RACE_MIN_STAKE greater than RACE_MAX_STAKE", () => {

@@ -70,6 +70,7 @@ export async function buildApp({
       requireAuth,
       config: {
         raceDurationMs: config.raceDurationMs,
+        raceIntermissionMs: config.raceIntermissionMs,
         raceMinStake: config.raceMinStake,
         raceMaxStake: config.raceMaxStake,
       },

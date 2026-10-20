@@ -131,7 +131,13 @@ const openRound = {
 
 describe("HTTP API client races calls", () => {
   it("reads the current race and validates it", async () => {
-    const body = { round: openRound, myBet: null, now: "2026-01-01T00:00:05.000Z" };
+    const body = {
+      round: openRound,
+      myBet: null,
+      now: "2026-01-01T00:00:05.000Z",
+      limits: { minStake: "100", maxStake: "100000" },
+      raceDurationMs: 10000,
+    };
     const { client, fetchMock } = setup(json(body));
     await expect(client.getCurrentRace()).resolves.toEqual(body);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://api.test/races/current");
@@ -144,8 +150,15 @@ describe("HTTP API client races calls", () => {
         round: { ...openRound, serverSeed: "seed" },
         myBet: null,
         now: "2026-01-01T00:00:05.000Z",
+        limits: { minStake: "100", maxStake: "100000" },
+        raceDurationMs: 10000,
       }),
     );
+    await expect(client.getCurrentRace()).rejects.toMatchObject({ code: "invalid_response" });
+  });
+
+  it("rejects a current race without the stake limits or the race duration", async () => {
+    const { client } = setup(json({ round: null, myBet: null, now: "2026-01-01T00:00:05.000Z" }));
     await expect(client.getCurrentRace()).rejects.toMatchObject({ code: "invalid_response" });
   });
 

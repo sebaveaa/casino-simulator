@@ -32,6 +32,7 @@ const config = {
   appEnv: "production" as const,
   allowedOrigins: [],
   raceDurationMs: 10_000,
+  raceIntermissionMs: 8000,
   raceMinStake: 10n,
   raceMaxStake: 500n,
 };
@@ -170,8 +171,13 @@ describe("current race route", () => {
       round: openRound,
       myBet: { animal: 3, stake: "50", payout: null },
       now: "2026-10-19T10:00:05.000Z",
+      limits: { minStake: "10", maxStake: "500" },
+      raceDurationMs: 10_000,
     });
-    expect(getCurrentRound).toHaveBeenCalledWith(expect.anything(), { raceDurationMs: 10_000 });
+    expect(getCurrentRound).toHaveBeenCalledWith(expect.anything(), {
+      raceDurationMs: 10_000,
+      raceIntermissionMs: 8000,
+    });
     expect(getPlayerBet).toHaveBeenCalledWith(expect.anything(), userId, roundId);
   });
 
@@ -180,7 +186,12 @@ describe("current race route", () => {
     vi.mocked(getDatabaseNow).mockResolvedValue("2026-10-19T10:00:05.000Z");
     const app = await build();
     const res = await app.inject({ method: "GET", url: apiPaths.raceCurrent, headers: auth });
-    expect(currentRaceResponseSchema.parse(res.json())).toMatchObject({ round: null, myBet: null });
+    expect(currentRaceResponseSchema.parse(res.json())).toMatchObject({
+      round: null,
+      myBet: null,
+      limits: { minStake: "10", maxStake: "500" },
+      raceDurationMs: 10_000,
+    });
     expect(getPlayerBet).not.toHaveBeenCalled();
   });
 });

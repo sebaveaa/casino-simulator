@@ -2,6 +2,7 @@ import { type RaceRound, raceResultSchema, races } from "@casino/shared";
 import { sql } from "kysely";
 import type { Db } from "../../db/database";
 import type { Json, RoundStatus } from "../../db/schema";
+import { raceSelectionSchema } from "./selection";
 
 /** The columns `toRaceRound` reads. `server_seed` is already null unless the round is resolved. */
 export type RaceRoundRow = {
@@ -64,13 +65,14 @@ export function toRaceRound(row: RaceRoundRow, raceDurationMs: number): RaceRoun
 
 /**
  * The round the lobby shows: the most recent one that is not `settled` or, if there is none, the
- * latest `settled` one while its race could still be on screen (settled less than
- * `raceDurationMs` ago, by the database clock), so a player who reconnects right after
- * settlement still sees the result. Otherwise `null`.
+ * latest `settled` one during the intermission (settled less than `raceIntermissionMs` ago, by the
+ * database clock), so the outcome stays on screen until the next round opens and a player who
+ * reconnects right after settlement still sees it. Otherwise `null`; with an intermission of 0
+ * a settled round is never current.
  */
 export async function getCurrentRound(
   db: Db,
-  { raceDurationMs }: { raceDurationMs: number },
+  { raceDurationMs, raceIntermissionMs }: { raceDurationMs: number; raceIntermissionMs: number },
 ): Promise<RaceRound | null> {
   const active = await selectRounds(db)
     .where("status", "!=", "settled")
@@ -82,7 +84,7 @@ export async function getCurrentRound(
   const recent = await selectRounds(db)
     .where("status", "=", "settled")
     .where(
-      sql<boolean>`settled_at > now() - (${raceDurationMs}::double precision * interval '1 millisecond')`,
+      sql<boolean>`settled_at > now() - (${raceIntermissionMs}::double precision * interval '1 millisecond')`,
     )
     .orderBy("settled_at", "desc")
     .limit(1)
@@ -123,6 +125,6 @@ export async function getPlayerBet(
     .where("game", "=", races.id)
     .executeTakeFirst();
   if (!bet) return null;
-  const animal = (bet.selection as { animal: number }).animal;
+  const { animal } = raceSelectionSchema.parse(bet.selection);
   return { animal, stake: bet.stake, payout: bet.status === "settled" ? bet.payout : null };
 }

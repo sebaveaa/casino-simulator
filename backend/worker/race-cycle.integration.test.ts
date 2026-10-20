@@ -24,7 +24,9 @@ import { advanceRaces, type RaceCycleDeps } from "./race-cycle";
 
 const WINDOW_MS = 60_000;
 const DURATION_MS = 20_000;
-const config = { raceWindowMs: WINDOW_MS, raceDurationMs: DURATION_MS };
+const INTERMISSION_MS = 8000;
+// No intermission by default, so most tests open the next round right after a settlement.
+const config = { raceWindowMs: WINDOW_MS, raceDurationMs: DURATION_MS, raceIntermissionMs: 0 };
 const limits = { min: 10n, max: 500n };
 
 /**
@@ -438,6 +440,78 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("advanceRaces", () => {
     expect(published.filter((e) => e.type === "opened")).toHaveLength(2);
     for (const p of placed) expect(await payoutCount(p.betId)).toBeLessThanOrEqual(1);
     await expectLedgerConsistent();
+  });
+
+  describe("intermission", () => {
+    const withIntermission = { config: { ...config, raceIntermissionMs: INTERMISSION_MS } };
+
+    async function settleOneRound(overrides: Partial<RaceCycleDeps>) {
+      await tick(overrides);
+      advanceBy(WINDOW_MS);
+      await tick(overrides); // closed
+      await tick(overrides); // resolved
+      advanceBy(DURATION_MS);
+      await tick(overrides); // settled
+      expect((await onlyRound()).status).toBe("settled");
+    }
+
+    it("opens the very first round at once", async () => {
+      await tick(withIntermission);
+      expect((await onlyRound()).status).toBe("open");
+    });
+
+    it("opens no new round during the intermission, and opens one right after it", async () => {
+      await settleOneRound(withIntermission);
+      published = [];
+
+      await tick(withIntermission);
+      advanceBy(INTERMISSION_MS - 1);
+      await tick(withIntermission);
+      expect(await rounds()).toHaveLength(1);
+      expect(published).toEqual([]);
+
+      advanceBy(1);
+      await tick(withIntermission);
+      expect((await rounds()).map((r) => r.status)).toEqual(["settled", "open"]);
+      expect(published.map((e) => e.type)).toEqual(["opened"]);
+    });
+
+    it("opens the next round at once when the intermission is 0", async () => {
+      await settleOneRound({});
+      await tick();
+      expect((await rounds()).map((r) => r.status)).toEqual(["settled", "open"]);
+    });
+
+    it("measures the intermission from the latest settlement, not an older one", async () => {
+      await settleOneRound(withIntermission);
+      advanceBy(INTERMISSION_MS);
+      await tick(withIntermission); // opens round 2
+      await tick(withIntermission);
+      advanceBy(WINDOW_MS);
+      await tick(withIntermission); // closed
+      await tick(withIntermission); // resolved
+      advanceBy(DURATION_MS);
+      await tick(withIntermission); // settled
+      expect((await rounds()).map((r) => r.status)).toEqual(["settled", "settled"]);
+
+      advanceBy(INTERMISSION_MS - 1);
+      await tick(withIntermission);
+      expect(await rounds()).toHaveLength(2);
+      advanceBy(1);
+      await tick(withIntermission);
+      expect(await rounds()).toHaveLength(3);
+    });
+
+    it("does not change how an unsettled round advances", async () => {
+      const roundId = await openRound();
+      advanceBy(WINDOW_MS);
+      await tick(withIntermission);
+      expect((await onlyRound()).status).toBe("closed");
+      await tick(withIntermission);
+      expect((await onlyRound()).status).toBe("resolved");
+      expect(published.map((e) => e.type)).toEqual(["opened", "closed", "result"]);
+      expect(published.at(-1)).toMatchObject({ roundId });
+    });
   });
 
   for (const outcome of ["commit", "rollback"] as const) {

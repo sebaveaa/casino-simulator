@@ -79,6 +79,10 @@ export const currentRaceResponseSchema = z.object({
     .nullable(),
   /** Server clock, so the client can correct its countdowns. */
   now: datetimeSchema,
+  /** The stake limits per bet, in minor units, so the client does not hardcode them. */
+  limits: z.object({ minStake: amountSchema, maxStake: amountSchema }),
+  /** How long the race animation lasts, so the client plays it for the same time as the server waits. */
+  raceDurationMs: z.number().int().positive(),
 });
 export type CurrentRaceResponse = z.infer<typeof currentRaceResponseSchema>;
 

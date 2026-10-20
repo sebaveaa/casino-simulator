@@ -11,7 +11,12 @@ const roundParamsSchema = z.object({ roundId: z.uuid() });
 
 export const racesRoutes: ModuleRoutes = async (
   app,
-  { db, services, requireAuth, config: { raceDurationMs, raceMinStake, raceMaxStake } },
+  {
+    db,
+    services,
+    requireAuth,
+    config: { raceDurationMs, raceIntermissionMs, raceMinStake, raceMaxStake },
+  },
 ) => {
   const { wallet } = services;
 
@@ -40,7 +45,7 @@ export const racesRoutes: ModuleRoutes = async (
 
   app.get(apiPaths.raceCurrent, { preHandler: requireAuth() }, async (request) => {
     const userId = getAuth(request).id;
-    const round = await getCurrentRound(db, { raceDurationMs });
+    const round = await getCurrentRound(db, { raceDurationMs, raceIntermissionMs });
     const bet = round ? await getPlayerBet(db, userId, round.id) : null;
     return {
       round,
@@ -52,6 +57,8 @@ export const racesRoutes: ModuleRoutes = async (
           }
         : null,
       now: await getDatabaseNow(db),
+      limits: { minStake: toAmount(raceMinStake), maxStake: toAmount(raceMaxStake) },
+      raceDurationMs,
     };
   });
 

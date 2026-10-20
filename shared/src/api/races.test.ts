@@ -104,11 +104,36 @@ describe("raceRoundSchema", () => {
 
 describe("currentRaceResponseSchema", () => {
   const now = "2026-10-19T10:00:05Z";
+  const settings = { limits: { minStake: "100", maxStake: "100000" }, raceDurationMs: 10000 };
 
   it("accepts no round and no bet", () => {
-    expect(currentRaceResponseSchema.safeParse({ round: null, myBet: null, now }).success).toBe(
-      true,
+    expect(
+      currentRaceResponseSchema.safeParse({ round: null, myBet: null, now, ...settings }).success,
+    ).toBe(true);
+  });
+
+  it("requires the stake limits and the race duration", () => {
+    const body = { round: null, myBet: null, now };
+    expect(currentRaceResponseSchema.safeParse(body).success).toBe(false);
+    expect(currentRaceResponseSchema.safeParse({ ...body, raceDurationMs: 10000 }).success).toBe(
+      false,
     );
+    expect(currentRaceResponseSchema.safeParse({ ...body, limits: settings.limits }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a non-positive or fractional race duration and malformed limits", () => {
+    const body = { round: null, myBet: null, now, ...settings };
+    for (const raceDurationMs of [0, -1, 1.5]) {
+      expect(currentRaceResponseSchema.safeParse({ ...body, raceDurationMs }).success).toBe(false);
+    }
+    expect(
+      currentRaceResponseSchema.safeParse({
+        ...body,
+        limits: { minStake: "1.5", maxStake: "100" },
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts a round with a pending bet", () => {
@@ -116,6 +141,7 @@ describe("currentRaceResponseSchema", () => {
       round: { ...baseRound, status: "open" },
       myBet: { animal: 1, stake: "100", payout: null },
       now,
+      ...settings,
     };
     expect(currentRaceResponseSchema.safeParse(body).success).toBe(true);
   });
@@ -127,6 +153,8 @@ describe("currentRaceResponseSchema payout", () => {
       round: { ...baseRound, status: "settled", result, serverSeed: "seed" },
       myBet: { animal: 2, stake: "100", payout: "450" },
       now: "2026-10-19T10:01:00Z",
+      limits: { minStake: "100", maxStake: "100000" },
+      raceDurationMs: 10000,
     };
     expect(currentRaceResponseSchema.safeParse(body).success).toBe(true);
   });

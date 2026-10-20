@@ -30,7 +30,7 @@ export const CLOSE_LOCK_TIMEOUT_MS = 5000;
 export type RaceCycleDeps = {
   wallet: WalletService;
   events: RaceEventBus;
-  config: Pick<Config, "raceWindowMs" | "raceDurationMs">;
+  config: Pick<Config, "raceWindowMs" | "raceDurationMs" | "raceIntermissionMs">;
   /** Overrides {@link SETTLEMENT_BATCH_SIZE}; tests use a small one. */
   settlementBatchSize?: number;
   /** Overrides {@link CLOSE_LOCK_TIMEOUT_MS}; tests use a short one. */
@@ -56,7 +56,9 @@ export type Clock = () => Date | Promise<Date>;
  * exception: it waits for the lock, because in-flight bets hold the round `FOR SHARE`
  * (see `placeRaceBet`) and must land before betting closes; it then re-checks the status, so a
  * close another worker already made is not repeated. Opening has no row to lock, so it takes a
- * transaction-scoped advisory lock and re-checks that no round is active.
+ * transaction-scoped advisory lock and re-checks that no round is active. It also waits out the
+ * intermission (`raceIntermissionMs`) after the latest settlement, so the outcome of a race stays
+ * on screen before the next round opens.
  *
  * Lock order is always round, then player wallets, then the house wallet. `placeRaceBet` takes
  * round then player then house, and roulette takes player then house, so none of them can form a
@@ -139,6 +141,22 @@ async function openRound(trx: Db, deps: RaceCycleDeps, now: Date): Promise<RaceE
     .limit(1)
     .executeTakeFirst();
   if (active) return [];
+
+  // The intermission is measured with the same clock the tick uses, from the latest settlement.
+  if (deps.config.raceIntermissionMs > 0) {
+    const last = await trx
+      .selectFrom("game_rounds")
+      .select("settled_at")
+      .where("game", "=", races.id)
+      .where("status", "=", "settled")
+      .orderBy("settled_at", "desc")
+      .limit(1)
+      .executeTakeFirst();
+    const reopensAt = last?.settled_at
+      ? last.settled_at.getTime() + deps.config.raceIntermissionMs
+      : 0;
+    if (reopensAt > now.getTime()) return [];
+  }
 
   const serverSeed = randomBytes(32).toString("hex");
   const row = await trx

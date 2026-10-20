@@ -8,6 +8,7 @@ const stakeSchema = z.coerce
   .max(MAX_MONEY, "must fit in a bigint column");
 
 const seconds = z.coerce.number().int().min(1);
+const secondsOrZero = z.coerce.number().int().min(0);
 
 const configSchema = z
   .object({
@@ -28,6 +29,7 @@ const configSchema = z
     PROCESS_ROLE: z.enum(["api", "worker"]).default("api"),
     RACE_BETTING_WINDOW_SECONDS: seconds.default(30),
     RACE_DURATION_SECONDS: seconds.default(10),
+    RACE_INTERMISSION_SECONDS: secondsOrZero.default(8),
     RACE_MIN_STAKE: stakeSchema.default(100n),
     RACE_MAX_STAKE: stakeSchema.default(100000n),
   })
@@ -48,6 +50,8 @@ export type Config = {
   raceWindowMs: number;
   /** How long the race animation lasts. */
   raceDurationMs: number;
+  /** Pause between a settled round and the opening of the next one (0 opens at once). */
+  raceIntermissionMs: number;
   raceMinStake: bigint;
   raceMaxStake: bigint;
 };
@@ -79,6 +83,7 @@ export function loadConfig(source: NodeJS.ProcessEnv): Config {
     processRole: env.PROCESS_ROLE,
     raceWindowMs: env.RACE_BETTING_WINDOW_SECONDS * 1000,
     raceDurationMs: env.RACE_DURATION_SECONDS * 1000,
+    raceIntermissionMs: env.RACE_INTERMISSION_SECONDS * 1000,
     raceMinStake: env.RACE_MIN_STAKE,
     raceMaxStake: env.RACE_MAX_STAKE,
   };

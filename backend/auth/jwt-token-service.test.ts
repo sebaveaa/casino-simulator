@@ -92,6 +92,7 @@ describe("requireAuth with the JWT service", () => {
         appEnv: "production",
         allowedOrigins: [],
         raceDurationMs: 10_000,
+        raceIntermissionMs: 8000,
         raceMinStake: 1n,
         raceMaxStake: 1000n,
       },

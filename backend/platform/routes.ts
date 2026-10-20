@@ -11,7 +11,10 @@ import type { Config } from "./config";
 import type { Services } from "./services";
 
 /** The settings the race routes read. */
-export type RaceSettings = Pick<Config, "raceDurationMs" | "raceMinStake" | "raceMaxStake">;
+export type RaceSettings = Pick<
+  Config,
+  "raceDurationMs" | "raceIntermissionMs" | "raceMinStake" | "raceMaxStake"
+>;
 
 export type RouteDeps = {
   db: Db;

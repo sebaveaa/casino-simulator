@@ -1,9 +1,10 @@
 import { apiPaths, type RaceEvent, raceEventSchema } from "@casino/shared";
-import type { FastifyInstance } from "fastify";
-import { afterEach, describe, expect, it } from "vitest";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type AuthUser, InvalidTokenError, type TokenService } from "../auth/token-service";
 import type { Db } from "../db/database";
 import { buildApp } from "../platform/app";
+import type { ModuleRoutes } from "../platform/routes";
 import { stubServices } from "../platform/services";
 import { createMemoryRaceEventBus, type RaceEventBus } from "./race-events";
 import { createStreamRoutes, MAX_STREAMS_PER_USER } from "./stream-routes";
@@ -12,6 +13,7 @@ const config = {
   appEnv: "production" as const,
   allowedOrigins: ["http://localhost:8080"],
   raceDurationMs: 10_000,
+  raceIntermissionMs: 8000,
   raceMinStake: 10n,
   raceMaxStake: 500n,
 };
@@ -78,14 +80,36 @@ async function until(condition: () => boolean, timeoutMs = 3000): Promise<void> 
   }
 }
 
-async function start(options: Parameters<typeof createStreamRoutes>[0] = {}) {
+/** A logger that records warnings, to check what is logged. */
+function recordingLogger() {
+  const warn = vi.fn();
+  const noop = () => {};
+  const logger = {
+    level: "info",
+    info: noop,
+    error: noop,
+    debug: noop,
+    fatal: noop,
+    trace: noop,
+    silent: noop,
+    warn,
+    child: () => logger,
+  } as unknown as FastifyBaseLogger;
+  return { logger, warn };
+}
+
+async function start(
+  options: Parameters<typeof createStreamRoutes>[0] = {},
+  extra: { logger?: FastifyBaseLogger; routes?: ModuleRoutes[] } = {},
+) {
   const { bus, state } = countingBus();
   const app = await buildApp({
+    logger: extra.logger,
     config,
     checks,
     db: {} as Db,
     services: { ...stubServices, tokens: fakeTokens([alice, bob]), raceEvents: bus },
-    routes: [createStreamRoutes({ heartbeatMs: 20, ...options })],
+    routes: [...(extra.routes ?? []), createStreamRoutes({ heartbeatMs: 20, ...options })],
   });
   apps.push(app);
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -175,6 +199,46 @@ describe("race event stream", () => {
     await bus.publish({ type: "settled", roundId });
     await until(() => dataEvents(client.text()).length === 1);
     expect(dataEvents(client.text())).toEqual([{ type: "settled", roundId }]);
+  });
+
+  it("logs a dropped event at warn level without its body or any seed", async () => {
+    const { logger, warn } = recordingLogger();
+    const { url, bus, state } = await start({}, { logger });
+    const client = await open(url, as(alice));
+    await until(() => state.subscribers === 1);
+    await bus.publish({
+      type: "closed",
+      roundId,
+      serverSeed: "secret-seed",
+    } as unknown as RaceEvent);
+    await bus.publish({ type: "settled", roundId: "not-a-uuid" } as RaceEvent);
+    await bus.publish({ type: "settled", roundId });
+    await until(() => dataEvents(client.text()).length === 1);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("secret-seed");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("not-a-uuid");
+  });
+
+  it("does not leak a slot when writeHead throws", async () => {
+    let failing = true;
+    const breakWriteHead: ModuleRoutes = async (app) => {
+      app.addHook("onRequest", async (_request, reply) => {
+        if (!failing) return;
+        reply.raw.writeHead = () => {
+          throw new Error("writeHead failed");
+        };
+      });
+    };
+    const { logger, warn } = recordingLogger();
+    const { url } = await start({}, { logger, routes: [breakWriteHead] });
+    for (let i = 0; i < MAX_STREAMS_PER_USER + 1; i++) {
+      await fetch(url, { headers: as(alice) }).catch(() => undefined);
+    }
+    expect(warn).toHaveBeenCalledTimes(MAX_STREAMS_PER_USER + 1);
+
+    failing = false;
+    const client = await open(url, as(alice));
+    expect(client.status).toBe(200);
   });
 
   it("never writes a serverSeed in an opened or closed event", async () => {

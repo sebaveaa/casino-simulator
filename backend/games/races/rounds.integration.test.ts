@@ -20,10 +20,12 @@ import { getCurrentRound, getPlayerBet, getRound } from "./rounds";
 class Rollback extends Error {}
 
 const raceDurationMs = 10_000;
+const raceIntermissionMs = 8000;
 const config = {
   appEnv: "production" as const,
   allowedOrigins: [],
   raceDurationMs,
+  raceIntermissionMs,
   raceMinStake: 1n,
   raceMaxStake: 1000n,
 };
@@ -191,13 +193,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("race round queries and routes",
     expect(body.round?.id).toBe(id);
     expect(body.round?.serverSeed).toBeUndefined();
     expect(body.myBet).toBeNull();
+    expect(body.limits).toEqual({ minStake: "1", maxStake: "1000" });
+    expect(body.raceDurationMs).toBe(raceDurationMs);
     expect(new Date(body.now).toISOString()).toBe(body.now);
   });
 
   it("returns null when there are no rounds", async () => {
     await rolledBack(
       async (trx) => {
-        expect(await getCurrentRound(trx, { raceDurationMs })).toBeNull();
+        expect(await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs })).toBeNull();
       },
       { emptyRounds: true },
     );
@@ -207,19 +211,42 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("race round queries and routes",
     await rolledBack(
       async (trx) => {
         const settled = await createRound(trx, "settled", { settledAgoMs: 1_000 });
-        expect((await getCurrentRound(trx, { raceDurationMs }))?.id).toBe(settled);
+        expect((await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs }))?.id).toBe(
+          settled,
+        );
         const open = await createRound(trx, "open", { opensInMs: 1_000 });
-        expect((await getCurrentRound(trx, { raceDurationMs }))?.id).toBe(open);
+        expect((await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs }))?.id).toBe(open);
       },
       { emptyRounds: true },
     );
   });
 
-  it("returns null when the only round settled longer ago than the race duration", async () => {
+  it("keeps a settled round current for the intermission and then returns null", async () => {
     await rolledBack(
       async (trx) => {
-        await createRound(trx, "settled", { settledAgoMs: raceDurationMs + 5_000 });
-        expect(await getCurrentRound(trx, { raceDurationMs })).toBeNull();
+        const settled = await createRound(trx, "settled", {
+          settledAgoMs: raceIntermissionMs - 3_000,
+        });
+        expect((await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs }))?.id).toBe(
+          settled,
+        );
+        await trx.deleteFrom("game_rounds").execute();
+        await createRound(trx, "settled", { settledAgoMs: raceIntermissionMs + 3_000 });
+        expect(await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs })).toBeNull();
+      },
+      { emptyRounds: true },
+    );
+  });
+
+  it("shows no settled round at all when the intermission is 0", async () => {
+    await rolledBack(
+      async (trx) => {
+        await createRound(trx, "settled", { settledAgoMs: 1 });
+        expect(await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs: 0 })).toBeNull();
+        const open = await createRound(trx, "open", { opensInMs: 1_000 });
+        expect((await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs: 0 }))?.id).toBe(
+          open,
+        );
       },
       { emptyRounds: true },
     );

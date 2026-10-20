@@ -9,6 +9,7 @@ const config = {
   appEnv: "production" as const,
   allowedOrigins: ["http://localhost:5173"],
   raceDurationMs: 10_000,
+  raceIntermissionMs: 8000,
   raceMinStake: 1n,
   raceMaxStake: 1000n,
 };

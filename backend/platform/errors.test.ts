@@ -11,6 +11,7 @@ const config = {
   appEnv: "production" as const,
   allowedOrigins: [],
   raceDurationMs: 10_000,
+  raceIntermissionMs: 8000,
   raceMinStake: 1n,
   raceMaxStake: 1000n,
 };

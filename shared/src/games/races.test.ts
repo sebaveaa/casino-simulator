@@ -78,6 +78,15 @@ describe("races game", () => {
     expect(races.validateBet({ stake: MAX_MONEY, animal: 0 })).toBe(false);
   });
 
+  it("accepts the largest stake whose payout fits MAX_MONEY and rejects the next one", () => {
+    // Largest s with floor(9s / 2) <= MAX_MONEY, checked against racePayout itself below.
+    const largest = (MAX_MONEY * 2n + 1n) / 9n;
+    expect(racePayout(largest)).toBeLessThanOrEqual(MAX_MONEY);
+    expect(racePayout(largest + 1n)).toBeGreaterThan(MAX_MONEY);
+    expect(races.validateBet({ stake: largest, animal: 0 })).toBe(true);
+    expect(races.validateBet({ stake: largest + 1n, animal: 0 })).toBe(false);
+  });
+
   it("pays only when the bet animal wins", () => {
     const result = { winner: 2, order: [2, 0, 1, 3, 4] };
     expect(races.payout({ stake: 100n, animal: 2 }, result)).toBe(450n);

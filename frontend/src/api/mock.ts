@@ -38,6 +38,7 @@ const TOKEN_LIFETIME_SECONDS = 3600;
 const MOCK_CLIENT_SEED = "mock-client-seed";
 const DEFAULT_RACE_WINDOW_MS = 30000;
 const DEFAULT_RACE_DURATION_MS = 10000;
+const DEFAULT_RACE_INTERMISSION_MS = 8000;
 const MIN_RACE_STAKE = 100n;
 const MAX_RACE_STAKE = 100000n;
 
@@ -64,6 +65,11 @@ export interface MockRaceOptions {
   windowMs?: number;
   /** Time between the result and the settlement. Default 10000. */
   durationMs?: number;
+  /**
+   * Pause between a settlement and the next round: the settled round stays current for it, like
+   * the backend `RACE_INTERMISSION_SECONDS`. Default 8000.
+   */
+  intermissionMs?: number;
   /** Delay before the first round opens. Default 0. */
   startDelayMs?: number;
 }
@@ -114,6 +120,7 @@ export function createMockApiClient(
   const delayMs = options.delayMs ?? 0;
   const windowMs = options.race?.windowMs ?? DEFAULT_RACE_WINDOW_MS;
   const durationMs = options.race?.durationMs ?? DEFAULT_RACE_DURATION_MS;
+  const intermissionMs = options.race?.intermissionMs ?? DEFAULT_RACE_INTERMISSION_MS;
   const startDelayMs = options.race?.startDelayMs ?? 0;
   let balance = STARTING_BALANCE;
   const transactions: Transaction[] = [];
@@ -231,8 +238,8 @@ export function createMockApiClient(
     }
     current.status = "settled";
     emit({ type: "settled", roundId: current.id });
-    // Like the backend, the settled round stays current for a while so a reload still shows it.
-    schedule(openRound, durationMs);
+    // Like the backend, the settled round stays current for the intermission, then the next opens.
+    schedule(openRound, intermissionMs);
   }
 
   function ensureRaces() {
@@ -364,6 +371,8 @@ export function createMockApiClient(
             }
           : null,
         now: new Date().toISOString(),
+        limits: { minStake: toAmount(MIN_RACE_STAKE), maxStake: toAmount(MAX_RACE_STAKE) },
+        raceDurationMs: durationMs,
       };
     },
     async placeRaceBet(body: RaceBetRequest, idempotencyKey: string): Promise<RaceBetResponse> {
