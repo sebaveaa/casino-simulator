@@ -28,8 +28,8 @@ const configSchema = z
     PROCESS_ROLE: z.enum(["api", "worker"]).default("api"),
     RACE_BETTING_WINDOW_SECONDS: seconds.default(30),
     RACE_DURATION_SECONDS: seconds.default(10),
-    RACE_MIN_STAKE: stakeSchema.default(1n),
-    RACE_MAX_STAKE: stakeSchema.default(1000n),
+    RACE_MIN_STAKE: stakeSchema.default(100n),
+    RACE_MAX_STAKE: stakeSchema.default(100000n),
   })
   .refine((env) => env.RACE_MIN_STAKE <= env.RACE_MAX_STAKE, {
     path: ["RACE_MIN_STAKE"],

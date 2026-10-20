@@ -512,8 +512,8 @@ Las credenciales reales **nunca** se suben al repositorio. Ver `.env.example`.
 | `PROCESS_ROLE` | `api` o `worker`: la misma imagen Docker arranca uno u otro proceso |
 | `RACE_BETTING_WINDOW_SECONDS` | Segundos que una ronda de carreras acepta apuestas (por defecto 30) |
 | `RACE_DURATION_SECONDS` | Segundos que dura la animación de la carrera (por defecto 10) |
-| `RACE_MIN_STAKE` | Apuesta mínima por ronda, en unidades menores (por defecto 1) |
-| `RACE_MAX_STAKE` | Apuesta máxima por ronda, en unidades menores (por defecto 1000); no puede ser menor que la mínima |
+| `RACE_MIN_STAKE` | Apuesta mínima por ronda, en unidades menores (100 por crédito; por defecto 100 = 1 crédito) |
+| `RACE_MAX_STAKE` | Apuesta máxima por ronda, en unidades menores (por defecto 100000 = 1000 créditos); no puede ser menor que la mínima |
 
 ---
 

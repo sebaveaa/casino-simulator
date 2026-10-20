@@ -38,8 +38,8 @@ const TOKEN_LIFETIME_SECONDS = 3600;
 const MOCK_CLIENT_SEED = "mock-client-seed";
 const DEFAULT_RACE_WINDOW_MS = 30000;
 const DEFAULT_RACE_DURATION_MS = 10000;
-const MIN_RACE_STAKE = 1n;
-const MAX_RACE_STAKE = 1000n;
+const MIN_RACE_STAKE = 100n;
+const MAX_RACE_STAKE = 100000n;
 
 /** Random lowercase hex string; a stand-in for seeds and hashes in the mock. */
 function randomHex(bytes: number): string {

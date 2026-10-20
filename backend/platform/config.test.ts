@@ -30,8 +30,8 @@ describe("loadConfig", () => {
     const config = loadConfig(validEnv);
     expect(config.raceWindowMs).toBe(30_000);
     expect(config.raceDurationMs).toBe(10_000);
-    expect(config.raceMinStake).toBe(1n);
-    expect(config.raceMaxStake).toBe(1000n);
+    expect(config.raceMinStake).toBe(100n);
+    expect(config.raceMaxStake).toBe(100000n);
   });
 
   it("reads the race variables, seconds to milliseconds and stakes to bigint", () => {

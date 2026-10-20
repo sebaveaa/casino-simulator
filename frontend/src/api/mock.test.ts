@@ -338,11 +338,11 @@ describe("mock API client races", () => {
   it("refuses a second bet in the same round with a conflict", async () => {
     const { api, unwatch } = setup();
     const round = await openRound(api);
-    await api.placeRaceBet({ roundId: round.id, animal: 1, stake: "10" }, "key-r-0020");
+    await api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100" }, "key-r-0020");
     await expect(
-      api.placeRaceBet({ roundId: round.id, animal: 2, stake: "10" }, "key-r-0021"),
+      api.placeRaceBet({ roundId: round.id, animal: 2, stake: "100" }, "key-r-0021"),
     ).rejects.toMatchObject({ code: "conflict", status: 409 });
-    expect((await api.getBalance()).balance).toBe("99990");
+    expect((await api.getBalance()).balance).toBe("99900");
     unwatch();
   });
 
@@ -350,20 +350,20 @@ describe("mock API client races", () => {
     const { api, unwatch } = setup();
     const round = await openRound(api);
     await expect(
-      api.placeRaceBet({ roundId: crypto.randomUUID(), animal: 1, stake: "10" }, "key-r-0030"),
+      api.placeRaceBet({ roundId: crypto.randomUUID(), animal: 1, stake: "100" }, "key-r-0030"),
     ).rejects.toMatchObject({ code: "invalid_request", status: 400 });
     await expect(
       api.placeRaceBet({ roundId: round.id, animal: 1, stake: "0" }, "key-r-0031"),
     ).rejects.toMatchObject({ code: "invalid_request" });
     await expect(
-      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "1001" }, "key-r-0032"),
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100001" }, "key-r-0032"),
     ).rejects.toMatchObject({ code: "invalid_request" });
     await expect(
-      api.placeRaceBet({ roundId: round.id, animal: 5, stake: "10" }, "key-r-0033"),
+      api.placeRaceBet({ roundId: round.id, animal: 5, stake: "100" }, "key-r-0033"),
     ).rejects.toMatchObject({ code: "invalid_request" });
     await step(api, WINDOW);
     await expect(
-      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "10" }, "key-r-0034"),
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100" }, "key-r-0034"),
     ).rejects.toMatchObject({ code: "invalid_request", status: 400 });
     expect((await api.getBalance()).balance).toBe("100000");
     unwatch();
@@ -382,7 +382,7 @@ describe("mock API client races", () => {
     }
     expect((await api.getBalance()).balance).toBe("0");
     await expect(
-      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "1" }, "key-r-0042"),
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100" }, "key-r-0042"),
     ).rejects.toMatchObject({ code: "insufficient_funds", status: 422 });
     unwatch();
   });
@@ -425,14 +425,14 @@ describe("mock API client races", () => {
     // Bet on a different animal in each run until one loses; with 5 animals one of them always does.
     const peek = await step(api, 0);
     expect(peek.round?.id).toBe(round.id);
-    await api.placeRaceBet({ roundId: round.id, animal: 0, stake: "10" }, "key-r-0050");
+    await api.placeRaceBet({ roundId: round.id, animal: 0, stake: "100" }, "key-r-0050");
     await step(api, WINDOW);
     const settled = await step(api, DURATION);
     const result = events.find((e) => e.type === "result");
     if (result?.type !== "result") throw new Error("no result");
     expect(settled.round?.status).toBe("settled");
     expect(settled.myBet?.payout).toBe(
-      result.result.winner === 0 ? racePayout(10n).toString() : "0",
+      result.result.winner === 0 ? racePayout(100n).toString() : "0",
     );
     unwatch();
   });
