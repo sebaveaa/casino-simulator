@@ -4,6 +4,7 @@ import { authRoutes } from "../auth/routes";
 import type { Db } from "../db/database";
 import { racesRoutes } from "../games/races/routes";
 import { rouletteRoutes } from "../games/roulette/routes";
+import { streamRoutes } from "../realtime/stream-routes";
 import { seedPairRoutes } from "../rng/routes";
 import { walletRoutes } from "../wallet/routes";
 import type { Config } from "./config";
@@ -28,4 +29,5 @@ export const moduleRoutes: ModuleRoutes[] = [
   seedPairRoutes,
   rouletteRoutes,
   racesRoutes,
+  streamRoutes,
 ];
