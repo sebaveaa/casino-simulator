@@ -82,6 +82,33 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("0003_race_rounds", () => {
     });
   });
 
+  it("lets two different users each bet in the same round", async () => {
+    await rolledBack(async (trx) => {
+      const { userId, roundId } = await fixtures(trx);
+      const other = await trx
+        .insertInto("users")
+        .values({ email: `${randomUUID()}@test.local`, password_hash: "not-a-real-hash" })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      const bet = (user: string) => ({
+        user_id: user,
+        game: "races" as const,
+        round_id: roundId,
+        stake: 100n,
+        selection: { animal: 1 },
+        status: "pending" as const,
+      });
+      await trx.insertInto("bets").values(bet(userId)).execute();
+      await trx.insertInto("bets").values(bet(other.id)).execute();
+      const count = await trx
+        .selectFrom("bets")
+        .select((eb) => eb.fn.countAll<string>().as("n"))
+        .where("round_id", "=", roundId)
+        .executeTakeFirstOrThrow();
+      expect(Number(count.n)).toBe(2);
+    });
+  });
+
   it("does not constrain bets without a round (roulette-style)", async () => {
     await rolledBack(async (trx) => {
       const { userId, seedPairId } = await fixtures(trx);
@@ -103,13 +130,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("0003_race_rounds", () => {
     await rolledBack(async (trx) => {
       const columns = () =>
         sql<{ column_name: string }>`select column_name from information_schema.columns
-          where table_name = 'game_rounds' and column_name in ('result', 'resolved_at', 'settled_at')`
+          where table_schema = current_schema() and table_name = 'game_rounds'
+            and column_name in ('result', 'resolved_at', 'settled_at')`
           .execute(trx)
           .then((r) => r.rows.map((row) => row.column_name).sort());
       const index = () =>
         sql<{
           indexname: string;
-        }>`select indexname from pg_indexes where indexname = 'bets_round_user_key'`
+        }>`select indexname from pg_indexes
+          where schemaname = current_schema() and indexname = 'bets_round_user_key'`
           .execute(trx)
           .then((r) => r.rows.length);
 

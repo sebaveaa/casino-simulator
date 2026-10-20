@@ -13,6 +13,10 @@ describe("migrations", () => {
     expect(Object.keys(migrations)).toContain("0003_race_rounds");
   });
 
+  it("registers the race current-round index migration", () => {
+    expect(Object.keys(migrations)).toContain("0004_race_current_index");
+  });
+
   it("gives every migration an up and a down", () => {
     for (const migration of Object.values(migrations)) {
       expect(migration.up).toBeTypeOf("function");
