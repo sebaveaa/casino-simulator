@@ -9,6 +9,10 @@ describe("migrations", () => {
     expect(names).toEqual([...names].sort());
   });
 
+  it("registers the race round columns migration", () => {
+    expect(Object.keys(migrations)).toContain("0003_race_rounds");
+  });
+
   it("gives every migration an up and a down", () => {
     for (const migration of Object.values(migrations)) {
       expect(migration.up).toBeTypeOf("function");

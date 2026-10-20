@@ -1,6 +1,7 @@
 import type { Migration } from "kysely/migration";
 import * as initial from "./0001_initial";
 import * as ledgerHistoryIndex from "./0002_ledger_history_index";
+import * as raceRounds from "./0003_race_rounds";
 
 /**
  * Static registry, so esbuild bundles the migrations (no filesystem provider at runtime).
@@ -9,4 +10,5 @@ import * as ledgerHistoryIndex from "./0002_ledger_history_index";
 export const migrations: Record<string, Migration> = {
   "0001_initial": initial,
   "0002_ledger_history_index": ledgerHistoryIndex,
+  "0003_race_rounds": raceRounds,
 };
