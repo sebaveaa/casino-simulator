@@ -26,6 +26,43 @@ describe("loadConfig", () => {
     expect(config.processRole).toBe("worker");
   });
 
+  it("applies the race defaults", () => {
+    const config = loadConfig(validEnv);
+    expect(config.raceWindowMs).toBe(30_000);
+    expect(config.raceDurationMs).toBe(10_000);
+    expect(config.raceMinStake).toBe(1n);
+    expect(config.raceMaxStake).toBe(1000n);
+  });
+
+  it("reads the race variables, seconds to milliseconds and stakes to bigint", () => {
+    const config = loadConfig({
+      ...validEnv,
+      RACE_BETTING_WINDOW_SECONDS: "5",
+      RACE_DURATION_SECONDS: "2",
+      RACE_MIN_STAKE: "10",
+      RACE_MAX_STAKE: "500",
+    });
+    expect(config.raceWindowMs).toBe(5000);
+    expect(config.raceDurationMs).toBe(2000);
+    expect(config.raceMinStake).toBe(10n);
+    expect(config.raceMaxStake).toBe(500n);
+  });
+
+  it("rejects RACE_MIN_STAKE greater than RACE_MAX_STAKE", () => {
+    expect(() => loadConfig({ ...validEnv, RACE_MIN_STAKE: "50", RACE_MAX_STAKE: "10" })).toThrow(
+      /RACE_MIN_STAKE/,
+    );
+  });
+
+  it("rejects a RACE_MAX_STAKE above the largest money value", () => {
+    expect(() => loadConfig({ ...validEnv, RACE_MAX_STAKE: "9223372036854775808" })).toThrow(
+      /RACE_MAX_STAKE/,
+    );
+    expect(loadConfig({ ...validEnv, RACE_MAX_STAKE: "9223372036854775807" }).raceMaxStake).toBe(
+      9223372036854775807n,
+    );
+  });
+
   it("names a missing DATABASE_URL", () => {
     const { DATABASE_URL: _omitted, ...env } = validEnv;
     expect(() => loadConfig(env)).toThrow(/DATABASE_URL/);
