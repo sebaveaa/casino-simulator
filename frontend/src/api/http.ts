@@ -1,10 +1,14 @@
+import type { RaceEvent } from "@casino/shared";
 import {
   apiPaths,
   authResponseSchema,
   balanceResponseSchema,
+  currentRaceResponseSchema,
   depositResponseSchema,
   errorResponseSchema,
   IDEMPOTENCY_KEY_HEADER,
+  raceBetResponseSchema,
+  raceEventSchema,
   rouletteBetResponseSchema,
   transactionHistoryResponseSchema,
 } from "@casino/shared";
@@ -18,6 +22,20 @@ export interface HttpApiClientOptions {
   /** Called when the server rejects the session token (401 on a guarded call). */
   onUnauthorized?: () => void;
   fetch?: typeof fetch;
+  /** Waits before each stream reconnection attempt; the last value repeats. Default 1 s up to 10 s. */
+  streamReconnectDelaysMs?: number[];
+}
+
+const DEFAULT_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 10000];
+
+/** The `data:` payload of one SSE block, or null for comments and blocks without data. */
+function sseData(block: string): string | null {
+  const lines: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith(":")) continue;
+    if (line.startsWith("data:")) lines.push(line.slice(5).replace(/^ /, ""));
+  }
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 /** `ApiClient` that talks to the backend over HTTP, validating every response with the shared schemas. */
@@ -80,6 +98,102 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
     return parsed.data;
   }
 
+  const reconnectDelays =
+    options.streamReconnectDelaysMs && options.streamReconnectDelaysMs.length > 0
+      ? options.streamReconnectDelaysMs
+      : DEFAULT_RECONNECT_DELAYS_MS;
+
+  function watchRaces(
+    onEvent: (event: RaceEvent) => void,
+    onStatus?: (status: "connected" | "reconnecting") => void,
+  ): () => void {
+    let closed = false;
+    let controller: AbortController | null = null;
+    let wake: (() => void) | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    function wait(ms: number): Promise<void> {
+      return new Promise((resolve) => {
+        wake = resolve;
+        timer = setTimeout(resolve, ms);
+      });
+    }
+
+    function dispatch(block: string): void {
+      const data = sseData(block);
+      if (data === null) return;
+      let json: unknown;
+      try {
+        json = JSON.parse(data);
+      } catch {
+        return;
+      }
+      const parsed = raceEventSchema.safeParse(json);
+      if (!parsed.success) return;
+      try {
+        onEvent(parsed.data);
+      } catch {
+        // A listener bug must not be treated as a stream failure.
+      }
+    }
+
+    async function run(): Promise<void> {
+      let attempt = 0;
+      while (!closed) {
+        controller = new AbortController();
+        try {
+          const token = options.getToken();
+          const headers: Record<string, string> = { accept: "text/event-stream" };
+          if (token) headers.authorization = `Bearer ${token}`;
+          const response = await doFetch(`${baseUrl}${apiPaths.raceStream}`, {
+            method: "GET",
+            headers,
+            signal: controller.signal,
+          });
+          if (closed) return;
+          if (response.status === 401 || response.status === 403) {
+            void response.body?.cancel();
+            if (token) options.onUnauthorized?.();
+            return;
+          }
+          if (!response.ok) void response.body?.cancel();
+          if (response.ok && response.body) {
+            onStatus?.("connected");
+            attempt = 0;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const blocks = buffer.split(/\r?\n\r?\n/);
+              buffer = blocks.pop() ?? "";
+              for (const block of blocks) dispatch(block);
+            }
+          }
+        } catch {
+          // Network failure or abort: handled below.
+        }
+        if (closed) return;
+        onStatus?.("reconnecting");
+        const delay = reconnectDelays[Math.min(attempt, reconnectDelays.length - 1)] ?? 1000;
+        attempt += 1;
+        await wait(delay);
+      }
+    }
+
+    void run();
+
+    return () => {
+      if (closed) return;
+      closed = true;
+      controller?.abort();
+      clearTimeout(timer);
+      wake?.();
+    };
+  }
+
   return {
     register: (body) =>
       request(authResponseSchema, { method: "POST", path: apiPaths.register, body, public: true }),
@@ -110,5 +224,15 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
         body,
         idempotencyKey,
       }),
+    getCurrentRace: () =>
+      request(currentRaceResponseSchema, { method: "GET", path: apiPaths.raceCurrent }),
+    placeRaceBet: (body, idempotencyKey) =>
+      request(raceBetResponseSchema, {
+        method: "POST",
+        path: apiPaths.raceBets,
+        body,
+        idempotencyKey,
+      }),
+    watchRaces,
   };
 }
