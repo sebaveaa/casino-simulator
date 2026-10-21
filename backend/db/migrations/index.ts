@@ -3,6 +3,7 @@ import * as initial from "./0001_initial";
 import * as ledgerHistoryIndex from "./0002_ledger_history_index";
 import * as raceRounds from "./0003_race_rounds";
 import * as raceCurrentIndex from "./0004_race_current_index";
+import * as racePartialIndexes from "./0005_race_round_partial_indexes";
 
 /**
  * Static registry, so esbuild bundles the migrations (no filesystem provider at runtime).
@@ -13,4 +14,5 @@ export const migrations: Record<string, Migration> = {
   "0002_ledger_history_index": ledgerHistoryIndex,
   "0003_race_rounds": raceRounds,
   "0004_race_current_index": raceCurrentIndex,
+  "0005_race_round_partial_indexes": racePartialIndexes,
 };

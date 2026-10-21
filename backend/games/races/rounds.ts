@@ -68,21 +68,22 @@ export function toRaceRound(row: RaceRoundRow, raceDurationMs: number): RaceRoun
  * latest `settled` one during the intermission (settled less than `raceIntermissionMs` ago, by the
  * database clock), so the outcome stays on screen until the next round opens and a player who
  * reconnects right after settlement still sees it. Otherwise `null`; with an intermission of 0
- * a settled round is never current.
+ * a settled round is never current. The status predicates are literal SQL, spelled as in the
+ * partial indexes of migration 0005, so the planner can use them.
  */
 export async function getCurrentRound(
   db: Db,
   { raceDurationMs, raceIntermissionMs }: { raceDurationMs: number; raceIntermissionMs: number },
 ): Promise<RaceRound | null> {
   const active = await selectRounds(db)
-    .where("status", "!=", "settled")
+    .where(sql<boolean>`status <> 'settled'`)
     .orderBy("opens_at", "desc")
     .limit(1)
     .executeTakeFirst();
   if (active) return toRaceRound(active, raceDurationMs);
 
   const recent = await selectRounds(db)
-    .where("status", "=", "settled")
+    .where(sql<boolean>`status = 'settled'`)
     .where(
       sql<boolean>`settled_at > now() - (${raceIntermissionMs}::double precision * interval '1 millisecond')`,
     )

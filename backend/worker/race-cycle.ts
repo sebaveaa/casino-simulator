@@ -137,7 +137,7 @@ async function openRound(trx: Db, deps: RaceCycleDeps, now: Date): Promise<RaceE
     .selectFrom("game_rounds")
     .select("id")
     .where("game", "=", races.id)
-    .where("status", "!=", "settled")
+    .where(sql<boolean>`status <> 'settled'`)
     .limit(1)
     .executeTakeFirst();
   if (active) return [];
@@ -148,7 +148,7 @@ async function openRound(trx: Db, deps: RaceCycleDeps, now: Date): Promise<RaceE
       .selectFrom("game_rounds")
       .select("settled_at")
       .where("game", "=", races.id)
-      .where("status", "=", "settled")
+      .where(sql<boolean>`status = 'settled'`)
       .orderBy("settled_at", "desc")
       .limit(1)
       .executeTakeFirst();

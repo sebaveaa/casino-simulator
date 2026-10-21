@@ -5,6 +5,7 @@ import { postgresTypes } from "../../platform/postgres";
 import { createDatabase, type Db } from "../database";
 import type { Database } from "../schema";
 import * as raceCurrentIndex from "./0004_race_current_index";
+import * as racePartialIndexes from "./0005_race_round_partial_indexes";
 
 class Rollback extends Error {}
 
@@ -45,6 +46,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("0004_race_current_index", () =>
           .execute(trx)
           .then((r) => r.rows.length);
 
+      // 0005 replaced the index; put it back to exercise 0004 on its own.
+      await racePartialIndexes.down(trx);
       expect(await index()).toBe(1);
       await raceCurrentIndex.down(trx);
       expect(await index()).toBe(0);
