@@ -26,11 +26,11 @@ export function stakeFromCredits(input: string, limits: StakeLimits | null): str
   return amount;
 }
 
-/** The limits as credits text ("1", "1000"), for hints and errors. */
+/** The limits as credits text ("1", "1000"), without thousands grouping, for hints and errors. */
 export function limitsInCredits(limits: StakeLimits): { min: string; max: string } {
   return {
-    min: shortCredits(parseAmount(limits.minStake)),
-    max: shortCredits(parseAmount(limits.maxStake)),
+    min: shortCredits(parseAmount(limits.minStake)).replaceAll(",", ""),
+    max: shortCredits(parseAmount(limits.maxStake)).replaceAll(",", ""),
   };
 }
 

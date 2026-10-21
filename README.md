@@ -431,7 +431,7 @@ flowchart LR
 - Autenticación con tokens; la lógica de autorización vive en el backend.
 - El canal SSE exige autenticación igual que la API; un jugador solo recibe eventos públicos de la carrera, nunca datos de otros jugadores.
 - **Secretos fuera del repositorio:** solo variables de entorno; el repo incluye `.env.example` sin valores reales.
-- Límite de tasa (*rate limiting*) por usuario, apoyado en Redis, y límite de conexiones SSE simultáneas por usuario. Hoy el límite de conexiones SSE es de 3 por usuario **en cada proceso de la API** (el contador vive en memoria), así que con N instancias un usuario puede llegar a 3 × N conexiones; y el límite de tasa aún no está implementado en las rutas de apuestas.
+- Límite de tasa (*rate limiting*) por usuario, apoyado en Redis, y límite de conexiones SSE simultáneas por usuario. Hoy el límite de conexiones SSE es de 3 por usuario **en cada proceso de la API** (el contador vive en memoria), así que con N instancias un usuario puede llegar a 3 × N conexiones; y el límite de tasa aún no está implementado en ninguna ruta de la API.
 - Validación estricta de entradas en la API (esquemas Zod).
 - El cliente nunca decide resultados ni saldos.
 

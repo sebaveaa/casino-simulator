@@ -122,6 +122,7 @@ export function RacesPage() {
   useRaceWatchdog({
     round,
     raceDurationMs: race.raceDurationMs,
+    startedAtMs: race.startedAtMs,
     now: serverNow,
     refresh: sync,
     enabled: race.loaded,

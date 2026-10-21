@@ -3,22 +3,34 @@ import { useEffect, useRef } from "react";
 
 /** Grace after the expected end of a phase before the page asks the server what happened. */
 export const WATCHDOG_GRACE_MS = 2000;
+/**
+ * The worker's loop interval (`RACE_TICK_INTERVAL_MS` in the backend) and it moves a round one
+ * step per tick: close, then resolve a tick later, then settle at the first tick at or after
+ * `resolved_at + raceDuration`. Settlement therefore lands up to one tick after the animation ends,
+ * and up to two after `closesAt + raceDuration` (close, resolve). Keep it equal to the backend's.
+ */
+export const WORKER_TICK_MS = 1000;
 /** Interval between further fetches while the page is still behind. */
 export const WATCHDOG_RETRY_MS = 5000;
 
 /**
  * When the round on screen should have moved to its next phase, by the server clock, or null when
- * nothing is expected (settled, or the animation length is not known yet).
+ * nothing is expected (settled, or the animation length is not known yet). `startedAtMs` is when
+ * the page's animation started (a live `result` event, or `settlesAt` minus the duration): the
+ * round settles one tick after it. Without it only `closesAt` is known, and the grace also covers
+ * the two ticks between closing and resolving.
  */
 export function expectedPhaseEnd(
   round: Pick<RaceRound, "status" | "closesAt" | "settlesAt">,
   raceDurationMs: number | null,
+  startedAtMs: number | null = null,
 ): number | null {
   if (round.status === "open") return Date.parse(round.closesAt) + WATCHDOG_GRACE_MS;
   if (round.status === "closed" || round.status === "resolved") {
     if (round.settlesAt) return Date.parse(round.settlesAt) + WATCHDOG_GRACE_MS;
     if (raceDurationMs !== null) {
-      return Date.parse(round.closesAt) + raceDurationMs + WATCHDOG_GRACE_MS;
+      if (startedAtMs !== null) return startedAtMs + raceDurationMs + WATCHDOG_GRACE_MS;
+      return Date.parse(round.closesAt) + raceDurationMs + 2 * WORKER_TICK_MS + WATCHDOG_GRACE_MS;
     }
   }
   return null;
@@ -33,12 +45,15 @@ export function expectedPhaseEnd(
 export function useRaceWatchdog({
   round,
   raceDurationMs,
+  startedAtMs,
   now,
   refresh,
   enabled,
 }: {
   round: RaceRound | null;
   raceDurationMs: number | null;
+  /** Server-clock time at which the page's race animation started; null when there is none. */
+  startedAtMs: number | null;
   /** The server-adjusted clock, in milliseconds. */
   now: () => number;
   refresh: () => Promise<void>;
@@ -59,6 +74,7 @@ export function useRaceWatchdog({
     const end = expectedPhaseEnd(
       { status, closesAt, settlesAt: settlesAt ?? undefined },
       raceDurationMs,
+      startedAtMs,
     );
     if (end === null) return;
 
@@ -86,5 +102,5 @@ export function useRaceWatchdog({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [enabled, id, status, closesAt, settlesAt, raceDurationMs]);
+  }, [enabled, id, status, closesAt, settlesAt, raceDurationMs, startedAtMs]);
 }

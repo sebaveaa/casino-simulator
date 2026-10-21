@@ -229,6 +229,14 @@ describe("RacesPage open round", () => {
     expect(await screen.findByText(/Mínimo 5, máximo 20 créditos\./)).toBeTruthy();
   });
 
+  it("writes the stake limits without thousands grouping", async () => {
+    const api = raceApi(
+      current(openRound(), null, { limits: { minStake: "100", maxStake: "100000" } }),
+    );
+    await renderRaces(api.client);
+    expect(await screen.findByText(/Mínimo 1, máximo 1000 créditos\./)).toBeTruthy();
+  });
+
   it("ticks the countdown every second and stops at zero", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const api = raceApi(current(openRound(ROUND_A, 3_000)));
@@ -355,7 +363,7 @@ describe("RacesPage betting", () => {
     for (const value of ["0", "2.5", "abc", "1001"]) {
       bet("Tortuga", value);
       expect(
-        await screen.findByText("Ingrese un número entero de créditos entre 1 y 1,000."),
+        await screen.findByText("Ingrese un número entero de créditos entre 1 y 1000."),
       ).toBeTruthy();
     }
     expect(api.placeRaceBet).not.toHaveBeenCalled();
@@ -691,11 +699,61 @@ describe("RacesPage watchdog for lost events", () => {
     );
     await renderRaces(api.client);
     expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
-    // closesAt + 6 s + 2 s is 7 s away.
-    await advance(6_000);
+    // closesAt + 6 s + two worker ticks + 2 s is 9 s away.
+    await advance(8_000);
     expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
     await advance(2_000);
     await waitFor(() => expect(api.getCurrentRace).toHaveBeenCalledTimes(2));
+  });
+
+  it("recovers a lost settled event one grace after the animation it started itself", async () => {
+    const api = raceApi(current(openRound(ROUND_A, 1_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:01");
+    await advance(1_000);
+    api.emit({ type: "closed", roundId: ROUND_A });
+    api.emit({
+      type: "result",
+      roundId: ROUND_A,
+      result: { winner: 2, order: ORDER },
+      serverSeed: SEED,
+    });
+    const calls = api.getCurrentRace.mock.calls.length;
+    // The animation (10 s) started now, so the deadline is 10 s + 2 s from now.
+    await advance(11_000);
+    expect(api.getCurrentRace.mock.calls.length).toBe(calls);
+    await advance(2_000);
+    await waitFor(() => expect(api.getCurrentRace.mock.calls.length).toBe(calls + 1));
+  });
+
+  it("does not fetch before a settled event that follows the worker's real timing", async () => {
+    // The worker ticks once a second: it closes the round on a tick, resolves it on the next one
+    // and settles it at the first tick at or after resolved_at + the race duration.
+    const api = raceApi(current(openRound(ROUND_A, 1_000)));
+    await renderRaces(api.client);
+    await screen.findByText("00:01");
+    expect(api.getCurrentRace).toHaveBeenCalledTimes(1);
+    const calls = api.getCurrentRace.mock.calls.length;
+
+    await advance(1_900); // closesAt + 0.9 s: the closing tick
+    api.emit({ type: "closed", roundId: ROUND_A });
+    await advance(1_000); // closesAt + 1.9 s: the resolving tick
+    api.emit({
+      type: "result",
+      roundId: ROUND_A,
+      result: { winner: 2, order: ORDER },
+      serverSeed: SEED,
+    });
+    // Settlement tick: 10 s after resolution plus up to a second of tick alignment. This is past
+    // closesAt + duration + grace (12 s), where a watchdog based on closesAt would already fetch.
+    await advance(10_500);
+    expect(api.getCurrentRace.mock.calls.length).toBe(calls);
+
+    api.setRace(current({ ...resolvedRound(ROUND_A, -500), status: "settled" }));
+    api.emit({ type: "settled", roundId: ROUND_A });
+    await advance(5_000);
+    expect(api.getCurrentRace.mock.calls.length).toBe(calls);
+    expect(screen.getByText("Ganador: Zorro")).toBeTruthy();
   });
 
   it("retries every five seconds while the page is still behind", async () => {

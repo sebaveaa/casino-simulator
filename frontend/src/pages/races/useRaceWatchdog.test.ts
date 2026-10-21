@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expectedPhaseEnd, WATCHDOG_GRACE_MS } from "./useRaceWatchdog";
+import { expectedPhaseEnd, WATCHDOG_GRACE_MS, WORKER_TICK_MS } from "./useRaceWatchdog";
 
 const CLOSES_AT = "2026-01-01T00:00:30.000Z";
 const SETTLES_AT = "2026-01-01T00:00:45.000Z";
@@ -18,10 +18,27 @@ describe("expectedPhaseEnd", () => {
     ).toBe(Date.parse(SETTLES_AT) + WATCHDOG_GRACE_MS);
   });
 
-  it("falls back to closesAt plus the race duration when settlesAt is unknown", () => {
+  it("falls back to closesAt plus the duration and two worker ticks when only closesAt is known", () => {
     expect(expectedPhaseEnd({ status: "closed", closesAt: CLOSES_AT }, 10_000)).toBe(
-      closesMs + 10_000 + WATCHDOG_GRACE_MS,
+      closesMs + 10_000 + 2 * WORKER_TICK_MS + WATCHDOG_GRACE_MS,
     );
+  });
+
+  it("bases a live-resolved round on the animation start the page already has", () => {
+    const startedAtMs = closesMs + 1_900;
+    expect(expectedPhaseEnd({ status: "resolved", closesAt: CLOSES_AT }, 10_000, startedAtMs)).toBe(
+      startedAtMs + 10_000 + WATCHDOG_GRACE_MS,
+    );
+  });
+
+  it("prefers settlesAt over the animation start", () => {
+    expect(
+      expectedPhaseEnd(
+        { status: "resolved", closesAt: CLOSES_AT, settlesAt: SETTLES_AT },
+        10_000,
+        closesMs,
+      ),
+    ).toBe(Date.parse(SETTLES_AT) + WATCHDOG_GRACE_MS);
   });
 
   it("expects nothing from a settled round or an unknown race duration", () => {
