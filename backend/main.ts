@@ -8,6 +8,7 @@ import { createPostgresPool, pingPostgres } from "./platform/postgres";
 import { createRedisClient, pingRedis } from "./platform/redis";
 import { run, type Stoppable } from "./platform/run";
 import { stubServices } from "./platform/services";
+import { createRedisRaceEventBus } from "./realtime/redis-race-events";
 import { postgresSeedPairService } from "./rng/postgres-seed-pair-service";
 import { postgresWalletService } from "./wallet/postgres-wallet-service";
 import { startWorker } from "./worker/main";
@@ -18,6 +19,9 @@ async function startApi(config: Config): Promise<Stoppable> {
   const pool = createPostgresPool(config, (error) => logger.error(error, "postgres pool error"));
   const redis = createRedisClient(config, (error) => logger.error(error, "redis error"));
   const db = createDatabase(pool);
+  const raceEvents = createRedisRaceEventBus(redis, {
+    onError: (error) => logger.error(error, "race event bus error"),
+  });
   const app = await buildApp({
     config,
     logger,
@@ -29,12 +33,14 @@ async function startApi(config: Config): Promise<Stoppable> {
       seedPairs: postgresSeedPairService,
       payments: createSimulatedPaymentProvider(postgresWalletService),
       tokens: createJwtTokenService({ secret: config.jwtSecret }),
+      raceEvents,
     },
   });
   await app.listen({ host: "0.0.0.0", port: config.port });
   return {
     stop: async () => {
       await app.close();
+      await raceEvents.close();
       redis.disconnect();
       // Kysely ends the pool; ending it again throws "Called end on pool more than once".
       await db.destroy();

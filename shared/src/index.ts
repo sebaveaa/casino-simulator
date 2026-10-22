@@ -1,5 +1,6 @@
 export * from "./api";
 export * from "./games/game";
+export * from "./games/races";
 export * from "./games/roulette";
 export * from "./health";
 export * from "./money";

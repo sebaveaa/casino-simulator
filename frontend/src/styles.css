@@ -1812,3 +1812,354 @@ main {
     transform: none;
   }
 }
+
+/* Races page: track and status on the left, the bet on the right. */
+.races {
+  --win: #0a7a3e;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 16px;
+}
+
+.races-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 24px;
+  min-height: 40px;
+}
+
+.races-head h1,
+.races-balance {
+  margin: 0;
+}
+
+.races-head h1 {
+  font-size: 1.6rem;
+}
+
+/* Discreet: a small pill that only shows while the live stream reconnects. */
+.races-connection {
+  margin: 0 0 0 auto;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.races-connection:empty {
+  display: none;
+}
+
+.races-connection:not(:empty) {
+  padding: 2px 10px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+}
+
+.races-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .races-main {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+
+.races-stage,
+.races-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.races-status {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 74px;
+  border-radius: var(--radius-md);
+}
+
+.races-phase {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.races-countdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.races-countdown-label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.races-clock {
+  padding: 2px 12px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* Outcome: winner emoji, then the winner and the player's line. */
+.races-outcome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-sm);
+  animation: roulette-result-in 400ms var(--ease-spring) both;
+}
+
+.races-outcome.is-win {
+  /* Not by color alone: a sun fill, a heavier frame and a green offset shadow. */
+  border-width: 5px;
+  background: var(--sun);
+  box-shadow: 6px 6px 0 var(--win);
+}
+
+.races-outcome-emoji {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--lilac);
+  font-size: 1.8rem;
+}
+
+.races-outcome-body {
+  min-width: 0;
+}
+
+.races-outcome-body p {
+  margin: 0;
+}
+
+.races-outcome-winner {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.races-outcome-line {
+  font-weight: 700;
+}
+
+.races-outcome.is-win .races-outcome-line {
+  /* Ink on the sun fill; the green on yellow was only about 3.5:1. */
+  color: var(--ink);
+}
+
+/* The track keeps its 2:1 scene ratio while PixiJS loads, and scales to its column. */
+.race-track {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+}
+
+.race-track canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.race-track-fallback {
+  margin: 0;
+  padding: 16px 16px 16px 2.5rem;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  font-weight: 700;
+}
+
+/* Bet: the summary, the animals as radio cards, the stake and Apostar. */
+.races-side .races-form,
+.races-bet-summary {
+  padding: 16px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--chalk);
+  box-shadow: var(--shadow-md);
+}
+
+.races-bet-summary {
+  margin: 0;
+  background: var(--sun);
+  font-weight: 800;
+}
+
+.races-next {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.races-animals {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.races-animals-title {
+  margin: 0;
+  font-weight: 800;
+}
+
+.races-animal {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 12px 4px 4px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--chalk);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.races-animal:hover:not(:has(input:disabled)) {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.races-animal:has(input:checked) {
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Selected: a check mark, so the choice does not rely on color alone. */
+.races-animal:has(input:checked)::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  font-weight: 800;
+  transform: translateY(-50%);
+}
+
+.races-animal:has(input:focus-visible) {
+  outline: 3px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.races-animal:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+/* Only the cards that were not chosen fade: the chosen one keeps its full contrast. */
+.races-animal:has(input:disabled):not(:has(input:checked)) {
+  opacity: 0.55;
+}
+
+.races-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.races-animal-emoji {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.races-animal-name {
+  font-weight: 800;
+}
+
+.races-animal-lane {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.races-animal:has(input:checked) .races-animal-lane {
+  visibility: hidden;
+}
+
+.races-stake-label {
+  font-weight: 700;
+}
+
+.races-stake-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.races-stake-row .wallet-input {
+  min-width: 0;
+}
+
+.races-stake-row .wallet-input:disabled {
+  opacity: 0.55;
+}
+
+.races-submit {
+  justify-content: center;
+  min-width: 8rem;
+  background: var(--sun);
+  font-size: 1.15rem;
+}
+
+.races-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.races-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.races-error {
+  margin: 8px 0 0;
+}
+
+.races-fairness-note {
+  margin: 6px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .races-outcome {
+    animation: none;
+  }
+
+  .races-animal {
+    transition: none;
+  }
+
+  .races-animal:hover:not(:has(input:disabled)) {
+    transform: none;
+  }
+}

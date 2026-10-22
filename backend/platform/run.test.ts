@@ -10,6 +10,11 @@ const baseConfig: Config = {
   port: 3000,
   allowedOrigins: ["http://localhost:5173"],
   processRole: "api",
+  raceWindowMs: 30_000,
+  raceDurationMs: 10_000,
+  raceIntermissionMs: 8000,
+  raceMinStake: 1n,
+  raceMaxStake: 1000n,
 };
 
 function starters() {

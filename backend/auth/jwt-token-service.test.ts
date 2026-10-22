@@ -88,7 +88,14 @@ describe("requireAuth with the JWT service", () => {
     const time = clock();
     const tokens = createJwtTokenService({ secret, expiresInSeconds: 60, now: time.now });
     const app = await buildApp({
-      config: { appEnv: "production", allowedOrigins: [] },
+      config: {
+        appEnv: "production",
+        allowedOrigins: [],
+        raceDurationMs: 10_000,
+        raceIntermissionMs: 8000,
+        raceMinStake: 1n,
+        raceMaxStake: 1000n,
+      },
       checks: { postgres: async () => true, redis: async () => true },
       db: {} as Db,
       services: { ...stubServices, tokens },

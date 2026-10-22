@@ -1,22 +1,42 @@
+import { MAX_MONEY } from "@casino/shared";
 import { z } from "zod";
 
-const configSchema = z.object({
-  DATABASE_URL: z.url(),
-  REDIS_URL: z.url(),
-  JWT_SECRET: z.string().min(32, "must be at least 32 characters"),
-  APP_ENV: z.enum(["development", "production"]),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  ALLOWED_ORIGINS: z
-    .string()
-    .transform((value) =>
-      value
-        .split(",")
-        .map((origin) => origin.trim())
-        .filter((origin) => origin.length > 0),
-    )
-    .pipe(z.array(z.string()).min(1, "must list at least one origin")),
-  PROCESS_ROLE: z.enum(["api", "worker"]).default("api"),
-});
+/** A positive whole number of stake units (minor units), kept as a bigint. */
+const stakeSchema = z.coerce
+  .bigint()
+  .min(1n, "must be at least 1")
+  .max(MAX_MONEY, "must fit in a bigint column");
+
+const seconds = z.coerce.number().int().min(1);
+const secondsOrZero = z.coerce.number().int().min(0);
+
+const configSchema = z
+  .object({
+    DATABASE_URL: z.url(),
+    REDIS_URL: z.url(),
+    JWT_SECRET: z.string().min(32, "must be at least 32 characters"),
+    APP_ENV: z.enum(["development", "production"]),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    ALLOWED_ORIGINS: z
+      .string()
+      .transform((value) =>
+        value
+          .split(",")
+          .map((origin) => origin.trim())
+          .filter((origin) => origin.length > 0),
+      )
+      .pipe(z.array(z.string()).min(1, "must list at least one origin")),
+    PROCESS_ROLE: z.enum(["api", "worker"]).default("api"),
+    RACE_BETTING_WINDOW_SECONDS: seconds.default(30),
+    RACE_DURATION_SECONDS: seconds.default(10),
+    RACE_INTERMISSION_SECONDS: secondsOrZero.default(8),
+    RACE_MIN_STAKE: stakeSchema.default(100n),
+    RACE_MAX_STAKE: stakeSchema.default(100000n),
+  })
+  .refine((env) => env.RACE_MIN_STAKE <= env.RACE_MAX_STAKE, {
+    path: ["RACE_MIN_STAKE"],
+    message: "must not be greater than RACE_MAX_STAKE",
+  });
 
 export type Config = {
   databaseUrl: string;
@@ -26,6 +46,14 @@ export type Config = {
   port: number;
   allowedOrigins: string[];
   processRole: "api" | "worker";
+  /** How long a race round accepts bets. */
+  raceWindowMs: number;
+  /** How long the race animation lasts. */
+  raceDurationMs: number;
+  /** Pause between a settled round and the opening of the next one (0 opens at once). */
+  raceIntermissionMs: number;
+  raceMinStake: bigint;
+  raceMaxStake: bigint;
 };
 
 /**
@@ -53,5 +81,10 @@ export function loadConfig(source: NodeJS.ProcessEnv): Config {
     port: env.PORT,
     allowedOrigins: env.ALLOWED_ORIGINS,
     processRole: env.PROCESS_ROLE,
+    raceWindowMs: env.RACE_BETTING_WINDOW_SECONDS * 1000,
+    raceDurationMs: env.RACE_DURATION_SECONDS * 1000,
+    raceIntermissionMs: env.RACE_INTERMISSION_SECONDS * 1000,
+    raceMinStake: env.RACE_MIN_STAKE,
+    raceMaxStake: env.RACE_MAX_STAKE,
   };
 }

@@ -30,6 +30,7 @@ export const games: GameEntry[] = [
     title: "Carreras de animales",
     description: "Elige un ganador y anímalo hasta la meta.",
     tone: "sun",
+    path: "/games/races",
   },
   { id: "slots", title: "Tragamonedas", description: "Haz girar los rodillos.", tone: "chalk" },
   {

@@ -49,10 +49,12 @@ describe("LobbyPage", () => {
     renderLobby();
     const list = screen.getByRole("list", { name: "Juegos" });
     const links = within(list).getAllByRole("link");
-    expect(links).toHaveLength(1);
-    expect(links[0]?.getAttribute("href")).toBe("/games/roulette");
-    expect(within(links[0] as HTMLElement).getByText("¡Jugar!")).toBeTruthy();
-    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(3);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/games/roulette",
+      "/games/races",
+    ]);
+    for (const link of links) expect(within(link).getByText("¡Jugar!")).toBeTruthy();
+    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(2);
   });
 
   it("shows today's pick with the Roulette link and the balance", async () => {

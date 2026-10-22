@@ -60,6 +60,10 @@ export interface GameRoundsTable {
   server_seed_hash: string;
   opens_at: Date;
   closes_at: Date;
+  /** Race outcome, set when the round is resolved. */
+  result: Json | null;
+  resolved_at: Date | null;
+  settled_at: Date | null;
   created_at: CreatedAt;
 }
 

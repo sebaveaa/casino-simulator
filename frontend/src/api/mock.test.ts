@@ -1,13 +1,22 @@
 import {
   authResponseSchema,
   balanceResponseSchema,
+  computeRoundOutcome,
+  createRng,
+  currentRaceResponseSchema,
   depositResponseSchema,
+  hashServerSeed,
   pocketColor,
+  type RaceEvent,
   type RouletteBetRequest,
+  raceBetResponseSchema,
+  racePayout,
+  raceResultSchema,
+  resolveRace,
   rouletteBetResponseSchema,
   transactionHistoryResponseSchema,
 } from "@casino/shared";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readJwtExpiry } from "../session/jwt";
 import { createMockApiClient } from "./mock";
 
@@ -211,5 +220,274 @@ describe("mock API client", () => {
     const api = createMockApiClient();
     for (let i = 1; i <= 3; i++) await api.deposit({ amount: "100" }, `key-0000000${i}`);
     expect((await api.listTransactions({ limit: 2 })).items).toHaveLength(2);
+  });
+});
+
+describe("mock API client races", () => {
+  const WINDOW = 30000;
+  const DURATION = 10000;
+  const INTERMISSION = 5000;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setup() {
+    const api = createMockApiClient({
+      race: { windowMs: WINDOW, durationMs: DURATION, intermissionMs: INTERMISSION },
+    });
+    const events: RaceEvent[] = [];
+    const unwatch = api.watchRaces((e) => events.push(e));
+    return { api, events, unwatch };
+  }
+
+  async function openRound(api: ReturnType<typeof createMockApiClient>) {
+    const current = await api.getCurrentRace();
+    if (!current.round) throw new Error("expected an open round");
+    return current.round;
+  }
+
+  /** Moves the clock and waits for the async hash/HMAC of the transition it triggers. */
+  async function step(api: ReturnType<typeof createMockApiClient>, ms: number) {
+    await vi.advanceTimersByTimeAsync(ms);
+    return api.getCurrentRace();
+  }
+
+  it("reports the stake limits and the race duration with the current race", async () => {
+    const { api, unwatch } = setup();
+    const current = await api.getCurrentRace();
+    expect(current.limits).toEqual({ minStake: "100", maxStake: "100000" });
+    expect(current.raceDurationMs).toBe(DURATION);
+    unwatch();
+  });
+
+  it("keeps a settled round current for 8 seconds by default before opening the next", async () => {
+    const api = createMockApiClient({ race: { windowMs: WINDOW, durationMs: DURATION } });
+    const round = await openRound(api);
+    await step(api, WINDOW);
+    await step(api, DURATION);
+    expect((await step(api, 7999)).round).toMatchObject({ id: round.id, status: "settled" });
+    const next = (await step(api, 1)).round;
+    expect(next?.status).toBe("open");
+    expect(next?.id).not.toBe(round.id);
+  });
+
+  it("does not start any timer until it is used", () => {
+    createMockApiClient();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("runs a full cycle and returns responses that satisfy the shared schemas", async () => {
+    const { api, events, unwatch } = setup();
+    const round = await openRound(api);
+    expect(round.status).toBe("open");
+    expect(currentRaceResponseSchema.safeParse(await api.getCurrentRace()).success).toBe(true);
+
+    const placed = await api.placeRaceBet(
+      { roundId: round.id, animal: 0, stake: "100" },
+      "key-r-0001",
+    );
+    expect(raceBetResponseSchema.safeParse(placed).success).toBe(true);
+    expect(placed.balance).toBe("99900");
+    expect((await api.getCurrentRace()).myBet).toEqual({ animal: 0, stake: "100", payout: null });
+
+    const resolved = (await step(api, WINDOW)).round;
+    expect(resolved?.status).toBe("resolved");
+    expect(raceResultSchema.safeParse(resolved?.result).success).toBe(true);
+    expect(resolved?.serverSeed).toBeTruthy();
+    // The bet is debited, not yet paid.
+    expect((await api.getBalance()).balance).toBe("99900");
+
+    const settled = await step(api, DURATION);
+    const winner = resolved?.result?.winner;
+    const expected = winner === 0 ? 99900n + racePayout(100n) : 99900n;
+    expect((await api.getBalance()).balance).toBe(expected.toString());
+    // Like the backend, the settled round stays current, with the payout, for the intermission.
+    expect(settled.round).toMatchObject({
+      id: round.id,
+      status: "settled",
+      serverSeed: resolved?.serverSeed,
+      result: resolved?.result,
+    });
+    expect(settled.myBet).toEqual({
+      animal: 0,
+      stake: "100",
+      payout: (winner === 0 ? racePayout(100n) : 0n).toString(),
+    });
+
+    // It is still current just before the intermission ends, and the next round opens right at it.
+    expect((await step(api, INTERMISSION - 1)).round).toMatchObject({
+      id: round.id,
+      status: "settled",
+    });
+    // Then the next round opens and the old bet is not carried over.
+    const next = await step(api, 1);
+    expect(next.round?.status).toBe("open");
+    expect(next.round?.id).not.toBe(round.id);
+    expect(next.myBet).toBeNull();
+
+    // Paid exactly once, even after more time passes.
+    await step(api, WINDOW);
+    await step(api, DURATION);
+    expect((await api.getBalance()).balance).toBe(expected.toString());
+
+    const own = events.filter((e) => ("roundId" in e ? e.roundId : e.round.id) === round.id);
+    expect(own.map((e) => e.type)).toEqual(["opened", "closed", "result", "settled"]);
+    const resultEvent = own.find((e) => e.type === "result");
+    expect(resultEvent).toMatchObject({
+      result: resolved?.result,
+      serverSeed: resolved?.serverSeed,
+    });
+    unwatch();
+  });
+
+  it("credits the winner exactly racePayout(stake) and not the loser", async () => {
+    for (const animal of [0, 1, 2, 3, 4]) {
+      const { api, events, unwatch } = setup();
+      const round = await openRound(api);
+      await api.placeRaceBet({ roundId: round.id, animal, stake: "1000" }, `key-r-000${animal}`);
+      await step(api, WINDOW);
+      await step(api, DURATION);
+      const result = events.find((e) => e.type === "result");
+      if (result?.type !== "result") throw new Error("no result");
+      const balance = BigInt((await api.getBalance()).balance);
+      const won = result.result.winner === animal;
+      expect(balance).toBe(won ? 99000n + racePayout(1000n) : 99000n);
+      const payouts = (await api.listTransactions()).items.filter((t) => t.type === "payout");
+      expect(payouts).toHaveLength(won ? 1 : 0);
+      unwatch();
+    }
+  });
+
+  it("refuses a second bet in the same round with a conflict", async () => {
+    const { api, unwatch } = setup();
+    const round = await openRound(api);
+    await api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100" }, "key-r-0020");
+    await expect(
+      api.placeRaceBet({ roundId: round.id, animal: 2, stake: "100" }, "key-r-0021"),
+    ).rejects.toMatchObject({ code: "conflict", status: 409 });
+    expect((await api.getBalance()).balance).toBe("99900");
+    unwatch();
+  });
+
+  it("refuses bets after the window, for an unknown round, and out-of-range values", async () => {
+    const { api, unwatch } = setup();
+    const round = await openRound(api);
+    await expect(
+      api.placeRaceBet({ roundId: crypto.randomUUID(), animal: 1, stake: "100" }, "key-r-0030"),
+    ).rejects.toMatchObject({ code: "invalid_request", status: 400 });
+    await expect(
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "0" }, "key-r-0031"),
+    ).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100001" }, "key-r-0032"),
+    ).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(
+      api.placeRaceBet({ roundId: round.id, animal: 5, stake: "100" }, "key-r-0033"),
+    ).rejects.toMatchObject({ code: "invalid_request" });
+    await step(api, WINDOW);
+    await expect(
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100" }, "key-r-0034"),
+    ).rejects.toMatchObject({ code: "invalid_request", status: 400 });
+    expect((await api.getBalance()).balance).toBe("100000");
+    unwatch();
+  });
+
+  it("refuses a bet above the balance", async () => {
+    const { api, unwatch } = setup();
+    const round = await openRound(api);
+    // Lose everything on roulette (all-in on red until broke), then try a valid stake.
+    for (let i = 0; i < 80 && BigInt((await api.getBalance()).balance) > 0n; i++) {
+      const stake = (await api.getBalance()).balance;
+      await api.placeRouletteBet(
+        { bets: [{ stake, selection: { type: "color", color: "red" } }] },
+        `key-r-broke-${i}`,
+      );
+    }
+    expect((await api.getBalance()).balance).toBe("0");
+    await expect(
+      api.placeRaceBet({ roundId: round.id, animal: 1, stake: "100" }, "key-r-0042"),
+    ).rejects.toMatchObject({ code: "insufficient_funds", status: 422 });
+    unwatch();
+  });
+
+  it("never exposes the seed or result while the round is open or closed", async () => {
+    const { api, events, unwatch } = setup();
+    const open = await api.getCurrentRace();
+    expect(open.round).not.toHaveProperty("serverSeed");
+    expect(open.round).not.toHaveProperty("result");
+    expect(open.round?.serverSeedHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(Date.parse(open.now)).not.toBeNaN();
+    await step(api, WINDOW);
+    const opened = events.find((e) => e.type === "opened");
+    const closed = events.find((e) => e.type === "closed");
+    if (opened?.type !== "opened") throw new Error("no opened event");
+    expect(opened.round.serverSeedHash).toBe(open.round?.serverSeedHash);
+    expect(opened.round).not.toHaveProperty("serverSeed");
+    expect(opened.round).not.toHaveProperty("result");
+    expect(closed).toEqual({ type: "closed", roundId: opened.round.id });
+    unwatch();
+  });
+
+  it("derives hash and result from the revealed seed like the backend", async () => {
+    const { api, unwatch } = setup();
+    const open = (await api.getCurrentRace()).round;
+    const resolved = (await step(api, WINDOW)).round;
+    if (!open || !resolved?.serverSeed || !resolved.result) throw new Error("not resolved");
+    expect(resolved.id).toBe(open.id);
+    expect(resolved.serverSeed).toMatch(/^[0-9a-f]{64}$/);
+    expect(await hashServerSeed(resolved.serverSeed)).toBe(open.serverSeedHash);
+    expect(resolved.serverSeedHash).toBe(open.serverSeedHash);
+    const rng = createRng(await computeRoundOutcome(resolved.serverSeed, resolved.id));
+    expect(resolveRace(rng)).toEqual(resolved.result);
+    unwatch();
+  });
+
+  it("keeps the settled round current with a zero payout for a loser", async () => {
+    const { api, events, unwatch } = setup();
+    const round = await openRound(api);
+    // Bet on a different animal in each run until one loses; with 5 animals one of them always does.
+    const peek = await step(api, 0);
+    expect(peek.round?.id).toBe(round.id);
+    await api.placeRaceBet({ roundId: round.id, animal: 0, stake: "100" }, "key-r-0050");
+    await step(api, WINDOW);
+    const settled = await step(api, DURATION);
+    const result = events.find((e) => e.type === "result");
+    if (result?.type !== "result") throw new Error("no result");
+    expect(settled.round?.status).toBe("settled");
+    expect(settled.myBet?.payout).toBe(
+      result.result.winner === 0 ? racePayout(100n).toString() : "0",
+    );
+    unwatch();
+  });
+
+  it("delivers nothing to an unsubscribed listener", async () => {
+    const { api, events, unwatch } = setup();
+    await openRound(api);
+    const count = events.length;
+    unwatch();
+    await step(api, WINDOW);
+    await step(api, DURATION);
+    expect(events).toHaveLength(count);
+  });
+
+  it("reports connected on watch", () => {
+    const api = createMockApiClient();
+    const statuses: string[] = [];
+    const unwatch = api.watchRaces(
+      () => {},
+      (s) => statuses.push(s),
+    );
+    expect(statuses).toEqual(["connected"]);
+    unwatch();
+  });
+
+  it("delays the first round by startDelayMs", async () => {
+    const api = createMockApiClient({ race: { startDelayMs: 5000, windowMs: WINDOW } });
+    expect((await api.getCurrentRace()).round).toBeNull();
+    expect((await step(api, 5000)).round?.status).toBe("open");
   });
 });
