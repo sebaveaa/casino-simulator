@@ -1,5 +1,6 @@
 import { CHICKEN_ROAD_MULTIPLIERS, LANE_COUNT } from "@casino/shared";
-import { CheckArt, ChickenArt } from "./art";
+import type { CSSProperties } from "react";
+import { CarArt, CheckArt, ChickenArt } from "./art";
 import { formatMultiplier } from "./format";
 import type { ChickenRoadView } from "./useChickenRoad";
 
@@ -21,20 +22,35 @@ function laneState(view: ChickenRoadView, lane: number): LaneState {
   return view.kind === "playing" && lane === crossed + 1 ? "next" : "ahead";
 }
 
+// Cars sit at different heights and cycle tomato, chalk and sun (the token values, as in the SVG).
+const CAR_TOPS = [36, 214, 82, 246, 54, 190];
+const CAR_COLORS = ["#ff5a36", "#fff", "#ffc933"];
+
 /**
- * The road: start, six lanes with their multipliers, and the finish. It only draws the state the
- * server returned; it never decides anything.
+ * Horizontal center of a position, over the grid `96px repeat(6, 1fr) 84px`. Inside
+ * `translateX`, percentages are of the full-width mover, so they match the grid's width.
+ */
+function chickenX(position: number): string {
+  if (position === 0) return "48px";
+  if (position === LANE_COUNT + 1) return "calc(100% - 42px)";
+  return `calc(96px + ${position - 0.5} * (100% - 180px) / ${LANE_COUNT})`;
+}
+
+/**
+ * The road: start, six lanes with their multipliers and cars, and the finish. It only draws the
+ * state the server returned. The chicken jumps with a transform; on a hit the car drops onto it.
  */
 export function Road({ view }: { view: ChickenRoadView }) {
   const position = chickenPosition(view);
-  const chicken = <ChickenArt className="cr-chicken" />;
+  const hitLane = view.kind === "over" && view.game.status === "lost" ? view.game.hitLane : null;
+  const moverStyle: CSSProperties = { transform: `translateX(${chickenX(position)})` };
+
   return (
     <div className="cr-road-card">
       <div className="cr-road-scroll">
         <div className="cr-road">
           <div className="cr-start">
             <span className="cr-road-label">Salida</span>
-            {position === 0 && chicken}
           </div>
           {CHICKEN_ROAD_MULTIPLIERS.map((multiplier, index) => {
             const lane = index + 1;
@@ -42,7 +58,24 @@ export function Road({ view }: { view: ChickenRoadView }) {
             return (
               <div key={lane} className={`cr-lane is-${state}`} data-lane={lane} data-state={state}>
                 <span className={`cr-mult is-${state}`}>{formatMultiplier(multiplier)}</span>
-                {position === lane && chicken}
+                {lane === hitLane ? (
+                  // The car that hit the chicken drops onto it, with the ¡PAF! sticker.
+                  <span className="cr-hit" data-testid="cr-hit">
+                    <span className="cr-car-slot cr-hit-car">
+                      <CarArt className="cr-car-art" color={CAR_COLORS[index % 3] ?? "#fff"} />
+                    </span>
+                    <span className="cr-paf" aria-hidden="true">
+                      ¡PAF!
+                    </span>
+                  </span>
+                ) : (
+                  // Lanes not crossed yet have traffic.
+                  state !== "crossed" && (
+                    <span className="cr-car-slot" style={{ top: CAR_TOPS[index] }}>
+                      <CarArt className="cr-car-art" color={CAR_COLORS[index % 3] ?? "#fff"} />
+                    </span>
+                  )
+                )}
                 {state === "crossed" && (
                   <span className="cr-check" role="img" aria-label="Carril cruzado">
                     <CheckArt />
@@ -53,7 +86,15 @@ export function Road({ view }: { view: ChickenRoadView }) {
           })}
           <div className="cr-finish">
             <span className="cr-road-label cr-finish-label">Meta</span>
-            {position === LANE_COUNT + 1 && chicken}
+          </div>
+
+          <div className="cr-chicken-track" aria-hidden="true">
+            <div className="cr-chicken-mover" style={moverStyle} data-pos={position}>
+              {/* A new key per position replays the hop each time the chicken moves. */}
+              <div key={position} className={hitLane === null ? "cr-chicken" : "cr-chicken is-hit"}>
+                <ChickenArt className="cr-chicken-art" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

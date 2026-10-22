@@ -24,6 +24,48 @@ export function ChickenArt({ className }: { className?: string }) {
   );
 }
 
+/** A car seen from above (32×52), from DISENO-MINIJUEGOS §3; the color fills the body. */
+export function CarArt({ color, className }: { color: string; className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 52" aria-hidden="true">
+      <rect x="1" y="10" width="5" height="10" rx="2" fill="#141414" />
+      <rect x="26" y="10" width="5" height="10" rx="2" fill="#141414" />
+      <rect x="1" y="34" width="5" height="10" rx="2" fill="#141414" />
+      <rect x="26" y="34" width="5" height="10" rx="2" fill="#141414" />
+      <rect
+        x="4"
+        y="3"
+        width="24"
+        height="46"
+        rx="8"
+        fill={color}
+        stroke="#141414"
+        strokeWidth="3"
+      />
+      <rect
+        x="8"
+        y="12"
+        width="16"
+        height="9"
+        rx="2"
+        fill="#fff"
+        stroke="#141414"
+        strokeWidth="2"
+      />
+      <rect
+        x="8"
+        y="33"
+        width="16"
+        height="7"
+        rx="2"
+        fill="#fff"
+        stroke="#141414"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
 export function CheckArt() {
   return (
     <svg
