@@ -18,7 +18,14 @@ type Bigint = ColumnType<bigint, bigint, bigint>;
 export type UserRole = "player" | "admin";
 export type WalletKind = "player" | "house" | "issuance";
 export type RoundStatus = "open" | "closed" | "resolved" | "settled";
-export type BetGame = "roulette" | "slots" | "races" | "blackjack";
+export type BetGame =
+  | "roulette"
+  | "slots"
+  | "races"
+  | "blackjack"
+  | "chicken-road"
+  | "dino-crash"
+  | "aviator";
 export type BetStatus = "pending" | "in_progress" | "settled";
 export type TransactionType = "deposit" | "withdrawal" | "bet" | "payout";
 
@@ -74,7 +81,7 @@ export interface BetsTable {
   nonce: number | null;
   stake: Bigint;
   selection: Json;
-  /** Blackjack decisions. */
+  /** Blackjack decisions; Chicken Road lanes attempted. */
   actions: Json | null;
   result: Json | null;
   payout: ColumnType<bigint | null, bigint | null | undefined, bigint | null>;
