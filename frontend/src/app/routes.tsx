@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { LobbyPage } from "../pages/LobbyPage";
 import { LoginPage } from "../pages/LoginPage";
+import { MiniGamesPage } from "../pages/MiniGamesPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { RoulettePage } from "../pages/RoulettePage";
@@ -22,6 +23,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: "wallet", element: <WalletPage /> },
           { path: "games/roulette", element: <RoulettePage /> },
+          { path: "games/mini", element: <MiniGamesPage /> },
         ],
       },
       { path: "*", element: <NotFoundPage /> },

@@ -5,15 +5,11 @@ import { GameArt } from "./GameIcons";
 afterEach(cleanup);
 
 describe("GameArt", () => {
-  it("starts and ends every slot reel on a 7, so a roll loops back to the resting icon", () => {
-    const { container } = render(<GameArt id="slots" />);
-    const reels = [...container.querySelectorAll(".art-reel")];
-    expect(reels).toHaveLength(3);
-    for (const reel of reels) {
-      const symbols = [...reel.querySelectorAll("text")].map((text) => text.textContent);
-      expect(symbols.at(0)).toBe("7");
-      expect(symbols.at(-1)).toBe("7");
-    }
+  it("draws the mini games controller with its bolt, hidden from assistive tech", () => {
+    const { container } = render(<GameArt id="mini-games" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelector(".art-bolt")).not.toBeNull();
   });
 
   it("draws the races flag with three wind streaks, visible at rest", () => {
