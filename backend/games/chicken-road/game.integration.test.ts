@@ -397,7 +397,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Chicken Road games", () => {
       const payout = chickenRoadPayout(STAKE, 2);
       expect(await wallet.getBalance(db, userId)).toBe(before + payout);
       expect(await getCurrentChickenRoadGame(db, userId)).toBeNull();
-      const [latest] = await listChickenRoadHistory(db, userId, 5);
+      // Looked up by id: `age` moved its start back, so games `startWithRoad` played out earlier
+      // now sort as newer.
+      const history = await listChickenRoadHistory(db, userId, 20);
+      const latest = history.find((g) => g.gameId === game.gameId);
       expect(latest).toMatchObject({
         status: "cashed_out",
         gameId: game.gameId,

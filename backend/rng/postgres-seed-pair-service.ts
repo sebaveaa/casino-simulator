@@ -107,6 +107,18 @@ export const postgresSeedPairService: SeedPairService = {
   async rotate(db, userId, clientSeed) {
     const chosen = clientSeed === undefined ? undefined : validateClientSeed(clientSeed);
     const pair = await lockActive(db, userId);
+    // Revealing the server seed of a game still in progress (a Chicken Road road) would tell the
+    // player its outcome. `draw` takes the same users -> seed_pairs locks, so a game started
+    // concurrently is either committed and seen here, or drawn from the new pair.
+    const inProgress = await db
+      .selectFrom("bets")
+      .select("id")
+      .where("seed_pair_id", "=", pair.id)
+      .where("status", "=", "in_progress")
+      .executeTakeFirst();
+    if (inProgress) {
+      throw new AppError("conflict", "Finish the game in progress before changing the seeds");
+    }
     const revealed = await db
       .updateTable("seed_pairs")
       .set({ revealed_at: new Date() })
