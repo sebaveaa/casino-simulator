@@ -239,4 +239,14 @@ describe("mock API client: Chicken Road", () => {
       });
     }
   });
+
+  it("follows the fixed roads given for tests, in order", async () => {
+    const api = createMockApiClient({ chickenRoads: [2, null] });
+    const first = await start(api);
+    const lost = await stepTo(api, first.game.gameId, LANE_COUNT);
+    expect(lost.game).toMatchObject({ status: "lost", hitLane: 2 });
+    const second = await start(api);
+    const goal = await stepTo(api, second.game.gameId, LANE_COUNT);
+    expect(goal.game.status).toBe("completed");
+  });
 });
