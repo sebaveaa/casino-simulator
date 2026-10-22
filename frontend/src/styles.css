@@ -2067,3 +2067,369 @@ main {
     transform: none;
   }
 }
+
+/* Cruza la Calle (Chicken Road), DISENO-MINIJUEGOS §3. The road greys #2f2f33 and #4d4a57 are the
+   only colors outside the tokens. Animations, cars, the hit state and the history come with the
+   road visuals. */
+.chicken-road {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cr-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.cr-title-row h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.cr-pill {
+  padding: 2px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.cr-top-sticker {
+  padding: 4px 12px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+  transform: rotate(-3deg);
+}
+
+.cr-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.cr-road-area {
+  flex: 999 1 560px;
+  min-width: 0;
+}
+
+.cr-panel {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+}
+
+.cr-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cr-panel p {
+  margin: 0;
+}
+
+/* Only the road scrolls sideways; the page never does. */
+.cr-road-card {
+  overflow: hidden;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+}
+
+.cr-road-scroll {
+  overflow-x: auto;
+}
+
+.cr-road {
+  display: grid;
+  grid-template-columns: 96px repeat(6, minmax(72px, 1fr)) 84px;
+  min-width: 620px;
+  height: 360px;
+}
+
+.cr-start,
+.cr-lane,
+.cr-finish {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 12px;
+}
+
+.cr-start {
+  border-right: var(--outline);
+  background: var(--lilac);
+}
+
+.cr-lane {
+  border-right: 3px dashed var(--sun);
+  background: #2f2f33;
+}
+
+.cr-lane.is-crossed {
+  background: #4d4a57;
+}
+
+.cr-lane[data-lane="6"] {
+  border-right: var(--outline);
+}
+
+.cr-finish {
+  background: repeating-conic-gradient(var(--ink) 0 25%, var(--chalk) 0 50%) 0 0 / 20px 20px;
+}
+
+.cr-road-label {
+  padding: 2px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.cr-mult {
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-family: var(--font-amount);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.cr-mult.is-crossed {
+  background: var(--sun);
+}
+
+.cr-mult.is-next {
+  background: var(--tomato);
+}
+
+.cr-check {
+  position: absolute;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sun);
+}
+
+.cr-chicken {
+  position: absolute;
+  top: 148px;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  margin-left: -28px;
+}
+
+.cr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cr-field-label {
+  font-weight: 800;
+}
+
+.cr-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.cr-stake-input {
+  width: 8ch;
+  min-height: 48px;
+  padding: 0 12px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  font-family: var(--font-amount);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.cr-help,
+.cr-note,
+.cr-muted,
+.cr-progress {
+  color: var(--muted);
+}
+
+.cr-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.cr-quick-button {
+  min-height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--chalk);
+  font-family: var(--font-amount);
+  font-weight: 700;
+}
+
+.cr-quick-button.is-selected {
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+}
+
+.cr-primary,
+.cr-cashout {
+  justify-content: center;
+  width: 100%;
+}
+
+.cr-cashout {
+  background: var(--sun);
+}
+
+.cr-panel .button:disabled,
+.cr-quick-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.cr-subtitle {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.cr-paytable-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.cr-paytable-item {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+}
+
+.cr-paytable-item dd {
+  margin: 0;
+}
+
+.cr-big-mult {
+  font-size: 3.25rem;
+  line-height: 1;
+}
+
+.cr-prize {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  font-weight: 700;
+}
+
+.cr-dashed {
+  padding: 10px 14px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-align: center;
+}
+
+.cr-result-sticker {
+  align-self: flex-start;
+  padding: 6px 16px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  font-size: 1.4rem;
+  font-weight: 800;
+  transform: rotate(-3deg);
+}
+
+.cr-result-sticker.is-lost {
+  background: var(--tomato);
+}
+
+.cr-result-sticker.is-won {
+  background: var(--sun);
+}
+
+.cr-big-prize {
+  font-size: 2.25rem;
+}
+
+.cr-fair {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--ink);
+}
+
+.cr-fair-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.cr-fair-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cr-hash {
+  font-family: var(--font-amount);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.cr-fair-details summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.cr-fair-details dl {
+  margin: 0;
+}
+
+.cr-fair-details dd {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}

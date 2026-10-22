@@ -2,11 +2,11 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/46
 Branches (stacked):
-- PR A: `feat/46-chicken-road-ui`, from `feat/45-chicken-road-routes` at 72afb43
+- PR A: `feat/46-chicken-road-ui`, from `feat/45-chicken-road-routes` at 72afb43 (committed as e6b78bb)
 - PR B: `feat/46-chicken-road-page`, from A
 - PR C: `feat/46-chicken-road-road`, from B
 
-Status: PR A implemented, commit pending (Juan); PR B and C not started
+Status: PR B implemented, commit pending (Juan); PR C not started
 
 ## Objective
 
@@ -54,9 +54,9 @@ PR A:
 
 PR B:
 
-- [ ] T4 Route, `ChickenRoadPage`, `useChickenRoad` (load, actions, pending, balance, seed refresh), `format.ts` with tests (BigInt money, multipliers).
-- [ ] T5 Panel states (Apuesta, En juego, Atropellado, Cobrado, Meta), the Partida verificable block, and the plain road.
-- [ ] T6 Error mapping and 409 resync; page tests. PR B close-out.
+- [x] T4 Route, `ChickenRoadPage`, `useChickenRoad` (load, actions, pending, balance, seed refresh), `format.ts` with tests (BigInt money, multipliers).
+- [x] T5 Panel states (Apuesta, En juego, Atropellado, Cobrado, Meta), the Partida verificable block, and the plain road.
+- [x] T6 Error mapping and 409 resync; page tests. PR B close-out.
 
 PR C:
 
@@ -138,3 +138,47 @@ Juan makes the commits, pushes, branches, and opens the PRs: "Part of #46" on A 
     - backend: 182 of 183, 0 skipped. The one failure is roulette's "keeps the ledger consistent over wins and losses…", a 5 s timeout under full-suite load; the file passes alone (12/12). Backend is untouched;
     - frontend: 170 of 172. The two failures are 5 s timeouts in `RoulettePage.test.tsx`; the timeouts move between different tests from run to run, alone too (one run 25/25, others 1–2 timeouts). Those tests do not call the new methods.
   - All new tests pass: http 14/14, Chicken Road mock 11/11.
+- PR A committed by Juan (e6b78bb). Branch `feat/46-chicken-road-page` created from it.
+- T4 done.
+  - Route `games/mini/chicken-road` inside `RequireSession`.
+  - `ChickenRoadPage`: back link `Minijuegos`, the title row, the `Carretera` section and the `Tu partida` aside.
+  - `useChickenRoad`:
+    - loads current, history and seed pair, and restores a game in progress;
+    - start, step, cash out and play again;
+    - one pending request at a time, guarded by a ref as well as state, so a double click in one frame sends once; `pending` is cleared in `finally`;
+    - the roulette Idempotency-Key pattern, keyed by stake;
+    - `applyBalance` + `refreshBalance` after every answer;
+    - history and seed pair refetched after a game ends.
+  - `format.ts`: `formatMultiplier` (integers only), `credits` (roulette's `shortCredits`), BigInt `gainOf` and `wouldHaveWon`, and `stakeFromInput` (10–500 in steps of 10).
+  - `format.test.ts`: the gain is exact past 2^53, where Number gives 16 instead of 17; the floored "Habrías cobrado".
+  - Roulette's error messages moved to `pages/betErrorMessage.ts`, now shared by both pages, with no change in behavior.
+  - The mock gains `chickenRoads`, fixed hit lanes for tests, with its own test.
+- T5 done.
+  - `BetPanel`, `PlayingPanel`, `ResultPanel` and `FairnessBlock`, with the texts verbatim from DISENO §3.
+  - At 0 lanes the panel shows "1,00x" and the stake as the possible prize.
+  - `Road` (plain): Salida, six lanes with sun/tomato/chalk multiplier pills, the `Carril cruzado` badges, the chicken at start, lane or finish, and the checkered Meta.
+  - Base CSS (layout, panel, grid with `min-width: 620px` inside `overflow-x: auto`); the only colors outside the tokens are `#2f2f33` and `#4d4a57`.
+- T6 done.
+  - Error mapping with the approved texts.
+  - A 409 on start: restore the current game, or "Esa partida ya terminó."
+  - A 409 on step or cash out: a) restore at the real lane; b) the real final panel from history (limit 20); c) "Tu partida expiró y se devolvió tu apuesta."
+  - `ChickenRoadPage.test.tsx` (21 tests) covers:
+    - the five states and their texts;
+    - start → step → cash out with the multiplier, prize and header balance;
+    - a hit on lane 1 without "Habrías cobrado", a hit on lane 3 with it;
+    - Meta;
+    - no Retirar before lane 1;
+    - pending locks, with a double click sending once;
+    - restore on load;
+    - the next nonce after a game;
+    - the amount bounds and quick buttons;
+    - the login redirect;
+    - every error row, with a), b) for lost, cashed out and goal, and c).
+  - Waits in that file allow 4 s, and its tests 15 s: each one plays a whole game through the UI, and the 1 s default failed once under full-suite load.
+- PR B close-out.
+  - `npm run lint`: clean (187 files).
+  - `npm run typecheck`: clean.
+  - Full `npm test` with `TEST_DATABASE_URL`, run twice:
+    - shared: 158/158;
+    - backend: 182/183, 0 skipped (all 60 integration tests ran). The one failure is the known roulette integration timeout, which passes alone;
+    - frontend: 199/200 and 197/200. Every new test passed in both runs. The failures are `RoulettePage.test.tsx` 5 s timeouts, and that file passes alone (25/25).

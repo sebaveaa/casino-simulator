@@ -14,6 +14,7 @@ import {
   useBalanceAmount,
   useRefreshBalance,
 } from "../app/useBalance";
+import { betErrorMessage } from "./betErrorMessage";
 import {
   betsFromResponse,
   type Chip,
@@ -35,16 +36,6 @@ import { RouletteWheel } from "./roulette/RouletteWheel";
 import { SpinResult } from "./roulette/SpinResult";
 import { SpinSummary } from "./roulette/SpinSummary";
 import { TableControls } from "./roulette/TableControls";
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.code === "insufficient_funds") return "Saldo insuficiente.";
-    if (error.code === "network") return "No hay conexión con el servidor. Intente de nuevo.";
-    if (error.code === "unauthorized") return "Inicie sesión para continuar.";
-    if (error.code === "invalid_request") return "La apuesta no es válida.";
-  }
-  return "Ocurrió un error inesperado. Intente de nuevo.";
-}
 
 /** A spin the server already settled, with the bets it was made of. */
 type Round = { response: RouletteBetResponse; bets: RouletteBet[] };
@@ -131,7 +122,7 @@ export function RoulettePage() {
       setSpinId((id) => id + 1);
     } catch (caught) {
       if (!(caught instanceof ApiError && caught.code === "network")) pendingKey.current = null;
-      setError(errorMessage(caught));
+      setError(betErrorMessage(caught));
       setPhase("idle");
     }
   }
