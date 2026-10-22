@@ -2069,8 +2069,7 @@ main {
 }
 
 /* Cruza la Calle (Chicken Road), DISENO-MINIJUEGOS §3. The road greys #2f2f33 and #4d4a57 are the
-   only colors outside the tokens. Animations, cars, the hit state and the history come with the
-   road visuals. */
+   only colors outside the tokens. */
 .chicken-road {
   display: flex;
   flex-direction: column;
@@ -2158,6 +2157,7 @@ main {
 }
 
 .cr-road {
+  position: relative;
   display: grid;
   grid-template-columns: 96px repeat(6, minmax(72px, 1fr)) 84px;
   min-width: 620px;
@@ -2235,13 +2235,122 @@ main {
   background: var(--sun);
 }
 
+/* Traffic in the lanes not crossed yet; the hit car drops onto the chicken. */
+.cr-car-slot {
+  position: absolute;
+  left: 50%;
+  width: 32px;
+  height: 52px;
+  margin-left: -16px;
+}
+
+.cr-car-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cr-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.cr-hit-car {
+  top: 126px;
+  transform: rotate(-12deg);
+  animation: cr-car-drop 450ms var(--ease-spring) both;
+}
+
+.cr-paf {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  padding: 2px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--tomato);
+  box-shadow: var(--shadow-sm);
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%) rotate(-10deg);
+  animation: cr-paf-pop 320ms var(--ease-spring) 200ms both;
+}
+
+@keyframes cr-car-drop {
+  from {
+    transform: translateY(-180px) rotate(-12deg);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) rotate(-12deg);
+    opacity: 1;
+  }
+}
+
+@keyframes cr-paf-pop {
+  from {
+    transform: translateX(-50%) rotate(-10deg) scale(0);
+  }
+  to {
+    transform: translateX(-50%) rotate(-10deg) scale(1);
+  }
+}
+
+/* The chicken rides a full-width mover, so translateX percentages are of the road's width. */
+/* Clipped: the shifted mover reaches past the road's edge and would add a scrollbar. */
+.cr-chicken-track {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cr-chicken-mover {
+  position: absolute;
+  inset: 0;
+  transition: transform 400ms var(--ease-spring);
+}
+
 .cr-chicken {
   position: absolute;
   top: 148px;
-  left: 50%;
+  left: 0;
   width: 56px;
   height: 56px;
   margin-left: -28px;
+  animation: cr-hop 400ms var(--ease-spring);
+}
+
+.cr-chicken-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cr-chicken.is-hit {
+  transform: rotate(84deg);
+  animation: cr-knocked 300ms ease-out 150ms both;
+}
+
+@keyframes cr-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-26px);
+  }
+}
+
+@keyframes cr-knocked {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(84deg);
+  }
 }
 
 .cr-field {
@@ -2304,6 +2413,8 @@ main {
 .cr-cashout {
   justify-content: center;
   width: 100%;
+  padding: 0 12px;
+  text-align: center;
 }
 
 .cr-cashout {
@@ -2357,6 +2468,10 @@ main {
   border-radius: var(--radius-sm);
   background: var(--lilac);
   font-weight: 700;
+}
+
+.cr-prize strong {
+  white-space: nowrap;
 }
 
 .cr-dashed {
@@ -2432,4 +2547,56 @@ main {
 .cr-fair-details dd {
   margin: 0 0 6px;
   overflow-wrap: anywhere;
+}
+
+.cr-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.cr-history-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.cr-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-history-pill {
+  padding: 2px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+.cr-history-pill.is-win {
+  background: var(--sun);
+  font-family: var(--font-amount);
+}
+
+.cr-history-pill.is-lost {
+  background: var(--tomato);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-chicken,
+  .cr-chicken.is-hit,
+  .cr-hit-car,
+  .cr-paf,
+  .cr-top-sticker {
+    animation: none;
+  }
+
+  .cr-chicken-mover {
+    transition: none;
+  }
 }
