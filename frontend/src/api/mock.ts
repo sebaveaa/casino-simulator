@@ -129,12 +129,16 @@ function chickenView(game: MockChickenGame): ChickenRoadGame {
  * over one fixed mock seed pair, replayed starts and steps, a single payout, and lane 6 paid
  * automatically. Unlike the backend, it has no abandonment timer, and roulette spins do not
  * advance the seed pair's nonce.
+ *
+ * `chickenRoads` lets tests fix the road: the hit lane (or `null` for none) of each next game, in
+ * order. Once it runs out, the seed decides again.
  */
 export function createMockApiClient(
-  options: { delayMs?: number; startingBalance?: bigint } = {},
+  options: { delayMs?: number; startingBalance?: bigint; chickenRoads?: (number | null)[] } = {},
 ): ApiClient {
   const delayMs = options.delayMs ?? 0;
   let balance = options.startingBalance ?? STARTING_BALANCE;
+  const fixedRoads = [...(options.chickenRoads ?? [])];
   const transactions: Transaction[] = [];
   const deposits = new Map<string, DepositResponse>();
   const bets = new Map<string, { request: RouletteBetRequest; response: RouletteBetResponse }>();
@@ -344,7 +348,7 @@ export function createMockApiClient(
           clientSeed: MOCK_CLIENT_SEED,
           nonce,
         },
-        hitLane: road.hitLane,
+        hitLane: fixedRoads.length > 0 ? (fixedRoads.shift() ?? null) : road.hitLane,
         lanes: 0,
         payout: null,
       };
