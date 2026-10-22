@@ -12,6 +12,11 @@ export const apiPaths = {
   seedPairClientSeed: "/rng/seed-pair/client-seed",
   seedPairRotate: "/rng/seed-pair/rotate",
   rouletteBets: "/games/roulette/bets",
+  /** POST starts a game; GET lists the latest finished ones (`?limit=`). */
+  chickenRoadGames: "/games/chicken-road/games",
+  chickenRoadCurrent: "/games/chicken-road/games/current",
+  chickenRoadSteps: "/games/chicken-road/games/current/steps",
+  chickenRoadCashout: "/games/chicken-road/games/current/cashout",
 } as const;
 
 export type ApiPath = (typeof apiPaths)[keyof typeof apiPaths];
