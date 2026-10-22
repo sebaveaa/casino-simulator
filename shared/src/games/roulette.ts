@@ -58,8 +58,11 @@ function wins(selection: RouletteSelection, pocket: number): boolean {
   }
 }
 
-/** Roulette rules (README §4.1). Pure, so the browser verifier runs this exact code. */
-export const roulette: Game<RouletteBet, RouletteResult> = {
+/**
+ * Roulette rules (README §4.1). Pure, so the browser verifier runs this exact code. The id keeps
+ * its literal type, so the backend can store it where only the games it accepts fit.
+ */
+export const roulette: Game<RouletteBet, RouletteResult> & { readonly id: "roulette" } = {
   id: "roulette",
 
   validateBet(bet) {

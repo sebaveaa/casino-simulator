@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * What the lobby draws: the games, minus slots (replaced by the mini games hub, which is a menu,
  * not a game that records bets).
  */
-export type GameArtId = Exclude<GameId, "slots"> | "mini-games";
+export type GameArtId = Exclude<GameId, "slots" | "chicken-road"> | "mini-games";
 
 /** Wind around the races flag: above its top edge, beside its flying edge, and a curl below. */
 const windStreaks = ["M22 4.5h18", "M50.5 21h8", "M24 38h16a4 4 0 1 1 -4 4"];

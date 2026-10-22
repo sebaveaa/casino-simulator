@@ -1,4 +1,5 @@
 export * from "./api";
+export * from "./games/chicken-road";
 export * from "./games/game";
 export * from "./games/roulette";
 export * from "./health";
