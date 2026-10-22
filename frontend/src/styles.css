@@ -358,14 +358,14 @@ main {
 
 /*
  * Each icon idles with its own motion and livens up while its card is hovered or focused:
- * the wheel spins faster, the flag flaps, the reels roll once and the card flips once.
+ * the wheel spins faster, the flag flaps, the bolt shakes and the card flips once.
  * Coming-soon cards animate too; only playable cards lift.
  */
 .game-art {
   display: flex;
 }
 
-.game-art :is(.art-wheel, .art-wheel-boost, .art-card) {
+.game-art :is(.art-wheel, .art-wheel-boost, .art-card, .art-bolt) {
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -402,17 +402,8 @@ main {
   animation-delay: -1.7s;
 }
 
-.game-art .art-reel {
-  --reel-delay: 0s;
-  animation: reel-roll 5s ease-out var(--reel-delay) infinite;
-}
-
-.game-art .art-reel:nth-child(2) {
-  --reel-delay: 0.2s;
-}
-
-.game-art .art-reel:nth-child(3) {
-  --reel-delay: 0.4s;
+.game-art .art-bolt {
+  animation: bolt-blink 2.4s linear infinite;
 }
 
 .game-art .art-card {
@@ -431,8 +422,8 @@ main {
   animation-duration: 0.7s;
 }
 
-:is(.game-item:hover, .game-link:focus-visible) .art-reel {
-  animation: reel-spin 0.3s linear var(--reel-delay) 4;
+:is(.game-item:hover, .game-link:focus-visible) .art-bolt {
+  animation: bolt-shake 0.5s ease-in-out infinite;
 }
 
 :is(.game-item:hover, .game-link:focus-visible) .art-card {
@@ -471,20 +462,29 @@ main {
   }
 }
 
-/* A strip moves three symbols (108 viewBox units) and lands on its 7 again. */
-@keyframes reel-roll {
-  0% {
-    transform: none;
-  }
-  20%,
+/* The bolt flickers once near the end of each beat. */
+@keyframes bolt-blink {
+  0%,
+  70%,
+  90%,
   100% {
-    transform: translateY(108px);
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.25;
   }
 }
 
-@keyframes reel-spin {
-  to {
-    transform: translateY(108px);
+@keyframes bolt-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  25% {
+    transform: rotate(-12deg) translateX(-1px);
+  }
+  75% {
+    transform: rotate(12deg) translateX(1px);
   }
 }
 
@@ -539,6 +539,31 @@ main {
   25%,
   74.9% {
     opacity: 1;
+  }
+}
+
+/* "Nuevo" tag at the lower left of a circle; it breathes gently. */
+.game-new {
+  position: absolute;
+  bottom: 4px;
+  left: -14px;
+  padding: 3px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--tomato);
+  font-size: 0.8rem;
+  font-weight: 800;
+  transform: rotate(-8deg);
+  animation: new-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes new-pulse {
+  0%,
+  100% {
+    transform: rotate(-8deg) scale(1);
+  }
+  50% {
+    transform: rotate(-8deg) scale(1.08);
   }
 }
 
@@ -787,6 +812,225 @@ main {
   }
 }
 
+/* Mini games hub: back link, the lobby's hero, and one card per mini game. */
+.mini-games {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* min() keeps one column inside very narrow screens; wider ones get the 280px tracks. */
+.mini-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mini-list > li {
+  display: flex;
+}
+
+.mini-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+  transition:
+    transform 220ms var(--ease-spring),
+    box-shadow 220ms var(--ease-spring);
+}
+
+/* Only playable cards lift; coming-soon cards stay put. */
+.mini-card.is-playable:is(:hover, :focus-within) {
+  transform: translate(-4px, -4px) rotate(-1deg);
+  box-shadow: 12px 12px 0 var(--ink);
+}
+
+.mini-panel {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  border-bottom: var(--outline);
+}
+
+.mini-panel-soon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  padding: 4px 12px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.95rem;
+  font-weight: 700;
+  transform: rotate(6deg);
+}
+
+.mini-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
+}
+
+.mini-kind {
+  padding: 2px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.mini-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.mini-text {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+}
+
+.mini-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.mini-max {
+  font-family: var(--font-amount);
+  font-weight: 700;
+}
+
+.mini-soon {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+/* Cruza la Calle panel: curb, three lanes, checkered goal; the chicken floats, a car drives by. */
+.mini-road {
+  position: relative;
+  display: grid;
+  grid-template-columns: 70px repeat(3, 1fr) 50px;
+  height: 100%;
+}
+
+.mini-road-curb {
+  background: var(--lilac);
+}
+
+.mini-road-lane {
+  background: #3a3a3a;
+}
+
+.mini-road-lane + .mini-road-lane {
+  border-left: 3px dashed var(--sun);
+}
+
+.mini-road-goal {
+  background: repeating-conic-gradient(var(--ink) 0 25%, var(--chalk) 0 50%) 0 0 / 20px 20px;
+}
+
+.mini-road-chicken {
+  position: absolute;
+  top: calc(50% - 32px);
+  left: 3px;
+  width: 64px;
+  height: 64px;
+  animation: chicken-float 1.4s ease-in-out infinite;
+}
+
+/* Centered on the middle lane: curb 70px plus half of the three lanes, minus half the car. */
+.mini-road-car {
+  position: absolute;
+  top: 24px;
+  left: calc(70px + (100% - 120px) / 2 - 14px);
+  width: 28px;
+  height: 46px;
+  animation: car-drive 2.6s linear infinite;
+}
+
+.mini-road-chicken > *,
+.mini-road-car > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes chicken-float {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes car-drive {
+  from {
+    transform: translateY(-84px);
+  }
+  to {
+    transform: translateY(190px);
+  }
+}
+
+/* Crash panels: a drawn scene over the tone; Dino Crash adds its sun ground band. */
+.mini-scene {
+  position: relative;
+  height: 100%;
+}
+
+.mini-ground {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 44px;
+  border-top: var(--outline);
+  background: var(--sun);
+}
+
+.mini-scene-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 /* Shared classes. */
 .button {
   display: inline-flex;
@@ -849,12 +1093,23 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .button,
   .game-circle,
-  .sticker {
+  .sticker,
+  .mini-card {
     transition: none;
+  }
+
+  .mini-road-chicken,
+  .mini-road-car {
+    animation: none;
+  }
+
+  .mini-card.is-playable:is(:hover, :focus-within) {
+    transform: none;
   }
 
   .game-item:hover .sticker-soon,
   .game-item,
+  .game-new,
   .hero-sticker,
   .pick-wheel-turn,
   .pick-wheel svg,
@@ -863,7 +1118,7 @@ main {
   }
 
   .game-item .game-art :is(.art-wheel, .art-wheel-boost, .art-flag, .art-wind-streak),
-  .game-item .game-art :is(.art-reel, .art-card, .art-card-back) {
+  .game-item .game-art :is(.art-bolt, .art-card, .art-card-back) {
     animation: none;
   }
 
