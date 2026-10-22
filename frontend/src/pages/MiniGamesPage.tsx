@@ -17,7 +17,7 @@ export interface MiniGameEntry {
   path?: string;
 }
 
-/** Mini games listed on the hub. None is playable yet; Cruza la Calle gets its path in #46. */
+/** Mini games listed on the hub. Cruza la Calle is playable; the two Crash games come later. */
 export const miniGames: MiniGameEntry[] = [
   {
     id: "chicken-road",
@@ -27,6 +27,7 @@ export const miniGames: MiniGameEntry[] = [
       "Avanza carril por carril. Cada paso sube el premio; si te atropellan, lo pierdes.",
     max: "Hasta 3,66x",
     tone: "sun",
+    path: "/games/mini/chicken-road",
   },
   {
     id: "dino-crash",
