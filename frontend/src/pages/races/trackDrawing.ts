@@ -8,7 +8,8 @@ export const SCENE_HEIGHT = 320;
 const MARGIN_Y = 10;
 export const START_X = 56;
 export const FINISH_X = SCENE_WIDTH - 40;
-const RUNNER_RADIUS = 16;
+const RUNNER_SIZE = 30;
+const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 const LANE_HEIGHT = (SCENE_HEIGHT - MARGIN_Y * 2) / animals.length;
 
 export interface TrackPalette {
@@ -100,24 +101,21 @@ export function buildTrack(pixi: typeof Pixi, palette: TrackPalette): Pixi.Conta
   return track;
 }
 
-/** One marker per animal (index = animal id) with its accent color and short label. */
+/** One marker per animal (index = animal id): its emoji, mirrored when it looks away from the finish. */
 export function buildRunners(pixi: typeof Pixi, palette: TrackPalette): Pixi.Container[] {
   return animals.map((animal, lane) => {
     const runner = new pixi.Container();
-    const body = new pixi.Graphics();
-    body.circle(0, 0, RUNNER_RADIUS).fill(animal.color).stroke({ width: 3, color: palette.ink });
-    const text = new pixi.Text({
-      text: animal.label,
+    const glyph = new pixi.Text({
+      text: animal.emoji,
       style: {
-        fontFamily: palette.font,
-        fontSize: 10,
-        fontWeight: "700",
-        fill: palette.chalk,
-        stroke: { color: palette.ink, width: 3 },
+        fontFamily: EMOJI_FONT,
+        fontSize: RUNNER_SIZE,
+        dropShadow: { color: palette.ink, alpha: 0.5, angle: Math.PI / 2, blur: 2, distance: 4 },
       },
     });
-    text.anchor.set(0.5);
-    runner.addChild(body, text);
+    glyph.anchor.set(0.5);
+    if (animal.facesLeft) glyph.scale.x = -1;
+    runner.addChild(glyph);
     runner.position.set(runnerX(0), laneCenterY(lane));
     return runner;
   });

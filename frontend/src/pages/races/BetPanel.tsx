@@ -1,10 +1,6 @@
-import type { CSSProperties, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { animals } from "./animals";
 import { limitsInCredits, type StakeLimits } from "./stake";
-
-function hexColor(color: number): string {
-  return `#${color.toString(16).padStart(6, "0")}`;
-}
 
 export interface BetPanelProps {
   selected: number | null;
@@ -43,11 +39,7 @@ export function BetPanel({
           Elija un animal
         </p>
         {animals.map((animal) => (
-          <label
-            key={animal.id}
-            className="races-animal"
-            style={{ "--accent": hexColor(animal.color) } as CSSProperties}
-          >
+          <label key={animal.id} className="races-animal">
             <input
               type="radio"
               name="race-animal"
