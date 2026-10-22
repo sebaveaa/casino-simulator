@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Money } from "../money";
 import type { Rng } from "../rng";
 
-export const gameIds = ["roulette", "slots", "races", "blackjack"] as const;
+export const gameIds = ["roulette", "slots", "races", "blackjack", "chicken-road"] as const;
 export const gameIdSchema = z.enum(gameIds);
 export type GameId = z.infer<typeof gameIdSchema>;
 
