@@ -1,11 +1,20 @@
 import {
   type AuthResponse,
   type BalanceResponse,
+  CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT,
+  CHICKEN_ROAD_HISTORY_MAX_LIMIT,
+  type ChickenRoadGame,
+  chickenRoad,
+  chickenRoadPayout,
+  chickenRoadStartRequestSchema,
+  chickenRoadStepRequestSchema,
   computeOutcome,
   createRng,
   type DepositRequest,
   type DepositResponse,
+  type Fairness,
   hashServerSeed,
+  LANE_COUNT,
   type LoginRequest,
   parseAmount,
   type RegisterRequest,
@@ -63,20 +72,99 @@ function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }
 
+/** A Chicken Road game as the mock stores it; the road stays inside the mock. */
+type MockChickenGame = {
+  gameId: string;
+  key: string;
+  stake: bigint;
+  fairness: Fairness;
+  hitLane: number | null;
+  /** Lanes attempted; in a lost game the last one is the hit lane. */
+  lanes: number;
+  payout: bigint | null;
+};
+
+const conflict = (message: string) => new ApiError("conflict", message, 409);
+
+/**
+ * The game as the backend shows it (`backend/games/chicken-road/view.ts`). The in-progress shape
+ * never carries `hitLane`.
+ */
+function chickenView(game: MockChickenGame): ChickenRoadGame {
+  const base = { gameId: game.gameId, stake: toAmount(game.stake), fairness: game.fairness };
+  if (game.payout === null) {
+    return {
+      status: "in_progress",
+      ...base,
+      lanesCrossed: game.lanes,
+      cashoutAmount: game.lanes === 0 ? "0" : toAmount(chickenRoadPayout(game.stake, game.lanes)),
+    };
+  }
+  if (game.payout === 0n) {
+    return {
+      status: "lost",
+      ...base,
+      lanesCrossed: game.lanes - 1,
+      hitLane: game.lanes,
+      payout: "0",
+    };
+  }
+  if (game.lanes === LANE_COUNT) {
+    return {
+      status: "completed",
+      ...base,
+      lanesCrossed: LANE_COUNT,
+      payout: toAmount(game.payout),
+    };
+  }
+  return { status: "cashed_out", ...base, lanesCrossed: game.lanes, payout: toAmount(game.payout) };
+}
+
 /**
  * In-memory `ApiClient` for developing screens without a backend. Roulette spins run the shared
  * rules (`validateSpin`, `roulette.resolve`, `spinPayouts`) over a fixed mock seed pair, so payouts match
  * the real API; only the seeds and persistence are fake.
+ *
+ * Chicken Road mirrors the backend (#45): one game in progress, the road from `chickenRoad.resolve`
+ * over one fixed mock seed pair, replayed starts and steps, a single payout, and lane 6 paid
+ * automatically. Unlike the backend, it has no abandonment timer, and roulette spins do not
+ * advance the seed pair's nonce.
  */
-export function createMockApiClient(options: { delayMs?: number } = {}): ApiClient {
+export function createMockApiClient(
+  options: { delayMs?: number; startingBalance?: bigint } = {},
+): ApiClient {
   const delayMs = options.delayMs ?? 0;
-  let balance = STARTING_BALANCE;
+  let balance = options.startingBalance ?? STARTING_BALANCE;
   const transactions: Transaction[] = [];
   const deposits = new Map<string, DepositResponse>();
   const bets = new Map<string, { request: RouletteBetRequest; response: RouletteBetResponse }>();
 
   // email -> account. Passwords are kept in plain text: this is a dev-only stand-in.
   const users = new Map<string, { id: string; password: string }>();
+
+  // The one Chicken Road seed pair, and the games in the order they started.
+  const seedPair = { id: crypto.randomUUID(), serverSeed: crypto.randomUUID(), nextNonce: 0 };
+  const chickenGames: MockChickenGame[] = [];
+
+  function findChickenGame(gameId: string): MockChickenGame {
+    const game = chickenGames.find((g) => g.gameId === gameId);
+    if (!game) throw new ApiError("not_found", "Chicken Road game not found", 404);
+    return game;
+  }
+
+  /** Settles a game; a positive payout goes to the balance once, as one `payout` transaction. */
+  function settleChicken(game: MockChickenGame, payout: bigint): void {
+    game.payout = payout;
+    if (payout > 0n) {
+      balance += payout;
+      record("payout", payout, game.gameId);
+    }
+  }
+
+  const chickenResponse = (game: MockChickenGame) => ({
+    game: chickenView(game),
+    balance: toAmount(balance),
+  });
 
   const session = (id: string, email: string): AuthResponse => ({
     token: createUnsignedJwt({
@@ -206,6 +294,123 @@ export function createMockApiClient(options: { delayMs?: number } = {}): ApiClie
       };
       bets.set(idempotencyKey, { request: body, response });
       return response;
+    },
+    async getSeedPair() {
+      await sleep(delayMs);
+      return {
+        id: seedPair.id,
+        serverSeedHash: await hashServerSeed(seedPair.serverSeed),
+        clientSeed: MOCK_CLIENT_SEED,
+        nextNonce: seedPair.nextNonce,
+      };
+    },
+    async startChickenRoadGame(body, idempotencyKey) {
+      await sleep(delayMs);
+      const parsed = chickenRoadStartRequestSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new ApiError("invalid_request", "Stake must be between 10 and 500 credits", 400);
+      }
+      const stake = parseAmount(parsed.data.stake);
+
+      // A retry returns the game as it is now, like the backend.
+      const previous = chickenGames.find((g) => g.key === idempotencyKey);
+      if (previous) {
+        if (previous.stake !== stake) {
+          throw conflict("Idempotency-Key was already used for a different stake");
+        }
+        const game = chickenView(previous);
+        if (game.status !== "in_progress")
+          throw conflict("This Chicken Road game already finished");
+        return { game, balance: toAmount(balance) };
+      }
+      if (chickenGames.some((g) => g.payout === null)) {
+        throw conflict("A Chicken Road game is already in progress");
+      }
+      if (stake > balance) throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+
+      const nonce = seedPair.nextNonce++;
+      const seed = { serverSeed: seedPair.serverSeed, clientSeed: MOCK_CLIENT_SEED, nonce };
+      const road = chickenRoad.resolve(
+        { stake, cashOutAt: LANE_COUNT },
+        createRng(await computeOutcome(seed)),
+      );
+      const game: MockChickenGame = {
+        gameId: crypto.randomUUID(),
+        key: idempotencyKey,
+        stake,
+        fairness: {
+          seedPairId: seedPair.id,
+          serverSeedHash: await hashServerSeed(seedPair.serverSeed),
+          clientSeed: MOCK_CLIENT_SEED,
+          nonce,
+        },
+        hitLane: road.hitLane,
+        lanes: 0,
+        payout: null,
+      };
+      chickenGames.push(game);
+      balance -= stake;
+      record("bet", -stake, game.gameId);
+      const view = chickenView(game);
+      if (view.status !== "in_progress") throw new Error("a new game is in progress");
+      return { game: view, balance: toAmount(balance) };
+    },
+    async stepChickenRoadGame(body) {
+      await sleep(delayMs);
+      const parsed = chickenRoadStepRequestSchema.safeParse(body);
+      if (!parsed.success) throw new ApiError("invalid_request", "Invalid step", 400);
+      const { gameId, lane } = parsed.data;
+      const game = findChickenGame(gameId);
+
+      // A lane already played replays the game as it is now.
+      if (lane <= game.lanes) return chickenResponse(game);
+      if (game.payout !== null) {
+        throw conflict(
+          game.payout === 0n
+            ? "This Chicken Road game was lost"
+            : "This Chicken Road game already finished",
+        );
+      }
+      if (lane !== game.lanes + 1) throw conflict(`The next lane to cross is ${game.lanes + 1}`);
+
+      game.lanes = lane;
+      if (game.hitLane === lane) settleChicken(game, 0n);
+      else if (lane === LANE_COUNT) settleChicken(game, chickenRoadPayout(game.stake, LANE_COUNT));
+      return chickenResponse(game);
+    },
+    async cashOutChickenRoadGame(body) {
+      await sleep(delayMs);
+      const game = findChickenGame(body.gameId);
+      const view = chickenView(game);
+      if (view.status === "cashed_out" || view.status === "completed") {
+        return { game: view, balance: toAmount(balance) };
+      }
+      if (view.status === "lost") throw conflict("This Chicken Road game was lost");
+      if (game.lanes === 0) throw conflict("Cross at least one lane before cashing out");
+      settleChicken(game, chickenRoadPayout(game.stake, game.lanes));
+      const paid = chickenView(game);
+      if (paid.status !== "cashed_out") throw new Error("a cashed-out game is paid");
+      return { game: paid, balance: toAmount(balance) };
+    },
+    async getCurrentChickenRoadGame() {
+      await sleep(delayMs);
+      const game = chickenGames.find((g) => g.payout === null);
+      const view = game ? chickenView(game) : null;
+      return { game: view?.status === "in_progress" ? view : null };
+    },
+    async listChickenRoadHistory(query = {}) {
+      await sleep(delayMs);
+      const limit = query.limit ?? CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT;
+      if (!Number.isInteger(limit) || limit < 1 || limit > CHICKEN_ROAD_HISTORY_MAX_LIMIT) {
+        throw new ApiError("invalid_request", "Invalid history limit", 400);
+      }
+      const games = [...chickenGames]
+        .reverse()
+        .filter((g) => g.payout !== null)
+        .slice(0, limit)
+        .map(chickenView)
+        .flatMap((game) => (game.status === "in_progress" ? [] : [game]));
+      return { games };
     },
   };
 }
