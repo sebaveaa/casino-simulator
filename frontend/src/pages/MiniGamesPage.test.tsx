@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -50,10 +50,30 @@ describe("MiniGamesPage", () => {
     });
   });
 
-  it("marks every mini game as coming soon, with no play link yet", () => {
+  it("lets the player start Cruza la Calle, while the two Crash games are coming soon", () => {
     const list = renderHub();
-    expect(within(list).getAllByText("Muy pronto")).toHaveLength(3);
-    expect(within(list).queryAllByRole("link")).toHaveLength(0);
+    const links = within(list).getAllByRole("link");
+    expect(links).toHaveLength(1);
+    const play = within(list).getByRole("link", { name: "¡Jugar! Cruza la Calle" });
+    expect(play.textContent).toBe("¡Jugar!");
+    expect(play.getAttribute("href")).toBe("/games/mini/chicken-road");
+
+    const [chicken, dino, aviator] = within(list).getAllByRole("article");
+    expect(chicken?.classList.contains("is-playable")).toBe(true);
+    expect(within(chicken as HTMLElement).queryByText("Muy pronto")).toBeNull();
+    expect(within(chicken as HTMLElement).queryByText("¡Pronto!")).toBeNull();
+    for (const card of [dino, aviator]) {
+      expect(card?.classList.contains("is-playable")).toBe(false);
+      expect(within(card as HTMLElement).getByText("Muy pronto")).toBeTruthy();
+    }
+  });
+
+  it("opens Cruza la Calle from its card", async () => {
+    seedSession();
+    const router = renderAt("/games/mini");
+    fireEvent.click(screen.getByRole("link", { name: "¡Jugar! Cruza la Calle" }));
+    expect(router.state.location.pathname).toBe("/games/mini/chicken-road");
+    expect(await screen.findByRole("heading", { level: 1, name: "Cruza la Calle" })).toBeTruthy();
   });
 
   it("keeps the panel art and its sticker out of the accessibility tree", () => {

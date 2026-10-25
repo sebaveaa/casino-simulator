@@ -6,7 +6,7 @@ Branches (stacked):
 - PR B: `feat/46-chicken-road-page`, from A
 - PR C: `feat/46-chicken-road-road`, from B
 
-Status: PR B implemented, commit pending (Juan); PR C not started
+Status: all three PRs implemented; PR C commit and the PRs pending (Juan)
 
 ## Objective
 
@@ -60,9 +60,9 @@ PR B:
 
 PR C:
 
-- [ ] T7 Road visuals (grid, lanes, pills, badges, cars, chicken, finish), with only the spec's new greys.
-- [ ] T8 Animations (jump, hit, ¡PAF!, reveal pacing), reduced motion, history pills, hub card playable, tests.
-- [ ] T9 PR C close-out.
+- [x] T7 Road visuals (grid, lanes, pills, badges, cars, chicken, finish), with only the spec's new greys.
+- [x] T8 Animations (jump, hit, ¡PAF!, reveal pacing), reduced motion, history pills, hub card playable, tests.
+- [x] T9 PR C close-out.
 
 ## Acceptance criteria
 
@@ -182,3 +182,31 @@ Juan makes the commits, pushes, branches, and opens the PRs: "Part of #46" on A 
     - shared: 158/158;
     - backend: 182/183, 0 skipped (all 60 integration tests ran). The one failure is the known roulette integration timeout, which passes alone;
     - frontend: 199/200 and 197/200. Every new test passed in both runs. The failures are `RoulettePage.test.tsx` 5 s timeouts, and that file passes alone (25/25).
+- PR B committed by Juan (92fc804). Branch `feat/46-chicken-road-road` created from it.
+- T7 done.
+  - `Road`: cars from the spec's SVG in every lane not crossed yet, at different heights, cycling tomato, chalk and sun.
+  - The chicken sits on a full-width overlay. Its `translateX(calc(...))` follows the grid columns: start 48px, lane n `96px + (n − 0.5) × (100% − 180px) / 6`, finish `100% − 42px`, 148 px from the top. The overlay is clipped, so the shifted mover adds no scrollbar.
+  - On a hit, the lane gets the car over the chicken, tilted −12°, and the `¡PAF!` sticker (aria-hidden; the panel says "¡Te atropellaron!"). The chicken rotates 84°.
+  - SVGs get classes instead of descendant selectors, which Biome flags.
+- T8 done.
+  - The jump is a 400 ms `transform` transition with `--ease-spring`, plus a hop that replays on each move (a new key per position). The car drops in from the top, and ¡PAF! pops in.
+  - Reveal pacing: the hook keeps a `roadView`, updated at once, and the panel view, updated `REVEAL_MS` (450 ms) later, or at once with reduced motion. Buttons stay disabled meanwhile, and the balance is applied after the reveal.
+  - `prefers-reduced-motion: reduce` turns off the jump, the hop, the hit, ¡PAF! and the title sticker.
+  - `GameHistory`: `Tus últimas partidas`, with a win as its multiplier on sun and a loss as `Atropellado` on tomato. It is hidden while empty.
+  - Hub card: Cruza la Calle has `path: "/games/mini/chicken-road"`, which turns on the lift and `¡Jugar!`; Dino Crash and Despegue stay "Muy pronto".
+  - Tests:
+    - `ChickenRoadPage.test.tsx` runs with reduced motion, as roulette does. It gains 5 tests: road states, pill classes, cars and chicken position; the finish; the hit; the reveal pacing with motion on; history pills.
+    - `MiniGamesPage.test.tsx`: one playable link, two "Muy pronto", and the card opens the game.
+- Browser check with the mock (Chrome, Vite dev server):
+  - At desktop width: the road, a step (badge, pills, chicken in lane 1), a hit on lane 2 (car, ¡PAF!, knocked-over chicken, "Habrías cobrado 12 créditos…") and the history pill.
+  - At 360 px (in an iframe): the page does not scroll sideways, and only the road does (620 px of content in 310 px).
+  - The hub link opens the game.
+  - Two fixes came out of it: the overlay is now clipped (it caused a scrollbar at desktop width), and the "Premio posible" amount no longer wraps.
+- T9 done.
+  - `npm run lint`: clean (188 files).
+  - `npm run typecheck`: clean.
+  - Full `npm test` with `TEST_DATABASE_URL`, run twice:
+    - shared: 158/158 both runs;
+    - backend: 183/183 both runs, 0 skipped;
+    - frontend: 205/206, then 206/206. The one failure was a known `RoulettePage.test.tsx` timeout.
+  - The `chickenRoads` mock option and `startingBalance` stay test and development aids.

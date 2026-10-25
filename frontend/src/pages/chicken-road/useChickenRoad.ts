@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, useApi } from "../../api";
 import { useApplyBalance, useRefreshBalance } from "../../app/useBalance";
 import { betErrorMessage } from "../betErrorMessage";
+import { prefersReducedMotion } from "../roulette/motion";
 
 /** What the panel shows: the bet form, a game on the road, or a game that ended. */
 export type ChickenRoadView =
@@ -25,6 +26,11 @@ function viewOf(game: ChickenRoadGame): ChickenRoadView {
   return game.status === "in_progress" ? { kind: "playing", game } : { kind: "over", game };
 }
 
+/** How long the panel waits after a step, so the road shows the result first. */
+export const REVEAL_MS = 450;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const isConflict = (error: unknown) => error instanceof ApiError && error.code === "conflict";
 const isNetwork = (error: unknown) => error instanceof ApiError && error.code === "network";
 
@@ -38,7 +44,14 @@ export function useChickenRoad() {
   const applyBalance = useApplyBalance();
   const refreshBalance = useRefreshBalance();
 
-  const [view, setView] = useState<ChickenRoadView>({ kind: "bet" });
+  // The road shows each answer at once; after a step the panel follows `REVEAL_MS` later, so it
+  // does not give the result away before the chicken lands.
+  const [view, setPanelView] = useState<ChickenRoadView>({ kind: "bet" });
+  const [roadView, setRoadView] = useState<ChickenRoadView>({ kind: "bet" });
+  const setView = useCallback((next: ChickenRoadView) => {
+    setRoadView(next);
+    setPanelView(next);
+  }, []);
   const [history, setHistory] = useState<ChickenRoadFinishedGame[]>([]);
   const [seedPair, setSeedPair] = useState<SeedPairResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +106,7 @@ export function useChickenRoad() {
     return () => {
       active = false;
     };
-  }, [api, loadHistory, loadSeedPair]);
+  }, [api, loadHistory, loadSeedPair, setView]);
 
   async function run(action: () => Promise<void>) {
     if (busy.current) return;
@@ -189,7 +202,11 @@ export function useChickenRoad() {
         async () => {
           // A retry after a network failure sends the same lane, which the server replays.
           const res = await api.stepChickenRoadGame({ gameId, lane: lanesCrossed + 1 });
-          setView(viewOf(res.game));
+          const next = viewOf(res.game);
+          setRoadView(next);
+          // Buttons stay disabled meanwhile: `run` holds `pending` until this resolves.
+          if (!prefersReducedMotion()) await sleep(REVEAL_MS);
+          setPanelView(next);
           applyBalance(res.balance);
           if (res.game.status === "in_progress") void refreshBalance();
           else await afterGameEnds();
@@ -223,6 +240,7 @@ export function useChickenRoad() {
 
   return {
     view,
+    roadView,
     history,
     seedPair,
     loading,

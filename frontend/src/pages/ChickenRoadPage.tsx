@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { BetPanel } from "./chicken-road/BetPanel";
 import { FairnessBlock } from "./chicken-road/FairnessBlock";
+import { GameHistory } from "./chicken-road/GameHistory";
 import { PlayingPanel } from "./chicken-road/PlayingPanel";
 import { ResultPanel } from "./chicken-road/ResultPanel";
 import { Road } from "./chicken-road/Road";
@@ -12,8 +13,19 @@ import { useChickenRoad } from "./chicken-road/useChickenRoad";
  * step; the screen sends the request, waits, and shows what came back (README §4.5).
  */
 export function ChickenRoadPage() {
-  const { view, seedPair, loading, pending, message, start, step, cashOut, playAgain } =
-    useChickenRoad();
+  const {
+    view,
+    roadView,
+    history,
+    seedPair,
+    loading,
+    pending,
+    message,
+    start,
+    step,
+    cashOut,
+    playAgain,
+  } = useChickenRoad();
   const [amount, setAmount] = useState("10");
   const disabled = loading || pending;
 
@@ -53,7 +65,8 @@ export function ChickenRoadPage() {
 
       <div className="cr-content">
         <section className="cr-road-area" aria-label="Carretera">
-          <Road view={view} />
+          <Road view={roadView} />
+          <GameHistory games={history} />
         </section>
 
         <aside className="cr-panel" aria-label="Tu partida" aria-busy={disabled || undefined}>

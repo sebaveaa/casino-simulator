@@ -11,13 +11,23 @@ const PATH = "/games/mini/chicken-road";
 // Each test plays a whole game through the UI; under full-suite load that can pass 5 s.
 vi.setConfig({ testTimeout: 15_000 });
 
+/** jsdom has no `matchMedia`; without it motion is on and each step waits `REVEAL_MS`. */
+function setReducedMotion(reduced: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: reduced && query.includes("prefers-reduced-motion"),
+  }));
+}
+
 beforeEach(() => {
   seedSession();
+  // Most tests look at the end state, which reduced motion shows at once.
+  setReducedMotion(true);
 });
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 const conflict = () => new ApiError("conflict", "conflict", 409);
@@ -438,5 +448,99 @@ describe("ChickenRoadPage errors", () => {
     await stepOnce();
     expect(within(panel()).getByText("Carril 1 de 6")).toBeTruthy();
     expect(alertText()).toBeNull();
+  });
+});
+
+describe("ChickenRoadPage road", () => {
+  const lanes = () => Array.from(road().querySelectorAll<HTMLElement>(".cr-lane"));
+  const states = () => lanes().map((lane) => lane.dataset.state);
+  const pillClass = (lane: number) => lanes()[lane - 1]?.querySelector(".cr-mult")?.className;
+  const carLanes = () =>
+    lanes()
+      .filter((lane) => lane.querySelector(".cr-car-slot:not(.cr-hit-car)"))
+      .map((lane) => Number(lane.dataset.lane));
+  const chickenAt = () =>
+    Number(road().querySelector<HTMLElement>(".cr-chicken-mover")?.dataset.pos ?? -1);
+
+  it("draws the start, the lanes with their pills, the cars and the chicken", async () => {
+    await renderPage(client([null]));
+    expect(states()).toEqual(["next", "ahead", "ahead", "ahead", "ahead", "ahead"]);
+    expect(chickenAt()).toBe(0);
+    expect(carLanes()).toEqual([1, 2, 3, 4, 5, 6]);
+
+    await startGame();
+    await stepOnce();
+    await stepOnce();
+    expect(states()).toEqual(["crossed", "crossed", "next", "ahead", "ahead", "ahead"]);
+    expect(pillClass(1)).toContain("is-crossed");
+    expect(pillClass(3)).toContain("is-next");
+    expect(pillClass(4)).toContain("is-ahead");
+    expect(within(road()).getAllByRole("img", { name: "Carril cruzado" })).toHaveLength(2);
+    // Cars only where the chicken has not crossed yet.
+    expect(carLanes()).toEqual([3, 4, 5, 6]);
+    expect(chickenAt()).toBe(2);
+    // The art is decorative: only the badges and the labels reach assistive technology.
+    for (const svg of road().querySelectorAll("svg")) {
+      const badge = svg.closest('[role="img"]');
+      if (!badge) expect(svg.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
+  });
+
+  it("puts the chicken on the finish after lane 6, with every lane crossed", async () => {
+    await renderPage(client([null]));
+    await startGame();
+    for (let lane = 1; lane <= 6; lane++) await stepOnce();
+    expect(chickenAt()).toBe(7);
+    expect(states()).toEqual(Array(6).fill("crossed"));
+    expect(carLanes()).toEqual([]);
+  });
+
+  it("knocks the chicken over on the hit lane, with the car on top and ¡PAF!", async () => {
+    await renderPage(client([3]));
+    expect(road().querySelector('[data-testid="cr-hit"]')).toBeNull();
+    await startGame();
+    for (let lane = 1; lane <= 3; lane++) await stepOnce();
+    const hit = within(road()).getByTestId("cr-hit");
+    expect(hit.closest(".cr-lane")?.getAttribute("data-lane")).toBe("3");
+    expect(hit.querySelector(".cr-hit-car")).not.toBeNull();
+    expect(within(hit).getByText("¡PAF!").getAttribute("aria-hidden")).toBe("true");
+    expect(chickenAt()).toBe(3);
+    expect(road().querySelector(".cr-chicken")?.classList.contains("is-hit")).toBe(true);
+    // Lanes past the hit keep their traffic.
+    expect(carLanes()).toEqual([4, 5, 6]);
+  });
+
+  it("moves the road first and reveals the panel after the jump", async () => {
+    setReducedMotion(false);
+    await renderPage(client([1]));
+    await startGame();
+    fireEvent.click(inPanel("Siguiente paso"));
+    // The road already shows the hit; the panel still waits, with its buttons locked.
+    await waitFor(() => expect(road().querySelector('[data-testid="cr-hit"]')).not.toBeNull());
+    expect(within(panel()).getByText("Listo para cruzar")).toBeTruthy();
+    expect((inPanel("Siguiente paso") as HTMLButtonElement).disabled).toBe(true);
+    await screen.findByText("¡Te atropellaron!", {}, { timeout: 4000 });
+    await settled();
+  });
+
+  it("lists the latest games: a win as its multiplier, a loss as Atropellado", async () => {
+    await renderPage(client([null, 1]));
+    expect(screen.queryByRole("list", { name: "Tus últimas partidas" })).toBeNull();
+
+    await startGame();
+    await stepOnce();
+    await stepOnce();
+    await press("Retirar 15 créditos");
+    await press("Jugar otra vez");
+    await startGame();
+    await stepOnce();
+
+    const list = await screen.findByRole("list", { name: "Tus últimas partidas" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));
+    const [loss, win] = within(list).getAllByRole("listitem");
+    expect(loss?.textContent).toBe("Atropellado");
+    expect(loss?.className).toContain("is-lost");
+    expect(win?.textContent).toBe("1,50x");
+    expect(win?.className).toContain("is-win");
   });
 });
