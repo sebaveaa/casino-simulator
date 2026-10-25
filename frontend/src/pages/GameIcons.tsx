@@ -1,24 +1,20 @@
 import type { GameId } from "@casino/shared";
 import type { ReactNode } from "react";
 
-/** Distance between two symbols on a slot reel strip, in viewBox units. */
-const REEL_STEP = 36;
-
-/** Slot reels: each strip starts and ends on its 7, so a roll of three steps loops seamlessly. */
-const reels = [
-  { x: 14.6, seven: "#141414", symbols: ["7", "3", "9", "7"] },
-  { x: 32, seven: "#ff5a36", symbols: ["7", "1", "4", "7"] },
-  { x: 49.3, seven: "#141414", symbols: ["7", "5", "2", "7"] },
-];
+/**
+ * What the lobby draws: the games, minus slots (replaced by the mini games hub, which is a menu,
+ * not a game that records bets).
+ */
+export type GameArtId = Exclude<GameId, "slots" | "chicken-road"> | "mini-games";
 
 /** Wind around the races flag: above its top edge, beside its flying edge, and a curl below. */
 const windStreaks = ["M22 4.5h18", "M50.5 21h8", "M24 38h16a4 4 0 1 1 -4 4"];
 
 /**
  * Artwork of each game for the lobby; decorative, hidden from assistive tech.
- * Classed parts (`art-*`) carry each game's motion in the stylesheet.
+ * Classed parts (`art-*`) carry each icon's motion in the stylesheet.
  */
-const art: Record<GameId, ReactNode> = {
+const art: Record<GameArtId, ReactNode> = {
   roulette: (
     <svg
       width="96"
@@ -70,7 +66,7 @@ const art: Record<GameId, ReactNode> = {
       </g>
     </svg>
   ),
-  slots: (
+  "mini-games": (
     <svg
       width="96"
       height="96"
@@ -79,37 +75,22 @@ const art: Record<GameId, ReactNode> = {
       stroke="#141414"
       strokeWidth="3"
       strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
     >
-      <defs>
-        <clipPath id="art-slots-window">
-          <rect x="7.5" y="15.5" width="49" height="33" rx="4.5" />
-        </clipPath>
-      </defs>
-      <rect x="6" y="14" width="52" height="36" rx="6" fill="#f1ecff" />
-      <g clipPath="url(#art-slots-window)">
-        {reels.map((reel) => (
-          <g key={reel.x} className="art-reel">
-            {reel.symbols.map((symbol, row) => (
-              <text
-                // biome-ignore lint/suspicious/noArrayIndexKey: a strip repeats its symbols by design
-                key={row}
-                x={reel.x}
-                y={39 - row * REEL_STEP}
-                textAnchor="middle"
-                fontFamily="Space Mono, monospace"
-                fontWeight="700"
-                fontSize="18"
-                fill={row === 0 || row === reel.symbols.length - 1 ? reel.seven : "#141414"}
-                stroke="none"
-              >
-                {symbol}
-              </text>
-            ))}
-          </g>
-        ))}
-      </g>
-      <path d="M23.3 14v36M40.6 14v36" />
+      <path
+        className="art-bolt"
+        d="M37 3l-9 12h7l-4 9 11-13h-7l5-8z"
+        fill="#ff5a36"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M17 26h30c7 0 11 6 12 13l1 7c0.6 5-4 8-8 5l-6-5H18l-6 5c-4 3-8.6 0-8-5l1-7c1-7 5-13 12-13z"
+        fill="#ffc933"
+      />
+      <path d="M17 33v10M12 38h10" />
+      <circle cx="43" cy="35" r="2.6" fill="#141414" stroke="none" />
+      <circle cx="50" cy="41" r="2.6" fill="#ff5a36" strokeWidth="2" />
     </svg>
   ),
   blackjack: (
@@ -151,6 +132,6 @@ const art: Record<GameId, ReactNode> = {
 };
 
 /** Artwork for a game id. */
-export function GameArt({ id }: { id: GameId }) {
+export function GameArt({ id }: { id: GameArtId }) {
   return art[id];
 }

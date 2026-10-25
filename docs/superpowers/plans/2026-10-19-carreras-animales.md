@@ -40,7 +40,7 @@ Entradas o fallos que el diseño implica y ninguna tarea exige por sí sola; cad
 | `shared/src/games/races.ts` | reglas puras: animales, validación, `resolveRace`, `racePayout` |
 | `shared/src/api/races.ts` | contratos Zod de apuesta, ronda actual y eventos |
 | `shared/src/rng.ts` | `computeRoundOutcome` |
-| `backend/db/migrations/0003_race_rounds.ts` | columnas de resultado e índice único de apuesta por ronda |
+| `backend/db/migrations/0005_race_rounds.ts` | columnas de resultado e índice único de apuesta por ronda |
 | `backend/games/races/rounds.ts` | consultas de rondas (actual, por id, proyección sin semilla) |
 | `backend/games/races/place-bet.ts` | apuesta transaccional e idempotente |
 | `backend/games/races/routes.ts` | `POST` apuesta, `GET` actual, `GET` ronda |
@@ -124,14 +124,14 @@ Entradas o fallos que el diseño implica y ninguna tarea exige por sí sola; cad
 ### Task 4: Migración y tipos
 
 **Files:**
-- Create: `backend/db/migrations/0003_race_rounds.ts`
+- Create: `backend/db/migrations/0005_race_rounds.ts`
 - Modify: `backend/db/migrations/index.ts`, `backend/db/schema.ts`
 - Test: `backend/db/migrations/index.test.ts`, integración de PostgreSQL
 
 **Interfaces:**
 - Produces: `game_rounds.result jsonb null`, `game_rounds.resolved_at timestamptz null`, `game_rounds.settled_at timestamptz null`; índice único `bets_round_user_key` sobre `bets (round_id, user_id) where round_id is not null`; `GameRoundsTable` con los tres campos nuevos.
 
-- [ ] **Step 1: Prueba que falla:** la prueba de migraciones espera `0003_race_rounds` registrada; una prueba de integración inserta dos apuestas del mismo usuario y ronda y espera violación de unicidad, e inserta una apuesta de ruleta sin `round_id` sin conflicto.
+- [ ] **Step 1: Prueba que falla:** la prueba de migraciones espera `0005_race_rounds` registrada; una prueba de integración inserta dos apuestas del mismo usuario y ronda y espera violación de unicidad, e inserta una apuesta de ruleta sin `round_id` sin conflicto.
 - [ ] **Step 2: Ejecutar y ver el fallo.**
 - [ ] **Step 3: Implementar** `up`/`down`, registrarla en `migrations/index.ts` y actualizar `schema.ts`.
 - [ ] **Step 4: Ejecutar** `npm run migrate` y las pruebas; deben pasar.

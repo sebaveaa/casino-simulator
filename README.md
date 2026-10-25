@@ -30,7 +30,7 @@ La guía del proyecto establece que la complejidad funcional no es el criterio p
 |---|---|---|---|
 | **Núcleo** | **Ruleta** | Una apuesta → un resultado inmediato | Sin estado entre apuestas. Es el caso más simple y escala fácil. |
 | **Núcleo** | **Carreras de animalitos** | Evento compartido entre muchos jugadores | Ventana de apuestas, tiempo real, cierre, carrera y liquidación masiva. Es el juego más exigente en concurrencia. |
-| Extra | **Tragamonedas** | Una apuesta → un resultado inmediato | Mismo patrón que la ruleta, con otra tabla de pagos. Costo bajo. |
+| Extra | **Minijuegos**: Cruza la Calle, Dino Crash y Despegue | Cruza la Calle: partida por pasos (con estado). Dino Crash y Despegue: ronda compartida en vivo | Reutilizan los dos patrones del núcleo sin tablas nuevas: Cruza la Calle guarda la partida entre pasos como el blackjack (4.4), y los dos Crash usan rondas, worker y SSE como los animalitos (4.3). Reemplazan a las tragamonedas. |
 | Opcional | **Blackjack** | Partida con estado (mano en curso) | Requiere guardar la sesión de juego entre decisiones del jugador. Solo si el núcleo está terminado. |
 
 La arquitectura se diseña y se defiende sobre **ruleta** (patrón sin estado) y **animalitos** (patrón de evento compartido en tiempo real). Los demás juegos reutilizan la misma base.
@@ -325,6 +325,17 @@ La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que Red
 - Cada decisión del jugador (pedir, plantarse, doblar) se añade a `BETS.actions` en PostgreSQL y actualiza la copia en Redis.
 - Mazo + decisiones = estado completo de la mano. Si Redis se pierde, el backend la reconstruye desde PostgreSQL y el jugador continúa.
 - Si el jugador abandona la mano (sin actividad durante el tiempo límite), la mano **no se da por perdida**: el sistema aplica *plantarse* automáticamente y la resuelve con las reglas normales. Un fallo de infraestructura o una desconexión nunca le quita dinero al jugador.
+
+### 4.5 Cruza la Calle (partida por pasos)
+
+Sigue el mismo patrón que el blackjack: la partida vive en PostgreSQL y se reconstruye desde ahí.
+
+- **Empezar** (con `Idempotency-Key`): se descuenta la apuesta y se crea la fila en `BETS` con estado `en_curso`, su `seed_pair_id` y su `nonce`. Un jugador tiene como máximo **una partida en curso** (índice único parcial). Si la petición se repite con la misma clave, se devuelve la partida en su estado actual y no se cobra de nuevo.
+- **El camino está fijado por la semilla**: en qué carril atropellan al pollo se recalcula en cada paso a partir del par de semillas y el `nonce`, así que no se guarda. Cada carril intentado se añade a `BETS.actions`.
+- **Paso**: cada paso es una transacción con la billetera y la apuesta bloqueadas (`SELECT … FOR UPDATE`). Repetir un carril ya jugado devuelve el mismo resultado, sin avanzar dos carriles. Si atropellan al pollo, la apuesta queda liquidada con premio 0. Al cruzar el carril 6 se cobra automáticamente.
+- **Retirar**: el premio se paga con la clave `payout:<usuario>:<apuesta>`, la misma que usan la meta y el abandono, así que una partida **no puede pagarse dos veces**.
+- **Abandono**: tras 10 minutos sin actividad, la partida **no se da por perdida**. En la siguiente petición del jugador a Cruza la Calle se cobra lo acumulado, o se devuelve la apuesta si no cruzó ningún carril.
+- **Semillas**: mientras haya una partida en curso no se puede rotar el par ni cambiar el `client_seed`, porque revelar el `server_seed` mostraría dónde está el auto.
 
 ---
 

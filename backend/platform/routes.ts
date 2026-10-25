@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { RequireAuth } from "../auth/guard";
 import { authRoutes } from "../auth/routes";
 import type { Db } from "../db/database";
+import { chickenRoadRoutes } from "../games/chicken-road/routes";
 import { racesRoutes } from "../games/races/routes";
 import { rouletteRoutes } from "../games/roulette/routes";
 import { streamRoutes } from "../realtime/stream-routes";
@@ -24,8 +25,8 @@ export type RouteDeps = {
 };
 export type ModuleRoutes = (app: FastifyInstance, deps: RouteDeps) => Promise<void>;
 
-// Each module ticket (#9 auth, #10 wallet, #11 seed pairs, #12 roulette) appends its routes
-// function here, using the paths from shared `apiPaths`.
+// Each module ticket (#9 auth, #10 wallet, #11 seed pairs, #12 roulette, #45 Chicken Road)
+// appends its routes function here, using the paths from shared `apiPaths`.
 export const moduleRoutes: ModuleRoutes[] = [
   authRoutes,
   walletRoutes,
@@ -33,4 +34,5 @@ export const moduleRoutes: ModuleRoutes[] = [
   rouletteRoutes,
   racesRoutes,
   streamRoutes,
+  chickenRoadRoutes,
 ];

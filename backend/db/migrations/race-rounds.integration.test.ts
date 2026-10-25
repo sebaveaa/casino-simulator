@@ -5,13 +5,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { postgresTypes } from "../../platform/postgres";
 import { createDatabase, type Db } from "../database";
 import type { Database } from "../schema";
-import * as raceRounds from "./0003_race_rounds";
+import * as raceRounds from "./0005_race_rounds";
 
 class Rollback extends Error {}
 
 // Runs against a migrated database: `TEST_DATABASE_URL=... npm test` (see AGENTS.md). Every test
 // runs inside a transaction that is rolled back, so the shared database stays clean.
-describe.skipIf(!process.env.TEST_DATABASE_URL)("0003_race_rounds", () => {
+describe.skipIf(!process.env.TEST_DATABASE_URL)("0005_race_rounds", () => {
   let pool: pg.Pool;
   let db: Db;
 

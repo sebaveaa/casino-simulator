@@ -52,9 +52,21 @@ describe("LobbyPage", () => {
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/games/roulette",
       "/games/races",
+      "/games/mini",
     ]);
     for (const link of links) expect(within(link).getByText("¡Jugar!")).toBeTruthy();
-    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(2);
+    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(1);
+  });
+
+  it("replaces slots with the mini games card, tagged as new", () => {
+    renderLobby();
+    const list = screen.getByRole("list", { name: "Juegos" });
+    expect(within(list).queryByText("Tragamonedas")).toBeNull();
+    const mini = within(list).getByRole("link", { name: /Minijuegos/ });
+    expect(mini.getAttribute("href")).toBe("/games/mini");
+    expect(within(mini).getByText("Retos rápidos, grandes premios.")).toBeTruthy();
+    expect(within(mini).getByText("Nuevo")).toBeTruthy();
+    expect(within(list).getAllByText("Nuevo")).toHaveLength(1);
   });
 
   it("shows today's pick with the Roulette link and the balance", async () => {

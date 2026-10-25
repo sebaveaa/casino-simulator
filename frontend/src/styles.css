@@ -358,14 +358,14 @@ main {
 
 /*
  * Each icon idles with its own motion and livens up while its card is hovered or focused:
- * the wheel spins faster, the flag flaps, the reels roll once and the card flips once.
+ * the wheel spins faster, the flag flaps, the bolt shakes and the card flips once.
  * Coming-soon cards animate too; only playable cards lift.
  */
 .game-art {
   display: flex;
 }
 
-.game-art :is(.art-wheel, .art-wheel-boost, .art-card) {
+.game-art :is(.art-wheel, .art-wheel-boost, .art-card, .art-bolt) {
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -402,17 +402,8 @@ main {
   animation-delay: -1.7s;
 }
 
-.game-art .art-reel {
-  --reel-delay: 0s;
-  animation: reel-roll 5s ease-out var(--reel-delay) infinite;
-}
-
-.game-art .art-reel:nth-child(2) {
-  --reel-delay: 0.2s;
-}
-
-.game-art .art-reel:nth-child(3) {
-  --reel-delay: 0.4s;
+.game-art .art-bolt {
+  animation: bolt-blink 2.4s linear infinite;
 }
 
 .game-art .art-card {
@@ -431,8 +422,8 @@ main {
   animation-duration: 0.7s;
 }
 
-:is(.game-item:hover, .game-link:focus-visible) .art-reel {
-  animation: reel-spin 0.3s linear var(--reel-delay) 4;
+:is(.game-item:hover, .game-link:focus-visible) .art-bolt {
+  animation: bolt-shake 0.5s ease-in-out infinite;
 }
 
 :is(.game-item:hover, .game-link:focus-visible) .art-card {
@@ -471,20 +462,29 @@ main {
   }
 }
 
-/* A strip moves three symbols (108 viewBox units) and lands on its 7 again. */
-@keyframes reel-roll {
-  0% {
-    transform: none;
-  }
-  20%,
+/* The bolt flickers once near the end of each beat. */
+@keyframes bolt-blink {
+  0%,
+  70%,
+  90%,
   100% {
-    transform: translateY(108px);
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.25;
   }
 }
 
-@keyframes reel-spin {
-  to {
-    transform: translateY(108px);
+@keyframes bolt-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  25% {
+    transform: rotate(-12deg) translateX(-1px);
+  }
+  75% {
+    transform: rotate(12deg) translateX(1px);
   }
 }
 
@@ -539,6 +539,31 @@ main {
   25%,
   74.9% {
     opacity: 1;
+  }
+}
+
+/* "Nuevo" tag at the lower left of a circle; it breathes gently. */
+.game-new {
+  position: absolute;
+  bottom: 4px;
+  left: -14px;
+  padding: 3px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--tomato);
+  font-size: 0.8rem;
+  font-weight: 800;
+  transform: rotate(-8deg);
+  animation: new-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes new-pulse {
+  0%,
+  100% {
+    transform: rotate(-8deg) scale(1);
+  }
+  50% {
+    transform: rotate(-8deg) scale(1.08);
   }
 }
 
@@ -787,6 +812,225 @@ main {
   }
 }
 
+/* Mini games hub: back link, the lobby's hero, and one card per mini game. */
+.mini-games {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* min() keeps one column inside very narrow screens; wider ones get the 280px tracks. */
+.mini-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mini-list > li {
+  display: flex;
+}
+
+.mini-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+  transition:
+    transform 220ms var(--ease-spring),
+    box-shadow 220ms var(--ease-spring);
+}
+
+/* Only playable cards lift; coming-soon cards stay put. */
+.mini-card.is-playable:is(:hover, :focus-within) {
+  transform: translate(-4px, -4px) rotate(-1deg);
+  box-shadow: 12px 12px 0 var(--ink);
+}
+
+.mini-panel {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  border-bottom: var(--outline);
+}
+
+.mini-panel-soon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  padding: 4px 12px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.95rem;
+  font-weight: 700;
+  transform: rotate(6deg);
+}
+
+.mini-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
+}
+
+.mini-kind {
+  padding: 2px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.mini-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.mini-text {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+}
+
+.mini-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.mini-max {
+  font-family: var(--font-amount);
+  font-weight: 700;
+}
+
+.mini-soon {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+/* Cruza la Calle panel: curb, three lanes, checkered goal; the chicken floats, a car drives by. */
+.mini-road {
+  position: relative;
+  display: grid;
+  grid-template-columns: 70px repeat(3, 1fr) 50px;
+  height: 100%;
+}
+
+.mini-road-curb {
+  background: var(--lilac);
+}
+
+.mini-road-lane {
+  background: #3a3a3a;
+}
+
+.mini-road-lane + .mini-road-lane {
+  border-left: 3px dashed var(--sun);
+}
+
+.mini-road-goal {
+  background: repeating-conic-gradient(var(--ink) 0 25%, var(--chalk) 0 50%) 0 0 / 20px 20px;
+}
+
+.mini-road-chicken {
+  position: absolute;
+  top: calc(50% - 32px);
+  left: 3px;
+  width: 64px;
+  height: 64px;
+  animation: chicken-float 1.4s ease-in-out infinite;
+}
+
+/* Centered on the middle lane: curb 70px plus half of the three lanes, minus half the car. */
+.mini-road-car {
+  position: absolute;
+  top: 24px;
+  left: calc(70px + (100% - 120px) / 2 - 14px);
+  width: 28px;
+  height: 46px;
+  animation: car-drive 2.6s linear infinite;
+}
+
+.mini-road-chicken > *,
+.mini-road-car > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes chicken-float {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes car-drive {
+  from {
+    transform: translateY(-84px);
+  }
+  to {
+    transform: translateY(190px);
+  }
+}
+
+/* Crash panels: a drawn scene over the tone; Dino Crash adds its sun ground band. */
+.mini-scene {
+  position: relative;
+  height: 100%;
+}
+
+.mini-ground {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 44px;
+  border-top: var(--outline);
+  background: var(--sun);
+}
+
+.mini-scene-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 /* Shared classes. */
 .button {
   display: inline-flex;
@@ -849,12 +1093,23 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .button,
   .game-circle,
-  .sticker {
+  .sticker,
+  .mini-card {
     transition: none;
+  }
+
+  .mini-road-chicken,
+  .mini-road-car {
+    animation: none;
+  }
+
+  .mini-card.is-playable:is(:hover, :focus-within) {
+    transform: none;
   }
 
   .game-item:hover .sticker-soon,
   .game-item,
+  .game-new,
   .hero-sticker,
   .pick-wheel-turn,
   .pick-wheel svg,
@@ -863,7 +1118,7 @@ main {
   }
 
   .game-item .game-art :is(.art-wheel, .art-wheel-boost, .art-flag, .art-wind-streak),
-  .game-item .game-art :is(.art-reel, .art-card, .art-card-back) {
+  .game-item .game-art :is(.art-bolt, .art-card, .art-card-back) {
     animation: none;
   }
 
@@ -1810,6 +2065,539 @@ main {
 
   .roulette-rack-chip:hover {
     transform: none;
+  }
+}
+
+/* Cruza la Calle (Chicken Road), DISENO-MINIJUEGOS §3. The road greys #2f2f33 and #4d4a57 are the
+   only colors outside the tokens. */
+.chicken-road {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cr-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.cr-title-row h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.cr-pill {
+  padding: 2px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.cr-top-sticker {
+  padding: 4px 12px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+  transform: rotate(-3deg);
+}
+
+.cr-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.cr-road-area {
+  flex: 999 1 560px;
+  min-width: 0;
+}
+
+.cr-panel {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+}
+
+.cr-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cr-panel p {
+  margin: 0;
+}
+
+/* Only the road scrolls sideways; the page never does. */
+.cr-road-card {
+  overflow: hidden;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+}
+
+.cr-road-scroll {
+  overflow-x: auto;
+}
+
+.cr-road {
+  position: relative;
+  display: grid;
+  grid-template-columns: 96px repeat(6, minmax(72px, 1fr)) 84px;
+  min-width: 620px;
+  height: 360px;
+}
+
+.cr-start,
+.cr-lane,
+.cr-finish {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 12px;
+}
+
+.cr-start {
+  border-right: var(--outline);
+  background: var(--lilac);
+}
+
+.cr-lane {
+  border-right: 3px dashed var(--sun);
+  background: #2f2f33;
+}
+
+.cr-lane.is-crossed {
+  background: #4d4a57;
+}
+
+.cr-lane[data-lane="6"] {
+  border-right: var(--outline);
+}
+
+.cr-finish {
+  background: repeating-conic-gradient(var(--ink) 0 25%, var(--chalk) 0 50%) 0 0 / 20px 20px;
+}
+
+.cr-road-label {
+  padding: 2px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.cr-mult {
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  font-family: var(--font-amount);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.cr-mult.is-crossed {
+  background: var(--sun);
+}
+
+.cr-mult.is-next {
+  background: var(--tomato);
+}
+
+.cr-check {
+  position: absolute;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sun);
+}
+
+/* Traffic in the lanes not crossed yet; the hit car drops onto the chicken. */
+.cr-car-slot {
+  position: absolute;
+  left: 50%;
+  width: 32px;
+  height: 52px;
+  margin-left: -16px;
+}
+
+.cr-car-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cr-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.cr-hit-car {
+  top: 126px;
+  transform: rotate(-12deg);
+  animation: cr-car-drop 450ms var(--ease-spring) both;
+}
+
+.cr-paf {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  padding: 2px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--tomato);
+  box-shadow: var(--shadow-sm);
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%) rotate(-10deg);
+  animation: cr-paf-pop 320ms var(--ease-spring) 200ms both;
+}
+
+@keyframes cr-car-drop {
+  from {
+    transform: translateY(-180px) rotate(-12deg);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) rotate(-12deg);
+    opacity: 1;
+  }
+}
+
+@keyframes cr-paf-pop {
+  from {
+    transform: translateX(-50%) rotate(-10deg) scale(0);
+  }
+  to {
+    transform: translateX(-50%) rotate(-10deg) scale(1);
+  }
+}
+
+/* The chicken rides a full-width mover, so translateX percentages are of the road's width. */
+/* Clipped: the shifted mover reaches past the road's edge and would add a scrollbar. */
+.cr-chicken-track {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cr-chicken-mover {
+  position: absolute;
+  inset: 0;
+  transition: transform 400ms var(--ease-spring);
+}
+
+.cr-chicken {
+  position: absolute;
+  top: 148px;
+  left: 0;
+  width: 56px;
+  height: 56px;
+  margin-left: -28px;
+  animation: cr-hop 400ms var(--ease-spring);
+}
+
+.cr-chicken-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cr-chicken.is-hit {
+  transform: rotate(84deg);
+  animation: cr-knocked 300ms ease-out 150ms both;
+}
+
+@keyframes cr-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-26px);
+  }
+}
+
+@keyframes cr-knocked {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(84deg);
+  }
+}
+
+.cr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cr-field-label {
+  font-weight: 800;
+}
+
+.cr-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.cr-stake-input {
+  width: 8ch;
+  min-height: 48px;
+  padding: 0 12px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  font-family: var(--font-amount);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.cr-help,
+.cr-note,
+.cr-muted,
+.cr-progress {
+  color: var(--muted);
+}
+
+.cr-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.cr-quick-button {
+  min-height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--chalk);
+  font-family: var(--font-amount);
+  font-weight: 700;
+}
+
+.cr-quick-button.is-selected {
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+}
+
+.cr-primary,
+.cr-cashout {
+  justify-content: center;
+  width: 100%;
+  padding: 0 12px;
+  text-align: center;
+}
+
+.cr-cashout {
+  background: var(--sun);
+}
+
+.cr-panel .button:disabled,
+.cr-quick-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.cr-subtitle {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.cr-paytable-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.cr-paytable-item {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+}
+
+.cr-paytable-item dd {
+  margin: 0;
+}
+
+.cr-big-mult {
+  font-size: 3.25rem;
+  line-height: 1;
+}
+
+.cr-prize {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  font-weight: 700;
+}
+
+.cr-prize strong {
+  white-space: nowrap;
+}
+
+.cr-dashed {
+  padding: 10px 14px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-align: center;
+}
+
+.cr-result-sticker {
+  align-self: flex-start;
+  padding: 6px 16px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  font-size: 1.4rem;
+  font-weight: 800;
+  transform: rotate(-3deg);
+}
+
+.cr-result-sticker.is-lost {
+  background: var(--tomato);
+}
+
+.cr-result-sticker.is-won {
+  background: var(--sun);
+}
+
+.cr-big-prize {
+  font-size: 2.25rem;
+}
+
+.cr-fair {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--ink);
+}
+
+.cr-fair-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.cr-fair-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cr-hash {
+  font-family: var(--font-amount);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.cr-fair-details summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.cr-fair-details dl {
+  margin: 0;
+}
+
+.cr-fair-details dd {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.cr-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.cr-history-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.cr-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-history-pill {
+  padding: 2px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+.cr-history-pill.is-win {
+  background: var(--sun);
+  font-family: var(--font-amount);
+}
+
+.cr-history-pill.is-lost {
+  background: var(--tomato);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-chicken,
+  .cr-chicken.is-hit,
+  .cr-hit-car,
+  .cr-paf,
+  .cr-top-sticker {
+    animation: none;
+  }
+
+  .cr-chicken-mover {
+    transition: none;
   }
 }
 

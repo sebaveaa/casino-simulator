@@ -40,7 +40,8 @@ export interface SeedPairService {
   /**
    * Reveals the active server seed and starts a new pair at nonce 0. The new pair keeps the
    * current client seed unless `clientSeed` is given. Changing the client seed always rotates,
-   * so each revealed pair reproduces all of its bets with a single client seed.
+   * so each revealed pair reproduces all of its bets with a single client seed. Refused (409)
+   * while a bet drawn from the active pair is in progress: the reveal would show its outcome.
    */
   rotate(
     db: Db,

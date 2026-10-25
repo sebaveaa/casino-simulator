@@ -3,6 +3,11 @@ import {
   apiPaths,
   authResponseSchema,
   balanceResponseSchema,
+  chickenRoadCashoutResponseSchema,
+  chickenRoadCurrentResponseSchema,
+  chickenRoadHistoryResponseSchema,
+  chickenRoadStartResponseSchema,
+  chickenRoadStepResponseSchema,
   currentRaceResponseSchema,
   depositResponseSchema,
   errorResponseSchema,
@@ -10,6 +15,7 @@ import {
   raceBetResponseSchema,
   raceEventSchema,
   rouletteBetResponseSchema,
+  seedPairResponseSchema,
   transactionHistoryResponseSchema,
 } from "@casino/shared";
 import type { z } from "zod";
@@ -234,5 +240,38 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
         idempotencyKey,
       }),
     watchRaces,
+    getSeedPair: () => request(seedPairResponseSchema, { method: "GET", path: apiPaths.seedPair }),
+    startChickenRoadGame: (body, idempotencyKey) =>
+      request(chickenRoadStartResponseSchema, {
+        method: "POST",
+        path: apiPaths.chickenRoadGames,
+        body,
+        idempotencyKey,
+      }),
+    stepChickenRoadGame: (body) =>
+      request(chickenRoadStepResponseSchema, {
+        method: "POST",
+        path: apiPaths.chickenRoadSteps,
+        body,
+      }),
+    cashOutChickenRoadGame: (body) =>
+      request(chickenRoadCashoutResponseSchema, {
+        method: "POST",
+        path: apiPaths.chickenRoadCashout,
+        body,
+      }),
+    getCurrentChickenRoadGame: () =>
+      request(chickenRoadCurrentResponseSchema, {
+        method: "GET",
+        path: apiPaths.chickenRoadCurrent,
+      }),
+    listChickenRoadHistory: (query = {}) =>
+      request(chickenRoadHistoryResponseSchema, {
+        method: "GET",
+        path:
+          query.limit === undefined
+            ? apiPaths.chickenRoadGames
+            : `${apiPaths.chickenRoadGames}?limit=${query.limit}`,
+      }),
   };
 }

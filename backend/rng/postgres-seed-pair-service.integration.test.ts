@@ -222,4 +222,64 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresSeedPairService", () =>
     const keys = drawn.map((d) => `${d.seedPairId}:${d.nonce}`);
     expect(new Set(keys).size).toBe(8);
   });
+
+  describe("with a game in progress", () => {
+    /** Draws from the active pair and opens a Chicken Road game on it, in one transaction. */
+    const startGame = (userId: string) =>
+      db.transaction().execute(async (trx) => {
+        const drawn = await seedPairs.draw(trx, userId);
+        return trx
+          .insertInto("bets")
+          .values({
+            user_id: userId,
+            game: "chicken-road",
+            seed_pair_id: drawn.seedPairId,
+            nonce: drawn.nonce,
+            stake: 1000n,
+            selection: JSON.stringify({}),
+            actions: JSON.stringify([]),
+            status: "in_progress",
+          })
+          .returning(["id", "seed_pair_id"])
+          .executeTakeFirstOrThrow();
+      });
+
+    it("refuses to rotate or change the client seed until the game settles", async () => {
+      const userId = await createUser();
+      const game = await startGame(userId);
+
+      for (const clientSeed of [undefined, "my-new-seed"]) {
+        const error = await rotate(userId, clientSeed).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(AppError);
+        expect(error).toMatchObject({ code: "conflict", statusCode: 409 });
+      }
+      // Nothing was revealed: the game's pair is still the active one.
+      const active = await seedPairs.getActive(db, userId);
+      expect(active.id).toBe(game.seed_pair_id);
+
+      await db
+        .updateTable("bets")
+        .set({ status: "settled", payout: 0n, settled_at: new Date() })
+        .where("id", "=", game.id)
+        .execute();
+      const { revealed, active: next } = await rotate(userId, "my-new-seed");
+      expect(revealed.id).toBe(game.seed_pair_id);
+      expect(next.clientSeed).toBe("my-new-seed");
+    });
+
+    it("never reveals the pair of a game started concurrently", async () => {
+      const userId = await createUser();
+      await seedPairs.getActive(db, userId);
+      const [started, rotated] = await Promise.allSettled([startGame(userId), rotate(userId)]);
+      if (started.status !== "fulfilled") throw started.reason;
+      if (rotated.status === "fulfilled") {
+        // The rotation ran first, so the game drew from the new pair.
+        expect(started.value.seed_pair_id).toBe(rotated.value.active.id);
+      } else {
+        // The game committed first, so the rotation was refused.
+        expect(rotated.reason).toMatchObject({ code: "conflict" });
+        expect((await seedPairs.getActive(db, userId)).id).toBe(started.value.seed_pair_id);
+      }
+    });
+  });
 });

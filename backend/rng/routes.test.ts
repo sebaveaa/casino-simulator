@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type AuthUser, InvalidTokenError, type TokenService } from "../auth/token-service";
 import type { Db } from "../db/database";
 import { buildApp } from "../platform/app";
+import { AppError } from "../platform/errors";
 import { stubServices } from "../platform/services";
 import type { ActiveSeedPair, SeedPairService } from "./seed-pair-service";
 
@@ -76,14 +77,14 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-async function build() {
+async function build(seedPairs: SeedPairService = fakeSeedPairs()) {
   // The fake service ignores the executor, so a transaction just runs its callback.
   const db = { transaction: () => ({ execute: (fn: (trx: Db) => unknown) => fn(db) }) } as Db;
   const app = await buildApp({
     config,
     checks,
     db,
-    services: { ...stubServices, seedPairs: fakeSeedPairs(), tokens: fakeTokens([userId]) },
+    services: { ...stubServices, seedPairs, tokens: fakeTokens([userId]) },
   });
   apps.push(app);
   return app;
@@ -168,5 +169,25 @@ describe("seed pair routes", () => {
     expect(active.id).not.toBe(before.id);
     expect(active.serverSeedHash).toBe(await hashServerSeed("server-seed-2"));
     expect(res.body).not.toContain("server-seed-2");
+  });
+
+  it("answers 409 on rotate and client-seed change while a game is in progress", async () => {
+    const seedPairs = fakeSeedPairs();
+    seedPairs.rotate = async () => {
+      throw new AppError("conflict", "Finish the game in progress before changing the seeds");
+    };
+    const app = await build(seedPairs);
+    for (const res of [
+      await app.inject({ method: "POST", url: apiPaths.seedPairRotate, headers: auth }),
+      await app.inject({
+        method: "PUT",
+        url: apiPaths.seedPairClientSeed,
+        headers: auth,
+        payload: { clientSeed: "my-seed" },
+      }),
+    ]) {
+      expect(res.statusCode).toBe(409);
+      expect(errorResponseSchema.parse(res.json()).error.code).toBe("conflict");
+    }
   });
 });

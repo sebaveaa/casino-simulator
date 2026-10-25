@@ -1,6 +1,14 @@
 import type {
   AuthResponse,
   BalanceResponse,
+  ChickenRoadCashoutRequest,
+  ChickenRoadCashoutResponse,
+  ChickenRoadCurrentResponse,
+  ChickenRoadHistoryResponse,
+  ChickenRoadStartRequest,
+  ChickenRoadStartResponse,
+  ChickenRoadStepRequest,
+  ChickenRoadStepResponse,
   CurrentRaceResponse,
   DepositRequest,
   DepositResponse,
@@ -12,6 +20,7 @@ import type {
   RegisterRequest,
   RouletteBetRequest,
   RouletteBetResponse,
+  SeedPairResponse,
   TransactionHistoryQueryInput,
   TransactionHistoryResponse,
 } from "@casino/shared";
@@ -52,4 +61,15 @@ export interface ApiClient {
     onEvent: (event: RaceEvent) => void,
     onStatus?: (status: "connected" | "reconnecting") => void,
   ): () => void;
+  /** The active seed pair: its hash is the one the next game will carry. */
+  getSeedPair(): Promise<SeedPairResponse>;
+  startChickenRoadGame(
+    body: ChickenRoadStartRequest,
+    idempotencyKey: string,
+  ): Promise<ChickenRoadStartResponse>;
+  stepChickenRoadGame(body: ChickenRoadStepRequest): Promise<ChickenRoadStepResponse>;
+  cashOutChickenRoadGame(body: ChickenRoadCashoutRequest): Promise<ChickenRoadCashoutResponse>;
+  getCurrentChickenRoadGame(): Promise<ChickenRoadCurrentResponse>;
+  /** Latest finished games, newest first; the server defaults `limit` to 5 (max 20). */
+  listChickenRoadHistory(query?: { limit?: number }): Promise<ChickenRoadHistoryResponse>;
 }

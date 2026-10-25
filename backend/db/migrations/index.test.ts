@@ -10,15 +10,15 @@ describe("migrations", () => {
   });
 
   it("registers the race round columns migration", () => {
-    expect(Object.keys(migrations)).toContain("0003_race_rounds");
+    expect(Object.keys(migrations)).toContain("0005_race_rounds");
   });
 
   it("registers the race current-round index migration", () => {
-    expect(Object.keys(migrations)).toContain("0004_race_current_index");
+    expect(Object.keys(migrations)).toContain("0006_race_current_index");
   });
 
   it("registers the race round partial indexes migration", () => {
-    expect(Object.keys(migrations)).toContain("0005_race_round_partial_indexes");
+    expect(Object.keys(migrations)).toContain("0007_race_round_partial_indexes");
   });
 
   it("gives every migration an up and a down", () => {
