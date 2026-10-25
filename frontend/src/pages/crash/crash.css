@@ -281,8 +281,46 @@
   font-size: 0.85rem;
 }
 
+/* Despegue scene: ink sky, tomato curve, sun plane. */
+.crash-scene-plane {
+  background: var(--ink);
+}
+.crash-curve {
+  stroke: var(--tomato);
+  stroke-linecap: round;
+}
+.crash-plane {
+  fill: var(--sun);
+  transform: translate(10px, 96px);
+}
+.crash-plane-wing {
+  fill: var(--chalk);
+}
+.crash-cloud {
+  fill: var(--chalk);
+}
+.crash-scene-plane[data-phase="flying"] .crash-plane {
+  animation: crash-climb 1.2s var(--ease-spring) forwards;
+}
+@keyframes crash-climb {
+  from {
+    transform: translate(10px, 96px);
+  }
+  to {
+    transform: translate(150px, 20px);
+  }
+}
+.crash-scene-plane[data-phase="impact"] .crash-plane,
+.crash-scene-plane[data-phase="cap"] .crash-plane {
+  transform: translate(170px, 14px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .crash-scene-dino[data-phase="flying"] .crash-dino {
     animation: none;
+  }
+  .crash-scene-plane[data-phase="flying"] .crash-plane {
+    animation: none;
+    transform: translate(80px, 58px);
   }
 }

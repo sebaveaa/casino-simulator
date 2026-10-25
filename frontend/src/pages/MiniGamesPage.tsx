@@ -46,6 +46,7 @@ export const miniGames: MiniGameEntry[] = [
     description: "El avión sube y tu premio también. Cobra antes de que se pierda entre las nubes.",
     max: "Hasta 20,00x",
     tone: "ink",
+    path: "/games/mini/aviator",
   },
 ];
 

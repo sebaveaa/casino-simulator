@@ -50,23 +50,25 @@ describe("MiniGamesPage", () => {
     });
   });
 
-  it("lets the player start Cruza la Calle and Dino Crash, while Despegue is coming soon", () => {
+  it("lets the player start all three mini games", () => {
     const list = renderHub();
     const links = within(list).getAllByRole("link");
-    expect(links).toHaveLength(2);
-    const playChicken = within(list).getByRole("link", { name: "¡Jugar! Cruza la Calle" });
-    expect(playChicken.getAttribute("href")).toBe("/games/mini/chicken-road");
-    const playDino = within(list).getByRole("link", { name: "¡Jugar! Dino Crash" });
-    expect(playDino.getAttribute("href")).toBe("/games/mini/dino-crash");
+    expect(links).toHaveLength(3);
+    expect(
+      within(list).getByRole("link", { name: "¡Jugar! Cruza la Calle" }).getAttribute("href"),
+    ).toBe("/games/mini/chicken-road");
+    expect(
+      within(list).getByRole("link", { name: "¡Jugar! Dino Crash" }).getAttribute("href"),
+    ).toBe("/games/mini/dino-crash");
+    expect(within(list).getByRole("link", { name: "¡Jugar! Despegue" }).getAttribute("href")).toBe(
+      "/games/mini/aviator",
+    );
 
-    const [chicken, dino, aviator] = within(list).getAllByRole("article");
-    for (const card of [chicken, dino]) {
-      expect(card?.classList.contains("is-playable")).toBe(true);
-      expect(within(card as HTMLElement).queryByText("Muy pronto")).toBeNull();
-      expect(within(card as HTMLElement).queryByText("¡Pronto!")).toBeNull();
+    for (const card of within(list).getAllByRole("article")) {
+      expect(card.classList.contains("is-playable")).toBe(true);
+      expect(within(card).queryByText("Muy pronto")).toBeNull();
+      expect(within(card).queryByText("¡Pronto!")).toBeNull();
     }
-    expect(aviator?.classList.contains("is-playable")).toBe(false);
-    expect(within(aviator as HTMLElement).getByText("Muy pronto")).toBeTruthy();
   });
 
   it("opens Cruza la Calle from its card", async () => {
