@@ -15,6 +15,16 @@ export type CrashGame = z.infer<typeof crashGameSchema>;
 export const CRASH_MIN_STAKE: Money = 10n * MINOR_UNITS_PER_CREDIT;
 export const CRASH_MAX_STAKE: Money = 500n * MINOR_UNITS_PER_CREDIT;
 
+/**
+ * Round timings are fixed game constants, not per-deployment settings (PLAN-CRASH §3.1 calls the
+ * window "constante"). Both the worker and the current-round query read them from here, so the API
+ * needs no new environment configuration. `CRASH_BETTING_WINDOW_MS` is how long a round accepts
+ * bets before takeoff; `CRASH_INTERMISSION_MS` is the pause after a round settles before the next
+ * one opens (and how long the finished round stays on screen).
+ */
+export const CRASH_BETTING_WINDOW_MS = 5000;
+export const CRASH_INTERMISSION_MS = 3000;
+
 /** Multiplier bounds in hundredths: 1.00x to the 20.00x cap (PLAN-CRASH §3.1). */
 export const MIN_MULTIPLIER_HUNDREDTHS = 100;
 export const MAX_MULTIPLIER_HUNDREDTHS = 2000;
