@@ -1,19 +1,20 @@
-import type { GameId } from "@casino/shared";
 import type { CSSProperties } from "react";
 import { Link } from "react-router";
 import { BALANCE_LOADING, useBalance } from "../app/useBalance";
-import { GameArt } from "./GameIcons";
+import { GameArt, type GameArtId } from "./GameIcons";
 
 /** Circle color of a game button; each maps to a `.tone-*` class. */
 type Tone = "tomato" | "sun" | "chalk" | "ink";
 
 interface GameEntry {
-  id: GameId;
+  id: GameArtId;
   title: string;
   description: string;
   tone: Tone;
   /** Route of the game; absent while it is not playable. */
   path?: string;
+  /** Shows the "Nuevo" tag on the circle. */
+  isNew?: boolean;
 }
 
 /** Games shown in the lobby. */
@@ -31,7 +32,14 @@ export const games: GameEntry[] = [
     description: "Elige un ganador y anímalo hasta la meta.",
     tone: "sun",
   },
-  { id: "slots", title: "Tragamonedas", description: "Haz girar los rodillos.", tone: "chalk" },
+  {
+    id: "mini-games",
+    title: "Minijuegos",
+    description: "Retos rápidos, grandes premios.",
+    tone: "chalk",
+    path: "/games/mini",
+    isNew: true,
+  },
   {
     id: "blackjack",
     title: "Blackjack",
@@ -52,6 +60,7 @@ function GameBody({ game, live }: { game: GameEntry; live: boolean }) {
         <span className={live ? "sticker sticker-play" : "sticker sticker-soon"}>
           {live ? "¡Jugar!" : "¡Pronto!"}
         </span>
+        {game.isNew && <span className="game-new">Nuevo</span>}
       </span>
       <h2 className="game-title">{game.title}</h2>
       <p className="game-text">{game.description}</p>
