@@ -1,4 +1,4 @@
-import type { RaceEvent } from "@casino/shared";
+import type { CrashEvent, CrashGame, RaceEvent } from "@casino/shared";
 import {
   apiPaths,
   authResponseSchema,
@@ -8,6 +8,11 @@ import {
   chickenRoadHistoryResponseSchema,
   chickenRoadStartResponseSchema,
   chickenRoadStepResponseSchema,
+  crashBetResponseSchema,
+  crashCashoutResponseSchema,
+  crashCurrentResponseSchema,
+  crashEventSchema,
+  crashHistoryResponseSchema,
   currentRaceResponseSchema,
   depositResponseSchema,
   errorResponseSchema,
@@ -200,6 +205,105 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
     };
   }
 
+  // A Crash stream, parameterised by game. Same transport and reconnection as `watchRaces`.
+  function watchCrash(
+    game: CrashGame,
+    onEvent: (event: CrashEvent) => void,
+    onStatus?: (status: "connected" | "reconnecting") => void,
+  ): () => void {
+    const path = apiPaths.crashStream.replace(":game", game);
+    let closed = false;
+    let controller: AbortController | null = null;
+    let wake: (() => void) | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    function wait(ms: number): Promise<void> {
+      return new Promise((resolve) => {
+        wake = resolve;
+        timer = setTimeout(resolve, ms);
+      });
+    }
+
+    function dispatch(block: string): void {
+      const data = sseData(block);
+      if (data === null) return;
+      let json: unknown;
+      try {
+        json = JSON.parse(data);
+      } catch {
+        return;
+      }
+      const parsed = crashEventSchema.safeParse(json);
+      if (!parsed.success) return;
+      try {
+        onEvent(parsed.data);
+      } catch {
+        // A listener bug must not be treated as a stream failure.
+      }
+    }
+
+    async function run(): Promise<void> {
+      let attempt = 0;
+      while (!closed) {
+        controller = new AbortController();
+        try {
+          const token = options.getToken();
+          const headers: Record<string, string> = { accept: "text/event-stream" };
+          if (token) headers.authorization = `Bearer ${token}`;
+          const response = await doFetch(`${baseUrl}${path}`, {
+            method: "GET",
+            headers,
+            signal: controller.signal,
+          });
+          if (closed) return;
+          if (response.status === 401 || response.status === 403) {
+            void response.body?.cancel();
+            if (token) options.onUnauthorized?.();
+            return;
+          }
+          if (!response.ok) void response.body?.cancel();
+          if (response.ok && response.body) {
+            onStatus?.("connected");
+            attempt = 0;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const blocks = buffer.split(/\r?\n\r?\n/);
+              buffer = blocks.pop() ?? "";
+              for (const block of blocks) dispatch(block);
+            }
+          }
+        } catch {
+          // Network failure or abort: handled below.
+        }
+        if (closed) return;
+        onStatus?.("reconnecting");
+        const delay = reconnectDelays[Math.min(attempt, reconnectDelays.length - 1)] ?? 1000;
+        attempt += 1;
+        await wait(delay);
+      }
+    }
+
+    void run();
+
+    return () => {
+      if (closed) return;
+      closed = true;
+      controller?.abort();
+      clearTimeout(timer);
+      wake?.();
+    };
+  }
+
+  const crashPath = (template: string, game: CrashGame, betId?: string) => {
+    const withGame = template.replace(":game", game);
+    return betId ? withGame.replace(":betId", betId) : withGame;
+  };
+
   return {
     register: (body) =>
       request(authResponseSchema, { method: "POST", path: apiPaths.register, body, public: true }),
@@ -272,6 +376,32 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
           query.limit === undefined
             ? apiPaths.chickenRoadGames
             : `${apiPaths.chickenRoadGames}?limit=${query.limit}`,
+      }),
+    getCurrentCrash: (game) =>
+      request(crashCurrentResponseSchema, {
+        method: "GET",
+        path: crashPath(apiPaths.crashCurrent, game),
+      }),
+    placeCrashBet: (game, body, idempotencyKey) =>
+      request(crashBetResponseSchema, {
+        method: "POST",
+        path: crashPath(apiPaths.crashBets, game),
+        body,
+        idempotencyKey,
+      }),
+    cashOutCrash: (game, betId) =>
+      request(crashCashoutResponseSchema, {
+        method: "POST",
+        path: crashPath(apiPaths.crashCashout, game, betId),
+      }),
+    watchCrash,
+    listCrashHistory: (game, query = {}) =>
+      request(crashHistoryResponseSchema, {
+        method: "GET",
+        path:
+          query.limit === undefined
+            ? crashPath(apiPaths.crashRounds, game)
+            : `${crashPath(apiPaths.crashRounds, game)}?limit=${query.limit}`,
       }),
   };
 }
