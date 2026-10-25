@@ -3,6 +3,7 @@ import type { RequireAuth } from "../auth/guard";
 import { authRoutes } from "../auth/routes";
 import type { Db } from "../db/database";
 import { chickenRoadRoutes } from "../games/chicken-road/routes";
+import { crashRoutes } from "../games/crash/routes";
 import { racesRoutes } from "../games/races/routes";
 import { rouletteRoutes } from "../games/roulette/routes";
 import { streamRoutes } from "../realtime/stream-routes";
@@ -35,4 +36,5 @@ export const moduleRoutes: ModuleRoutes[] = [
   racesRoutes,
   streamRoutes,
   chickenRoadRoutes,
+  crashRoutes,
 ];
