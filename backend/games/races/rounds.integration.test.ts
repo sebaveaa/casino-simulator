@@ -241,7 +241,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("race round queries and routes",
   it("shows no settled round at all when the intermission is 0", async () => {
     await rolledBack(
       async (trx) => {
-        await createRound(trx, "settled", { settledAgoMs: 1 });
+        await createRound(trx, "settled", { settledAgoMs: 1_000 });
         expect(await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs: 0 })).toBeNull();
         const open = await createRound(trx, "open", { opensInMs: 1_000 });
         expect((await getCurrentRound(trx, { raceDurationMs, raceIntermissionMs: 0 }))?.id).toBe(
