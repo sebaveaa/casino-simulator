@@ -51,10 +51,11 @@ describe("LobbyPage", () => {
     const links = within(list).getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/games/roulette",
+      "/games/races",
       "/games/mini",
     ]);
     for (const link of links) expect(within(link).getByText("¡Jugar!")).toBeTruthy();
-    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(2);
+    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(1);
   });
 
   it("replaces slots with the mini games card, tagged as new", () => {

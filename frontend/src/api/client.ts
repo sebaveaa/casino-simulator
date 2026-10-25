@@ -9,10 +9,14 @@ import type {
   ChickenRoadStartResponse,
   ChickenRoadStepRequest,
   ChickenRoadStepResponse,
+  CurrentRaceResponse,
   DepositRequest,
   DepositResponse,
   ErrorCode,
   LoginRequest,
+  RaceBetRequest,
+  RaceBetResponse,
+  RaceEvent,
   RegisterRequest,
   RouletteBetRequest,
   RouletteBetResponse,
@@ -46,6 +50,17 @@ export interface ApiClient {
   deposit(body: DepositRequest, idempotencyKey: string): Promise<DepositResponse>;
   listTransactions(query?: TransactionHistoryQueryInput): Promise<TransactionHistoryResponse>;
   placeRouletteBet(body: RouletteBetRequest, idempotencyKey: string): Promise<RouletteBetResponse>;
+  getCurrentRace(): Promise<CurrentRaceResponse>;
+  placeRaceBet(body: RaceBetRequest, idempotencyKey: string): Promise<RaceBetResponse>;
+  /**
+   * Subscribes to the live race events. `onStatus("connected")` fires on every (re)connection, and
+   * the caller should re-fetch `getCurrentRace()` on each one after the first. Returns the function
+   * that closes the stream; it is safe to call more than once.
+   */
+  watchRaces(
+    onEvent: (event: RaceEvent) => void,
+    onStatus?: (status: "connected" | "reconnecting") => void,
+  ): () => void;
   /** The active seed pair: its hash is the one the next game will carry. */
   getSeedPair(): Promise<SeedPairResponse>;
   startChickenRoadGame(

@@ -21,7 +21,14 @@ async function build(
 ): Promise<FastifyInstance> {
   const app = await buildApp({
     logger,
-    config: { appEnv: "production", allowedOrigins: [] },
+    config: {
+      appEnv: "production",
+      allowedOrigins: [],
+      raceDurationMs: 10_000,
+      raceIntermissionMs: 8000,
+      raceMinStake: 1n,
+      raceMaxStake: 1000n,
+    },
     checks: { postgres: async () => true, redis: async () => true },
     db: {} as Db,
     services: { ...stubServices, tokens: fakeTokens(verify) },

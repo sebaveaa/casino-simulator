@@ -54,6 +54,13 @@ export interface WalletService {
    * Writes one transaction with two ledger entries and keeps `wallets.balance` in sync.
    * Throws {@link InsufficientFundsError} if a player wallet would go negative. A repeated
    * `idempotencyKey` is rejected by the unique constraint; check {@link findTransaction} first.
+   *
+   * Lock order: `transfer` locks the two wallets it touches sorted by id, so it cannot by itself
+   * guarantee "house last". That property comes from the callers: they lock the player wallet(s)
+   * first through {@link lockBalance}, in a deterministic order (ascending wallet id when there
+   * are several), so the house wallet is the last lock a transaction takes. Roulette locks the
+   * player and then the house; race settlement pre-locks every winner's wallet (sorted) before its
+   * first transfer, after taking the round row (round, then players, then house).
    */
   transfer(trx: Db, input: TransferInput): Promise<{ transactionId: string }>;
 

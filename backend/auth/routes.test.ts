@@ -15,7 +15,14 @@ import { type Services, stubServices } from "../platform/services";
 import { postgresWalletService } from "../wallet/postgres-wallet-service";
 import { createJwtTokenService } from "./jwt-token-service";
 
-const config = { appEnv: "production" as const, allowedOrigins: [] };
+const config = {
+  appEnv: "production" as const,
+  allowedOrigins: [],
+  raceDurationMs: 10_000,
+  raceIntermissionMs: 8000,
+  raceMinStake: 1n,
+  raceMaxStake: 1000n,
+};
 const checks = { postgres: async () => true, redis: async () => true };
 const secret = "a-test-secret-that-is-at-least-32-characters";
 const password = "correct horse battery";

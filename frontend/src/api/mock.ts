@@ -4,11 +4,13 @@ import {
   CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT,
   CHICKEN_ROAD_HISTORY_MAX_LIMIT,
   type ChickenRoadGame,
+  type CurrentRaceResponse,
   chickenRoad,
   chickenRoadPayout,
   chickenRoadStartRequestSchema,
   chickenRoadStepRequestSchema,
   computeOutcome,
+  computeRoundOutcome,
   createRng,
   type DepositRequest,
   type DepositResponse,
@@ -17,9 +19,16 @@ import {
   LANE_COUNT,
   type LoginRequest,
   parseAmount,
+  type RaceBetRequest,
+  type RaceBetResponse,
+  type RaceEvent,
+  type RaceResult,
+  type RaceRound,
   type RegisterRequest,
   type RouletteBetRequest,
   type RouletteBetResponse,
+  racePayout,
+  resolveRace,
   roulette,
   selectionKey,
   spinPayouts,
@@ -36,6 +45,43 @@ import { type ApiClient, ApiError } from "./client";
 const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
 const MOCK_CLIENT_SEED = "mock-client-seed";
+const DEFAULT_RACE_WINDOW_MS = 30000;
+const DEFAULT_RACE_DURATION_MS = 10000;
+const DEFAULT_RACE_INTERMISSION_MS = 8000;
+const MIN_RACE_STAKE = 100n;
+const MAX_RACE_STAKE = 100000n;
+
+/** Random lowercase hex string; a stand-in for seeds and hashes in the mock. */
+function randomHex(bytes: number): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+interface MockRound {
+  id: string;
+  status: RaceRound["status"];
+  opensAt: number;
+  closesAt: number;
+  settlesAt: number | null;
+  serverSeed: string;
+  serverSeedHash: string;
+  result: RaceResult | null;
+}
+
+export interface MockRaceOptions {
+  /** How long a round accepts bets. Default 30000. */
+  windowMs?: number;
+  /** Time between the result and the settlement. Default 10000. */
+  durationMs?: number;
+  /**
+   * Pause between a settlement and the next round: the settled round stays current for it, like
+   * the backend `RACE_INTERMISSION_SECONDS`. Default 8000.
+   */
+  intermissionMs?: number;
+  /** Delay before the first round opens. Default 0. */
+  startDelayMs?: number;
+}
 
 /** A stake as an amount, or null when it is not one. */
 function stakeAmount(stake: string): bigint | null {
@@ -134,9 +180,18 @@ function chickenView(game: MockChickenGame): ChickenRoadGame {
  * order. Once it runs out, the seed decides again.
  */
 export function createMockApiClient(
-  options: { delayMs?: number; startingBalance?: bigint; chickenRoads?: (number | null)[] } = {},
+  options: {
+    delayMs?: number;
+    startingBalance?: bigint;
+    chickenRoads?: (number | null)[];
+    race?: MockRaceOptions;
+  } = {},
 ): ApiClient {
   const delayMs = options.delayMs ?? 0;
+  const windowMs = options.race?.windowMs ?? DEFAULT_RACE_WINDOW_MS;
+  const durationMs = options.race?.durationMs ?? DEFAULT_RACE_DURATION_MS;
+  const intermissionMs = options.race?.intermissionMs ?? DEFAULT_RACE_INTERMISSION_MS;
+  const startDelayMs = options.race?.startDelayMs ?? 0;
   let balance = options.startingBalance ?? STARTING_BALANCE;
   const fixedRoads = [...(options.chickenRoads ?? [])];
   const transactions: Transaction[] = [];
@@ -189,6 +244,104 @@ export function createMockApiClient(
       createdAt: new Date().toISOString(),
     });
     return id;
+  }
+
+  // Races: a round state machine driven by timers. Nothing runs until the first race call.
+  let raceStarted = false;
+  let round: MockRound | null = null;
+  // The player's bet on the current round; at most one per round.
+  let myBet: { betId: string; animal: number; stake: bigint; payout: bigint | null } | null = null;
+  const raceBets = new Map<string, { request: RaceBetRequest; response: RaceBetResponse }>();
+  const listeners = new Set<(event: RaceEvent) => void>();
+
+  const emit = (event: RaceEvent) => {
+    for (const listener of [...listeners]) listener(event);
+  };
+
+  function viewOf(r: MockRound): RaceRound {
+    const base = {
+      id: r.id,
+      opensAt: new Date(r.opensAt).toISOString(),
+      closesAt: new Date(r.closesAt).toISOString(),
+      serverSeedHash: r.serverSeedHash,
+    };
+    if ((r.status === "resolved" || r.status === "settled") && r.result) {
+      return {
+        ...base,
+        status: r.status,
+        result: r.result,
+        serverSeed: r.serverSeed,
+        settlesAt: r.settlesAt ? new Date(r.settlesAt).toISOString() : undefined,
+      };
+    }
+    return { ...base, status: r.status };
+  }
+
+  // The transition in flight (hashing and HMAC are async); race calls wait for it.
+  let raceReady: Promise<void> = Promise.resolve();
+  const schedule = (fn: () => Promise<void> | void, ms: number) =>
+    setTimeout(() => {
+      raceReady = Promise.resolve(fn());
+    }, ms);
+
+  /** Opens a round with the real derivation: the hash is published now, the result comes from the seed. */
+  async function openRound() {
+    const now = Date.now();
+    const serverSeed = randomHex(32);
+    const next: MockRound = {
+      id: crypto.randomUUID(),
+      status: "open",
+      opensAt: now,
+      closesAt: now + windowMs,
+      settlesAt: null,
+      serverSeed,
+      serverSeedHash: await hashServerSeed(serverSeed),
+      result: null,
+    };
+    round = next;
+    myBet = null;
+    emit({ type: "opened", round: viewOf(next) });
+    schedule(closeRound, windowMs);
+  }
+
+  async function closeRound() {
+    const current = round;
+    if (!current) return;
+    current.status = "closed";
+    emit({ type: "closed", roundId: current.id });
+    // Resolution is immediate, as in the backend worker.
+    const result = resolveRace(
+      createRng(await computeRoundOutcome(current.serverSeed, current.id)),
+    );
+    current.result = result;
+    current.status = "resolved";
+    current.settlesAt = Date.now() + durationMs;
+    emit({ type: "result", roundId: current.id, result, serverSeed: current.serverSeed });
+    schedule(settleRound, durationMs);
+  }
+
+  function settleRound() {
+    const current = round;
+    if (!current?.result) return;
+    if (myBet) {
+      const payout = myBet.animal === current.result.winner ? racePayout(myBet.stake) : 0n;
+      myBet.payout = payout;
+      if (payout > 0n) {
+        balance += payout;
+        record("payout", payout, myBet.betId);
+      }
+    }
+    current.status = "settled";
+    emit({ type: "settled", roundId: current.id });
+    // Like the backend, the settled round stays current for the intermission, then the next opens.
+    schedule(openRound, intermissionMs);
+  }
+
+  function ensureRaces() {
+    if (raceStarted) return;
+    raceStarted = true;
+    if (startDelayMs > 0) schedule(openRound, startDelayMs);
+    else raceReady = openRound();
   }
 
   return {
@@ -298,6 +451,90 @@ export function createMockApiClient(
       };
       bets.set(idempotencyKey, { request: body, response });
       return response;
+    },
+    async getCurrentRace(): Promise<CurrentRaceResponse> {
+      ensureRaces();
+      await raceReady;
+      await sleep(delayMs);
+      return {
+        round: round ? viewOf(round) : null,
+        myBet: myBet
+          ? {
+              animal: myBet.animal,
+              stake: toAmount(myBet.stake),
+              payout: myBet.payout === null ? null : toAmount(myBet.payout),
+            }
+          : null,
+        now: new Date().toISOString(),
+        limits: { minStake: toAmount(MIN_RACE_STAKE), maxStake: toAmount(MAX_RACE_STAKE) },
+        raceDurationMs: durationMs,
+      };
+    },
+    async placeRaceBet(body: RaceBetRequest, idempotencyKey: string): Promise<RaceBetResponse> {
+      ensureRaces();
+      await raceReady;
+      await sleep(delayMs);
+      const previous = raceBets.get(idempotencyKey);
+      if (previous) {
+        if (
+          previous.request.roundId !== body.roundId ||
+          previous.request.animal !== body.animal ||
+          stakeAmount(previous.request.stake) !== stakeAmount(body.stake)
+        ) {
+          throw new ApiError(
+            "conflict",
+            "Idempotency-Key was already used for a different bet",
+            409,
+          );
+        }
+        return { ...previous.response, balance: toAmount(balance) };
+      }
+      const stake = stakeAmount(body.stake);
+      if (
+        stake === null ||
+        stake < MIN_RACE_STAKE ||
+        stake > MAX_RACE_STAKE ||
+        !Number.isInteger(body.animal) ||
+        body.animal < 0 ||
+        body.animal > 4
+      ) {
+        throw new ApiError("invalid_request", "Invalid race bet", 400);
+      }
+      if (
+        !round ||
+        round.id !== body.roundId ||
+        round.status !== "open" ||
+        Date.now() >= round.closesAt
+      ) {
+        throw new ApiError("invalid_request", "The round is not open for bets", 400);
+      }
+      if (myBet) {
+        throw new ApiError("conflict", "You already placed a bet in this round", 409);
+      }
+      if (stake > balance) {
+        throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+      }
+      const betId = crypto.randomUUID();
+      balance -= stake;
+      record("bet", -stake, betId);
+      myBet = { betId, animal: body.animal, stake, payout: null };
+      const response: RaceBetResponse = {
+        betId,
+        roundId: round.id,
+        animal: body.animal,
+        stake: toAmount(stake),
+        balance: toAmount(balance),
+      };
+      raceBets.set(idempotencyKey, { request: body, response });
+      return response;
+    },
+    watchRaces(onEvent, onStatus) {
+      listeners.add(onEvent);
+      ensureRaces();
+      onStatus?.("connected");
+      return () => {
+        listeners.delete(onEvent);
+      };
     },
     async getSeedPair() {
       await sleep(delayMs);

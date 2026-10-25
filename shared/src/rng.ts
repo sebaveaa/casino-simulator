@@ -43,6 +43,14 @@ export async function computeOutcome(seed: SeedInput): Promise<Outcome> {
   return hmacSha256Hex(seed.serverSeed, `${seed.clientSeed}:${seed.nonce}`);
 }
 
+/**
+ * Outcome of a shared round (README §5.1 variant): HMAC-SHA256(serverSeed, roundId) as 64
+ * lowercase hex chars. Every bettor of the round sees the same result.
+ */
+export async function computeRoundOutcome(serverSeed: string, roundId: string): Promise<Outcome> {
+  return hmacSha256Hex(serverSeed, roundId);
+}
+
 /** SHA-256 of the server seed as hex; published before bets are placed. */
 export async function hashServerSeed(serverSeed: string): Promise<string> {
   return toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(serverSeed))));

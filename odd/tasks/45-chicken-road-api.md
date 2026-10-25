@@ -41,23 +41,7 @@ Design source: `PLAN-CHICKEN-ROAD.md` phase 4, `PLAN-MINI-GAMES.md` §4, `odd/ta
 
 ## Migration order
 
-Kysely refuses to run `0003_race_rounds` once `0004_mini_games` has run on the same database. If races merges after you ran 0004 locally, roll 0004 back, then run `npm run migrate` (it applies 0003, then 0004). PowerShell:
-
-No Chicken Road games played yet:
-
-```powershell
-docker compose exec postgres psql -U casino -d casino -c "BEGIN; DROP INDEX IF EXISTS bets_one_chicken_road_in_progress_key; ALTER TABLE bets DROP CONSTRAINT bets_game_check; ALTER TABLE bets ADD CONSTRAINT bets_game_check CHECK (game IN ('roulette','slots','races','blackjack')); DELETE FROM kysely_migration WHERE name = '0004_mini_games'; COMMIT;"
-$env:DATABASE_URL="postgres://casino:casino@127.0.0.1:5433/casino"; npm run migrate
-```
-
-Chicken Road games exist. The old check rejects their rows, and the append-only ledger keeps them from being deleted, so reset the local database. This wipes all local data:
-
-```powershell
-docker compose rm -sf postgres
-docker volume rm casino-simulator_postgres-data
-docker compose up -d postgres
-$env:DATABASE_URL="postgres://casino:casino@127.0.0.1:5433/casino"; npm run migrate
-```
+The race migrations were renumbered to `0005`-`0007` so they run after `0004_mini_games` (0003 is intentionally unused). Kysely rejects out-of-order migrations, so no rollback is needed.
 
 ## Tasks
 

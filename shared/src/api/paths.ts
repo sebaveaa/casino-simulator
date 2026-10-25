@@ -12,6 +12,10 @@ export const apiPaths = {
   seedPairClientSeed: "/rng/seed-pair/client-seed",
   seedPairRotate: "/rng/seed-pair/rotate",
   rouletteBets: "/games/roulette/bets",
+  raceBets: "/games/races/bets",
+  raceCurrent: "/races/current",
+  raceRound: "/races/rounds/:roundId",
+  raceStream: "/races/stream",
   /** POST starts a game; GET lists the latest finished ones (`?limit=`). */
   chickenRoadGames: "/games/chicken-road/games",
   chickenRoadCurrent: "/games/chicken-road/games/current",

@@ -27,7 +27,9 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
     const roulette = screen.getByRole("link", { name: /¡Jugar!.*Ruleta/ });
     expect(roulette.getAttribute("href")).toBe("/games/roulette");
-    expect(screen.getAllByText("¡Pronto!")).toHaveLength(2);
+    const races = screen.getByRole("link", { name: /¡Jugar!.*Carreras de animales/ });
+    expect(races.getAttribute("href")).toBe("/games/races");
+    expect(screen.getAllByText("¡Pronto!")).toHaveLength(1);
   });
 
   it("shows the balance returned by the API", async () => {

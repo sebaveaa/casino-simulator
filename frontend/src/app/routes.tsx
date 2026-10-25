@@ -4,6 +4,7 @@ import { LobbyPage } from "../pages/LobbyPage";
 import { LoginPage } from "../pages/LoginPage";
 import { MiniGamesPage } from "../pages/MiniGamesPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
+import { RacesPage } from "../pages/RacesPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { RoulettePage } from "../pages/RoulettePage";
 import { WalletPage } from "../pages/WalletPage";
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: "wallet", element: <WalletPage /> },
           { path: "games/roulette", element: <RoulettePage /> },
+          { path: "games/races", element: <RacesPage /> },
           { path: "games/mini", element: <MiniGamesPage /> },
           { path: "games/mini/chicken-road", element: <ChickenRoadPage /> },
         ],
