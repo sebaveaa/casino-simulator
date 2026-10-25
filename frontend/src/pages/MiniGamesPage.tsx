@@ -37,6 +37,7 @@ export const miniGames: MiniGameEntry[] = [
       "El multiplicador sube mientras el dino corre. Retírate antes de que caiga el meteorito.",
     max: "Hasta 20,00x",
     tone: "tomato",
+    path: "/games/mini/dino-crash",
   },
   {
     id: "aviator",
