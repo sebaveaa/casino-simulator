@@ -127,15 +127,35 @@
 .crash-meteor circle {
   fill: var(--ink);
 }
-.crash-scene-dino[data-phase="flying"] .crash-dino {
-  animation: crash-run 0.4s steps(2) infinite;
+/* Running legs: the two hind legs lift out of phase while the round is flying. */
+.crash-dino-leg {
+  transform-box: fill-box;
+  transform-origin: top;
 }
-@keyframes crash-run {
+.crash-scene-dino[data-phase="flying"] .crash-dino-leg-a {
+  animation: crash-step 0.28s steps(2) infinite;
+}
+.crash-scene-dino[data-phase="flying"] .crash-dino-leg-b {
+  animation: crash-step 0.28s steps(2) infinite reverse;
+}
+.crash-scene-dino[data-phase="flying"] .crash-dino {
+  animation: crash-bob 0.56s ease-in-out infinite;
+}
+@keyframes crash-step {
   from {
     transform: translateY(0);
   }
   to {
-    transform: translateY(-3px);
+    transform: translateY(-5px);
+  }
+}
+@keyframes crash-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
   }
 }
 
@@ -219,6 +239,38 @@
 .crash-cashout {
   width: 100%;
   background: var(--sun);
+  font-size: 1.15rem;
+}
+.crash-cashout-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+.crash-cashout-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.crash-howto {
+  margin: 0;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  font-size: 0.85rem;
+}
+.crash-panel-msg {
+  margin: 0;
+  font-weight: 700;
+}
+/* The focus ring is always visible on the interactive controls. */
+.crash-cashout:focus-visible,
+.crash-bet-submit:focus-visible,
+.crash-quick-button:focus-visible,
+.crash-stake:focus-visible {
+  outline: var(--outline);
+  outline-offset: 2px;
 }
 .crash-field-error,
 .crash-error {
@@ -291,36 +343,46 @@
 }
 .crash-plane {
   fill: var(--sun);
-  transform: translate(10px, 96px);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(8px, 84px) rotate(-12deg);
+}
+.crash-plane-tail {
+  fill: var(--sun);
 }
 .crash-plane-wing {
   fill: var(--chalk);
+}
+.crash-plane-window {
+  fill: var(--ink);
 }
 .crash-cloud {
   fill: var(--chalk);
 }
 .crash-scene-plane[data-phase="flying"] .crash-plane {
-  animation: crash-climb 1.2s var(--ease-spring) forwards;
+  animation: crash-climb 1.4s var(--ease-spring) forwards;
 }
 @keyframes crash-climb {
   from {
-    transform: translate(10px, 96px);
+    transform: translate(8px, 84px) rotate(-8deg);
   }
   to {
-    transform: translate(150px, 20px);
+    transform: translate(140px, 14px) rotate(-22deg);
   }
 }
 .crash-scene-plane[data-phase="impact"] .crash-plane,
 .crash-scene-plane[data-phase="cap"] .crash-plane {
-  transform: translate(170px, 14px);
+  transform: translate(160px, 10px) rotate(-22deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .crash-scene-dino[data-phase="flying"] .crash-dino {
+  .crash-scene-dino[data-phase="flying"] .crash-dino,
+  .crash-scene-dino[data-phase="flying"] .crash-dino-leg-a,
+  .crash-scene-dino[data-phase="flying"] .crash-dino-leg-b {
     animation: none;
   }
   .crash-scene-plane[data-phase="flying"] .crash-plane {
     animation: none;
-    transform: translate(80px, 58px);
+    transform: translate(80px, 52px) rotate(-16deg);
   }
 }

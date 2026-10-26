@@ -59,3 +59,15 @@ Out of scope: the engine, API, realtime, worker and the shared page (done in Bâ€
 ## Progress
 
 - Branch `feat/crash-aviator-ui` from `feat/crash-dino-ui`. Both tasks done.
+
+## Corrections (post-PR, user feedback)
+
+- **Plane visual (Fix 2b):** `PlaneStage` redrawn as an original side-view passenger jet (long
+  fuselage, nose, swept wing, tail fin with stabiliser, row of windows, cockpit) that tilts as it
+  climbs the curve, instead of the earlier triangle. Only existing tokens; reduced motion freezes it
+  mid-climb. Render test added.
+- The cash-out UX fix and the dino redraw (branch F) and the 8 s window (branch D) reach this branch
+  by `git merge` of the parent (no rebase); `crash.css` merged cleanly (dino legs + plane both kept in
+  the reduced-motion block).
+- **DECISIÃ“N:** the plane was redrawn **after** merging F into G (not before, as the plan's branch
+  order suggests), so `crash.css` had no three-way conflict between the dino and plane edits.

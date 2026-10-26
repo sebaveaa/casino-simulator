@@ -143,7 +143,93 @@ describe("CrashPage (Dino Crash)", () => {
     );
     await waitFor(() => expect(api.placeCrashBet).toHaveBeenCalled());
     expect(api.placeCrashBet.mock.calls[0]?.[1]).toEqual({ roundId: ROUND, stake: "1000" });
-    await waitFor(() => expect(screen.getByText(/Tu apuesta: 10\.00 créditos/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Apuesta lista: 10\.00 créditos/)).toBeTruthy());
+  });
+
+  it("always shows the how-to instructions", async () => {
+    const api = crashApi(current(openRound()));
+    await renderCrash(api.client);
+    expect(screen.getByText(/Cómo jugar:/)).toBeTruthy();
+  });
+
+  it("tells a player with no bet that the flying round already took off", async () => {
+    const api = crashApi(current(flyingRound()));
+    await renderCrash(api.client);
+    await waitFor(() =>
+      expect(screen.getByText(/Esta ronda ya despegó\. Espera la próxima/)).toBeTruthy(),
+    );
+    expect(screen.queryByRole("button", { name: /Retirar/ })).toBeNull();
+  });
+
+  const pendingBet = {
+    betId: BET,
+    stake: "1000" as const,
+    status: "pending" as const,
+    cashoutHundredths: null,
+    payout: null,
+  };
+
+  it("cashes out with Enter and shows the hint", async () => {
+    const api = crashApi(current(flyingRound(), pendingBet));
+    await renderCrash(api.client);
+    await screen.findByRole("button", { name: /Retirar/ });
+    expect(screen.getByText("o pulsa Enter / Espacio")).toBeTruthy();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    });
+    await waitFor(() => expect(api.cashOutCrash).toHaveBeenCalledWith("dino-crash", BET));
+  });
+
+  it("cashes out with Space", async () => {
+    const api = crashApi(current(flyingRound(), pendingBet));
+    await renderCrash(api.client);
+    await screen.findByRole("button", { name: /Retirar/ });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space" }));
+    });
+    await waitFor(() => expect(api.cashOutCrash).toHaveBeenCalledWith("dino-crash", BET));
+  });
+
+  it("ignores a held key (repeat) and never cashes out twice", async () => {
+    const api = crashApi(current(flyingRound(), pendingBet));
+    await renderCrash(api.client);
+    await screen.findByRole("button", { name: /Retirar/ });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", repeat: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    });
+    await waitFor(() => expect(api.cashOutCrash).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not cash out from the keyboard without a bet, or before takeoff", async () => {
+    const flyingNoBet = crashApi(current(flyingRound()));
+    await renderCrash(flyingNoBet.client);
+    await waitFor(() => expect(screen.getByText(/ya despegó/)).toBeTruthy());
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    });
+    expect(flyingNoBet.cashOutCrash).not.toHaveBeenCalled();
+    cleanup();
+
+    const openWithBet = crashApi(current(openRound(), pendingBet));
+    await renderCrash(openWithBet.client);
+    await waitFor(() => expect(screen.getByText(/Apuesta lista/)).toBeTruthy());
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    });
+    expect(openWithBet.cashOutCrash).not.toHaveBeenCalled();
+  });
+
+  it("does not cash out from the keyboard while the stake field has focus", async () => {
+    const api = crashApi(current(openRound()));
+    await renderCrash(api.client);
+    const field = (await screen.findByLabelText("Monto de tu apuesta")) as HTMLInputElement;
+    field.focus();
+    act(() => {
+      field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(api.cashOutCrash).not.toHaveBeenCalled();
   });
 
   it("offers a cash-out when flying with a pending bet, and cashes out", async () => {
