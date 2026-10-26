@@ -12,16 +12,28 @@ function Hand({
   cards,
   delays,
   total,
+  active = false,
+  keyByCard = false,
+  final = false,
 }: {
   title: string;
   cards: (BlackjackCard | null)[];
   delays: (number | null)[];
   /** `null` while the hole card hides the dealer's total. */
   total: Total | null;
+  /** The hand being played after a split. */
+  active?: boolean;
+  /**
+   * Key the player's cards by card, so the card a split moves or draws into a place lands anew.
+   * The dealer's are keyed by place, so the hole card turns over in place instead.
+   */
+  keyByCard?: boolean;
+  /** Once the round is settled a total reads as one number: "16", not "6 / 16". */
+  final?: boolean;
 }) {
   const titleId = useId();
   return (
-    <div className="bj-hand">
+    <div className={active ? "bj-hand is-active" : "bj-hand"}>
       <div className="bj-hand-head">
         <h2 id={titleId} className="bj-hand-title">
           {title}
@@ -29,17 +41,19 @@ function Hand({
         {cards.length > 0 && (
           <span className="bj-total amount">
             <span className="roulette-sr-only">Total: </span>
-            {total ? totalLabel(total) : "?"}
+            {total ? (final ? String(total.total) : totalLabel(total)) : "?"}
           </span>
         )}
+        {active && <span className="bj-turn">Tu turno</span>}
       </div>
       {cards.length > 0 ? (
         <ul className="bj-cards" aria-labelledby={titleId}>
           {cards.map((card, index) => (
-            // A dealt card keeps its place; the hole card turns over in place, so the position is
-            // the key and the flip is a transition, not a new card.
-            // biome-ignore lint/suspicious/noArrayIndexKey: a dealt card keeps its position
-            <PlayingCard key={index} card={card} delayMs={delays[index] ?? null} />
+            <PlayingCard
+              key={keyByCard && card ? `${index}-${card.rank}-${card.suit}` : index}
+              card={card}
+              delayMs={delays[index] ?? null}
+            />
           ))}
         </ul>
       ) : (
@@ -80,9 +94,10 @@ function FeltLegend() {
 }
 
 /**
- * The felt: the dealer's hand on top, the player's below. On the player's turn the dealer shows
- * the up card and the hole card face down; once the hand is settled the hole card turns over and
- * the dealer's draws land, in the order `deal` plans.
+ * The felt: the dealer's hand on top, the player's below, two side by side after a split with the
+ * one being played highlighted. On the player's turn the dealer shows the up card and the hole
+ * card face down; once the round is settled the hole card turns over and the dealer's draws land,
+ * in the order `deal` plans.
  */
 export function Table({
   view,
@@ -97,11 +112,32 @@ export function Table({
   const { player, dealer } = cardsOf(view);
   const hand = view.kind === "bet" ? null : view.hand;
   const dealerTotal = hand?.status === "settled" && !dealing ? hand.dealerTotal : null;
+  const split = player.length > 1;
+  const activeHand = hand?.status === "player_turn" ? hand.activeHand : null;
   return (
     <div className="bj-table">
-      <Hand title="Banca" cards={dealer} delays={deal.dealer} total={dealerTotal} />
+      <Hand title="Banca" cards={dealer} delays={deal.dealer} total={dealerTotal} final />
       <FeltLegend />
-      <Hand title="Tú" cards={player} delays={deal.player} total={hand?.playerTotal ?? null} />
+      {player.length === 0 ? (
+        <Hand title="Tú" cards={[]} delays={[]} total={null} />
+      ) : (
+        <div className={split ? "bj-player-hands is-split" : "bj-player-hands"}>
+          {player.map((cards, h) => (
+            <Hand
+              // A split never reorders the hands, so the position is a stable key.
+              // biome-ignore lint/suspicious/noArrayIndexKey: the player's hands keep their order
+              key={h}
+              title={split ? `Mano ${h + 1}` : "Tú"}
+              cards={cards}
+              delays={deal.player[h] ?? []}
+              total={hand?.playerHands[h]?.total ?? null}
+              active={split && activeHand === h}
+              final={hand?.status === "settled"}
+              keyByCard
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

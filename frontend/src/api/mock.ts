@@ -6,8 +6,10 @@ import {
   type BlackjackAction,
   type BlackjackHand,
   blackjackActionRequestSchema,
+  blackjackHandPayout,
   blackjackPayout,
   blackjackStartRequestSchema,
+  blackjackWagerCount,
   CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT,
   CHICKEN_ROAD_HISTORY_MAX_LIMIT,
   type ChickenRoadGame,
@@ -196,30 +198,42 @@ type MockBlackjackHand = {
  */
 function blackjackView(hand: MockBlackjackHand): BlackjackHand {
   const state = playHand(hand.shoe, hand.actions);
-  const base = {
-    handId: hand.handId,
-    stake: toAmount(hand.stake),
-    fairness: hand.fairness,
-    playerCards: state.playerCards.map(describeCard),
-    playerTotal: handValue(state.playerCards),
-  };
-  if (state.outcome === null) {
+  const base = { handId: hand.handId, stake: toAmount(hand.stake), fairness: hand.fairness };
+  const cardsAndTotal = (cards: number[]) => ({
+    cards: cards.map(describeCard),
+    total: handValue(cards),
+  });
+  if (!state.finished) {
+    const legal = legalActions(state);
     return {
       status: "player_turn",
       ...base,
+      playerHands: state.playerHands.map((h) => ({
+        ...cardsAndTotal(h.cards),
+        doubled: h.doubled,
+      })),
+      activeHand: state.active,
       dealerUpCard: describeCard(state.dealerCards[0] as number),
       actionCount: hand.actions.length,
-      canDouble: legalActions(state).includes("double"),
+      canDouble: legal.includes("double"),
+      canSplit: legal.includes("split"),
     };
   }
   return {
     status: "settled",
     ...base,
+    playerHands: state.playerHands.map((h) => {
+      const outcome = h.outcome ?? "lose";
+      return {
+        ...cardsAndTotal(h.cards),
+        doubled: h.doubled,
+        outcome,
+        payout: toAmount(blackjackHandPayout(hand.stake, { doubled: h.doubled, outcome })),
+      };
+    }),
     dealerCards: state.dealerCards.map(describeCard),
     dealerTotal: handValue(state.dealerCards),
-    doubled: state.doubled,
-    outcome: state.outcome,
-    totalStake: toAmount(state.doubled ? hand.stake * 2n : hand.stake),
+    totalStake: toAmount(hand.stake * blackjackWagerCount(hand.actions)),
     payout: toAmount(hand.payout ?? 0n),
   };
 }
@@ -237,9 +251,9 @@ function blackjackView(hand: MockBlackjackHand): BlackjackHand {
  * `chickenRoads` lets tests fix the road: the hit lane (or `null` for none) of each next game, in
  * order. Once it runs out, the seed decides again.
  *
- * Blackjack mirrors the backend (#63): one hand in progress, the shoe from `shuffleShoe` over the
- * same mock seed pair, replayed starts and actions by `index`, a double charged once, a natural
- * settled at the start, and a single payout. It has no abandonment timer. `blackjackShoes` lets
+ * Blackjack mirrors the backend (#63, #65): one round in progress, the shoe from `shuffleShoe` over
+ * the same mock seed pair, replayed starts and actions by `index`, a split and each double charged
+ * once, a natural settled at the start, and a single payout over the hands. It has no abandonment timer. `blackjackShoes` lets
  * tests and screens fix the deal: the stacked shoe of each next hand (player, dealer, player,
  * dealer, then the draws), in order.
  */
@@ -303,8 +317,12 @@ export function createMockApiClient(
   /** Settles a finished hand once; a positive payout goes to the balance as one `payout`. */
   function settleBlackjackIfOver(hand: MockBlackjackHand): void {
     const state = playHand(hand.shoe, hand.actions);
-    if (state.outcome === null || hand.payout !== null) return;
-    hand.payout = blackjackPayout(hand.stake, { doubled: state.doubled, outcome: state.outcome });
+    if (!state.finished || hand.payout !== null) return;
+    const playerHands = state.playerHands.map((h) => ({
+      doubled: h.doubled,
+      outcome: h.outcome ?? "lose",
+    }));
+    hand.payout = blackjackPayout(hand.stake, { playerHands });
     if (hand.payout > 0n) {
       balance += hand.payout;
       record("payout", hand.payout, hand.handId);
@@ -807,7 +825,8 @@ export function createMockApiClient(
       if (!legalActions(playHand(hand.shoe, hand.actions)).includes(action)) {
         throw conflict(`"${action}" is not allowed in this hand now`);
       }
-      if (action === "double") {
+      // A split and each double put the initial stake on the table again.
+      if (action === "split" || action === "double") {
         if (hand.stake > balance)
           throw new ApiError("insufficient_funds", "Insufficient funds", 422);
         balance -= hand.stake;

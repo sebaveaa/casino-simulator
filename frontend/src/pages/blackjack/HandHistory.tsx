@@ -1,15 +1,16 @@
 import type { BlackjackSettledHand } from "@casino/shared";
 import { useId } from "react";
-import { credits, gainOf, isWin, OUTCOME_TITLES } from "./format";
+import { credits, roundSummary } from "./format";
 
-/** One pill's text: a win shows what it gained, a loss its outcome and what it cost. */
+/** One pill's text: a gain shows what it gained, a loss its result and what it cost. */
 function pillText(hand: BlackjackSettledHand): string {
-  if (isWin(hand.outcome)) return `+${credits(gainOf(hand.payout, hand.totalStake))}`;
-  if (hand.outcome === "push") return OUTCOME_TITLES.push;
-  return `${OUTCOME_TITLES[hand.outcome]} −${credits(hand.totalStake)}`;
+  const { title, net } = roundSummary(hand);
+  if (net > 0n) return `+${credits(net)}`;
+  if (net === 0n) return title;
+  return `${title} −${credits(-net)}`;
 }
 
-/** "Tus últimas manos": wins on sun, losses on tomato, a push plain. */
+/** "Tus últimas manos": gains on sun, losses on tomato, even rounds plain. */
 export function HandHistory({ hands }: { hands: BlackjackSettledHand[] }) {
   const titleId = useId();
   if (hands.length === 0) return null;
@@ -20,9 +21,10 @@ export function HandHistory({ hands }: { hands: BlackjackSettledHand[] }) {
       </h2>
       <ul className="cr-history-list" aria-labelledby={titleId}>
         {hands.map((hand) => {
-          const tone = isWin(hand.outcome) ? " is-win" : hand.outcome === "push" ? "" : " is-lost";
+          const { tone } = roundSummary(hand);
+          const toneClass = tone === "won" ? " is-win" : tone === "lost" ? " is-lost" : "";
           return (
-            <li key={hand.handId} className={`cr-history-pill amount${tone}`}>
+            <li key={hand.handId} className={`cr-history-pill amount${toneClass}`}>
               {pillText(hand)}
             </li>
           );

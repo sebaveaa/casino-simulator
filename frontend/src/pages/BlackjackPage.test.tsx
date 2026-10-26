@@ -60,7 +60,7 @@ const result = () => screen.getByRole("dialog");
 const inResult = (text: string | RegExp) => within(result()).getByText(text);
 
 /** The cards of one hand, as a screen reader names them. */
-const cardsOf = (who: "Banca" | "Tú") =>
+const cardsOf = (who: "Banca" | "Tú" | "Mano 1" | "Mano 2") =>
   within(within(table()).getByRole("list", { name: who }))
     .getAllByRole("listitem")
     .map((card) => card.getAttribute("aria-label"));
@@ -138,7 +138,7 @@ describe("BlackjackPage hand", () => {
     expect(cardsOf("Tú")).toHaveLength(3);
     expect((inPanel(/^Doblar/) as HTMLButtonElement).disabled).toBe(true);
     expect(
-      within(panel()).getByText("Solo puedes doblar con tus dos primeras cartas."),
+      within(panel()).getByText("Solo puedes doblar o separar con tus dos primeras cartas."),
     ).toBeTruthy();
   });
 
@@ -192,7 +192,7 @@ describe("BlackjackPage errors", () => {
     await renderPage(client([ELEVEN], undefined, 1500n));
     await deal();
     expect((inPanel(/^Doblar/) as HTMLButtonElement).disabled).toBe(true);
-    expect(within(panel()).getByText("No tienes saldo para doblar.")).toBeTruthy();
+    expect(within(panel()).getByText("No tienes saldo para doblar ni separar.")).toBeTruthy();
   });
 
   it("keeps the hand and explains a 422 on double", async () => {
@@ -267,5 +267,44 @@ describe("BlackjackPage result pop-up and deal", () => {
     await press("Plantarse");
     expect(inResult("Perdiste")).toBeTruthy();
     expect(within(table()).getByText("Perdiste −10")).toBeTruthy();
+  });
+});
+
+describe("BlackjackPage split", () => {
+  // 8+8 against 9+7: the left hand draws a 3 (11), the right one a K (18); the dealer draws a 2
+  // to 18. Left loses, right pushes.
+  const PAIR = shoe("8", "9", "8", "7", "3", "K", "2");
+
+  it("offers Separar only on a pair", async () => {
+    await renderPage(client([OPEN, PAIR]));
+    await deal();
+    expect((inPanel(/^Separar/) as HTMLButtonElement).disabled).toBe(true);
+    await press("Plantarse");
+    fireEvent.click(within(result()).getByRole("button", { name: "Jugar otra vez" }));
+    await deal();
+    expect((inPanel(/^Separar/) as HTMLButtonElement).disabled).toBe(false);
+    expect(within(panel()).getByText("Tienes un par: puedes separarlo en dos manos.")).toBeTruthy();
+  });
+
+  it("splits into two hands, plays them in turn and shows each result", async () => {
+    await renderPage(client([PAIR]));
+    await deal();
+    await press(/^Separar/);
+    expect(cardsOf("Mano 1")).toEqual(["8 de picas", "3 de picas"]);
+    expect(cardsOf("Mano 2")).toEqual(["8 de picas"]);
+    expect(within(panel()).getByText("Tu turno · Mano 1 de 2")).toBeTruthy();
+    expect(await headerBalance("980.00")).toBeTruthy();
+
+    await press("Plantarse");
+    expect(cardsOf("Mano 2")).toEqual(["8 de picas", "K de picas"]);
+    expect(within(panel()).getByText("Tu turno · Mano 2 de 2")).toBeTruthy();
+
+    await press("Plantarse");
+    expect(inResult("Perdiste")).toBeTruthy();
+    expect(inResult("Perdiste 10 créditos")).toBeTruthy();
+    expect(inResult("Mano 1: Perdiste")).toBeTruthy();
+    expect(inResult("Mano 2: Empate")).toBeTruthy();
+    expect(within(table()).getByText("Perdiste −10")).toBeTruthy();
+    expect(await headerBalance("990.00")).toBeTruthy();
   });
 });

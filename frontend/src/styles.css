@@ -2655,6 +2655,37 @@ main {
   gap: 10px;
 }
 
+/* After a split the player's two hands sit side by side; the one being played is outlined. */
+.bj-player-hands.is-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.bj-player-hands.is-split .bj-hand {
+  padding: 10px;
+  border: 2px dashed transparent;
+  border-radius: var(--radius-md);
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+
+.bj-player-hands.is-split .bj-hand.is-active {
+  border-color: var(--sun);
+  background: rgb(255 201 51 / 0.12);
+}
+
+.bj-turn {
+  padding: 2px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .bj-hand-head {
   display: flex;
   align-items: center;
@@ -2876,6 +2907,16 @@ main {
 .bj-result-prize {
   font-size: 1.15rem;
   font-weight: 700;
+}
+
+.bj-result-hands {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  list-style: none;
 }
 
 .bj-result-detail {

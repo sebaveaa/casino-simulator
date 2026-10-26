@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/65
 Branch: `feat/65-blackjack-split`, from `feat/64-blackjack-page`.
-Status: in progress
+Status: implemented and pushed; the PR opens with the rest of the Blackjack stack (Juan Sebastián).
 
 ## Objective
 
@@ -37,9 +37,9 @@ Out of scope: resplitting, insurance and surrender; the verifier (#15).
 
 - [x] T1 Rules and contract in `shared/`: split, two hands, per-hand payout, wager count, action shape; tests with stacked shoes and fixed seeds; contract tests.
 - [x] T2 Backend: split charge and per-hand double keys, `bets.stake` as stake × wager count, settlement over the hands, abandonment standing every open hand; integration and route tests.
-- [ ] T3 Client mock mirroring the backend; tests.
-- [ ] T4 Screen: two hands with the active one highlighted, Separar, the pop-up and history over the hands; page tests.
-- [ ] T5 README §4.4; final checks.
+- [x] T3 Client mock mirroring the backend; tests.
+- [x] T4 Screen: two hands with the active one highlighted, Separar, the pop-up and history over the hands; page tests.
+- [x] T5 README §4.4; final checks.
 
 ## Acceptance criteria
 
@@ -63,3 +63,10 @@ From the issue:
 - Planned. Issue #65 opened; branch `feat/65-blackjack-split` created from `feat/64-blackjack-page`.
 - T1 done: rules (`legalActions` with split, `playHand` over two hands, `blackjackHandPayout`, `blackjackPayout` over the hands, `blackjackWagerCount`, action shape, `resolve` standing every open hand) and contract (`playerHands`, `activeHand`, `canSplit`, per-hand outcome and payout). Tests: v1 cases on the new state; split offered on a pair of the same rank only; left hand first and the right one's second card on its turn; each hand settled against the dealer; double after split and no resplit; split aces one card each, 21 there is not a natural; both hands bust and the dealer does not draw; payouts added up; wager count; action shape; fixed seeds unchanged. Contract: split in progress and settled, a decided hand refused in progress, hand counts and card bounds. Shared: 247 tests pass. Backend and frontend follow in T2-T4 on this branch.
 - T2 done: `initialStake` is `bets.stake` over the wager count; every action that adds a stake updates `bets.stake` with the actions; split charged with `blackjack-split:<user>:<hand>`, a double with `blackjack-double:<user>:<hand>:<player hand>`, both checked against the locked balance (422, round unchanged); settlement stores `{ playerHands, dealerCards }` and pays the sum once; abandonment stands while the round is open; the view shows `playerHands`, `activeHand`, `canSplit` and each hand's payout. `blackjackPayout` now takes hands without cards. Integration tests (+5): split charged once and replayed, both hands played and paid as the rules say; the right hand waiting with one card and `bets.stake` doubled; a double on each hand after the split; split without funds; abandoned split stands both hands. Abandoned rounds are now looked up by id, since the search for a pair can play more rounds than the history's limit. Route test: split handed over. Passed 6 runs in a row with the database.
+- T3 done: the mock plays `split`, charges it and each double once from the balance (422 without funds), pays the sum, and shows `playerHands`, `activeHand` and `canSplit`. Client and mock tests (+2): a split charged, replayed, played hand by hand and paid as the rules say; split without funds. Fixtures moved to `playerHands`.
+- T4 done: `planDeal` over the player's hands (a split lands the left hand's new card and the pair's other card; the right hand's second card on its turn); the felt shows two hands side by side, the active one outlined with "Tu turno"; Separar next to Doblar, both needing the server's flag and a balance for one more stake; the pop-up, the panel and the history read a round through `roundSummary` (one hand: its outcome; two: the net); settled totals read as one number. Page tests (+2): Separar only on a pair; a split played hand by hand with each result in the pop-up and the net in the history. Deal tests (+1): the split. Checked in the browser with the mock: split aces and a split played hand by hand; on a clean reload, dozens of rounds with no console errors.
+- T5 done: README §4.4 (split rules, charges, payout over the hands, abandonment of every open hand). Final checks: `npm run lint` clean (264 files); `npm run typecheck` clean; with the database, `npm test` green: shared 247, backend 329 passed and 4 skipped, frontend 378.
+
+## Next step
+
+Open the stacked PRs in order with the rest of Blackjack: #62 → #63 A → #63 B → #64 A → #64 B → #65 (`size:exception`).

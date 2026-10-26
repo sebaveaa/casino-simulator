@@ -1,7 +1,7 @@
 import type { BlackjackSettledHand } from "@casino/shared";
-import { OUTCOME_TITLES } from "./format";
+import { roundSummary } from "./format";
 
-/** The panel after a hand: the result itself pops up over the felt; here only "Jugar otra vez". */
+/** The panel after a round: the result itself pops up over the felt; here only "Jugar otra vez". */
 export function ResultPanel({
   hand,
   onPlayAgain,
@@ -13,7 +13,7 @@ export function ResultPanel({
 }) {
   return (
     <div className="cr-panel-body">
-      <p className="cr-progress">Mano terminada · {OUTCOME_TITLES[hand.outcome]}</p>
+      <p className="cr-progress">Mano terminada · {roundSummary(hand).title}</p>
       <button
         type="button"
         className="button button-large cr-primary"
