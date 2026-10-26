@@ -73,3 +73,18 @@ Out of scope: the Despegue scene and route (branch G); the shared verifier (#15)
 ## Progress
 
 - Branch `feat/crash-dino-ui` from `feat/crash-worker`. All tasks done.
+
+## Corrections (post-PR, user feedback)
+
+- **Cash-out UX (Fix 1):** the cash-out was not broken, but it was invisible unless the player bet
+  during the window, with no instructions and no keyboard. Added: a permanent "how to play" line; a
+  keyboard shortcut (Enter / Space cash out, only while flying with a pending bet, never from a form
+  field, ignoring `event.repeat`, and blocked while a request is in flight — same request as the
+  button, server still decides the amount); per-state panel messages (betting countdown, "ya despegó,
+  espera la próxima" when flying without a bet, "apuesta lista · despega en {s} s", the big "Retirar"
+  button with "o pulsa Enter / Espacio"); an `aria-live` status region and a visible focus ring.
+  - **DECISIÓN:** for "flying without a bet" there is no precise countdown to the next round, because
+    the server does not expose the next open time; the panel shows the message without a countdown.
+- **Dino visual (Fix 2a):** `DinoStage` redrawn as an original bipedal-dinosaur silhouette (big head
+  with an open jaw, eye, long raised tail, strong hind legs that run, short arm). Original art, not the
+  browser dinosaur. Reduced motion stops the legs. Render test added.

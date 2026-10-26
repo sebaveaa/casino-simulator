@@ -48,6 +48,10 @@ export interface CrashGameConfig {
 
 const DEFAULT_STAKE = "10";
 
+/** Permanent "how to play" line, so the shared-round flow is never a surprise. */
+const HOW_TO =
+  "Cómo jugar: 1) apuesta antes del despegue; 2) cuando despegue, pulsa Retirar (o Enter / Espacio) antes del impacto.";
+
 function betError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "insufficient_funds") return "Saldo insuficiente.";
@@ -85,6 +89,8 @@ export function CrashPage({ config }: { config: CrashGameConfig }) {
   const pendingKey = useRef<{ signature: string; key: string } | null>(null);
   const alive = useRef(false);
   const loadedOnce = useRef(false);
+  // Latest cash-out, so the keyboard shortcut always calls the current closure.
+  const cashOutRef = useRef<() => void>(() => {});
 
   const loadHistory = useCallback(async () => {
     try {
@@ -180,6 +186,8 @@ export function CrashPage({ config }: { config: CrashGameConfig }) {
     limits !== null &&
     serverNow() < Date.parse(round.closesAt);
   const canCashOut = status === "closed" && myBet?.status === "pending";
+  // The round left the betting window (flying or finished), regardless of whether we bet.
+  const airborne = round !== null && status !== null && status !== "open";
 
   let phase: CrashStageProps["phase"] = "waiting";
   if (status === "closed") phase = "flying";
@@ -276,6 +284,27 @@ export function CrashPage({ config }: { config: CrashGameConfig }) {
     }
   }
 
+  // Keep the ref pointing at the current cash-out closure.
+  useEffect(() => {
+    cashOutRef.current = () => void cashOut();
+  });
+
+  // Enter or Space cash out, but only while flying with a pending bet, never from a form field, and
+  // never twice from a held key (event.repeat); `cashOut` itself blocks re-entry while in flight.
+  useEffect(() => {
+    if (!canCashOut) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.key !== "Enter" && event.key !== " " && event.code !== "Space") return;
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      event.preventDefault();
+      cashOutRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canCashOut]);
+
   const livePayout =
     myBet && myBet.status === "pending"
       ? creditsFromMinor(crashPayout(parseAmount(myBet.stake), hundredths))
@@ -334,13 +363,6 @@ export function CrashPage({ config }: { config: CrashGameConfig }) {
           <div className="crash-status" role="status" aria-live="polite">
             {phaseMessage && <p className="crash-phase">{phaseMessage}</p>}
             {outcomeMessage && <p className="crash-outcome">{outcomeMessage}</p>}
-            {round && status === "open" && (
-              <p className="crash-takeoff">
-                Despega en{" "}
-                <Countdown key={round.id} deadlineMs={Date.parse(round.closesAt)} now={serverNow} />{" "}
-                s
-              </p>
-            )}
           </div>
           <Multiplier hundredths={hundredths} tone={tone} />
           <Stage phase={phase} hundredths={hundredths} />
@@ -353,40 +375,61 @@ export function CrashPage({ config }: { config: CrashGameConfig }) {
         </section>
 
         <aside className="crash-side" aria-label="Tu apuesta">
+          <p className="crash-howto">{HOW_TO}</p>
+
+          {/* Puede apostar: cuenta regresiva y formulario. */}
           {bettingOpen && !myBet && (
-            <BetPanel
-              amountText={amountText}
-              submitting={submitting}
-              locked={false}
-              fieldError={fieldError}
-              error={error}
-              onAmountChange={(text) => {
-                setAmountText(text);
-                setFieldError(null);
-              }}
-              onSubmit={placeBet}
-            />
+            <>
+              <p className="crash-panel-msg">
+                Apuestas abiertas · despega en{" "}
+                <Countdown
+                  key={round?.id}
+                  deadlineMs={Date.parse(round?.closesAt ?? "")}
+                  now={serverNow}
+                />{" "}
+                s
+              </p>
+              <BetPanel
+                amountText={amountText}
+                submitting={submitting}
+                locked={false}
+                fieldError={fieldError}
+                error={error}
+                onAmountChange={(text) => {
+                  setAmountText(text);
+                  setFieldError(null);
+                }}
+                onSubmit={placeBet}
+              />
+            </>
           )}
 
-          {!bettingOpen && !myBet && status !== null && status !== "open" && (
-            <p className="crash-wait-box">Espera la próxima ronda para apostar.</p>
+          {/* Ronda en vuelo o terminada sin apuesta propia. */}
+          {airborne && !myBet && (
+            <p className="crash-wait-box">Esta ronda ya despegó. Espera la próxima para apostar.</p>
           )}
 
-          {myBet && status === "open" && (
+          {/* Apostó y espera el despegue. */}
+          {myBet && status === "open" && round && (
             <p className="crash-bet-summary">
-              Tu apuesta: {creditsFromAmount(myBet.stake)} créditos
+              Apuesta lista: {creditsFromAmount(myBet.stake)} créditos · despega en{" "}
+              <Countdown key={round.id} deadlineMs={Date.parse(round.closesAt)} now={serverNow} /> s
             </p>
           )}
 
+          {/* En vuelo con apuesta: el botón de retiro, grande y con el monto en vivo. */}
           {canCashOut && livePayout && (
-            <button
-              type="button"
-              className="button button-large crash-cashout"
-              onClick={cashOut}
-              disabled={submitting}
-            >
-              Retirar {livePayout} créditos
-            </button>
+            <div className="crash-cashout-wrap">
+              <button
+                type="button"
+                className="button button-large crash-cashout"
+                onClick={cashOut}
+                disabled={submitting}
+              >
+                Retirar {livePayout} créditos
+              </button>
+              <p className="crash-cashout-hint">o pulsa Enter / Espacio</p>
+            </div>
           )}
 
           {myBet?.status === "settled" && myBet.cashoutHundredths !== null && (
