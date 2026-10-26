@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/63
 Branches: PR A `feat/63-blackjack-api`, from `feat/62-blackjack-rules`; PR B `feat/63-blackjack-routes`, from PR A.
-Status: PR A implemented and pushed; PR B pending. PRs open together at the end (Juan Sebastián).
+Status: PR A and PR B implemented and pushed. PRs open together at the end (Juan Sebastián).
 
 ## Objective
 
@@ -28,7 +28,7 @@ Design source: README §4.4, issue #63, `odd/tasks/62-blackjack-rules.md`, and t
 - **Action replay by `index`.** An index already played with the same action returns the hand unchanged; with a different action, 409. A new action on a settled hand, a skipped index, or an action `legalActions` refuses (double after a hit) answer 409.
 - **Double.** Checked against the locked balance first (422 `insufficient_funds`, hand unchanged), then charged as a `bet` transaction with `scopedKey("blackjack-double", userId, handId)`: one per hand.
 - **Single payout.** Natural, last action and abandonment all pay with `scopedKey("payout", userId, handId)`, so a hand is paid at most once. A loss pays nothing (the ledger rejects zero amounts).
-- **Abandonment** (README §4.4). `BLACKJACK_ABANDON_MS` (10 min) after the last activity, measured with PostgreSQL `now()`. The player stands and the hand resolves with the normal rules, which is what `blackjack.resolve` does with an open turn. A hand in progress can always stand. Settled by the next Blackjack request of that player, in its own transaction (wired in PR B).
+- **Abandonment** (README §4.4). `BLACKJACK_ABANDON_MS` (10 min) after the last activity, measured with PostgreSQL `now()`. The player stands and the hand resolves with the normal rules, which is what `blackjack.resolve` does with an open turn. A hand in progress can always stand. Settled by the next Blackjack request of that player, in its own transaction, before the operation runs.
 - **One hand in progress per player.** Checked explicitly (409) and backed by the partial unique index.
 - **Seed rotation** is already refused while any bet of the active pair is `in_progress` (`postgres-seed-pair-service.ts`, from #45); a test pins it for Blackjack.
 - `databaseNow` is imported from the Chicken Road view instead of duplicated.
@@ -43,9 +43,9 @@ PR A:
 
 PR B:
 
-- [ ] T4 `routes.ts` for the four endpoints (abandonment settled first), registered in `moduleRoutes`; `routes.test.ts` with `app.inject`.
-- [ ] T5 README §4.4: Blackjack rules, flow and abandonment.
-- [ ] T6 PR B close-out: lint, typecheck, tests with the database.
+- [x] T4 `routes.ts` for the four endpoints (abandonment settled first), registered in `moduleRoutes`; `routes.test.ts` with `app.inject`.
+- [x] T5 README §4.4: Blackjack rules, flow and abandonment.
+- [x] T6 PR B close-out: lint, typecheck, tests with the database.
 
 ## Acceptance criteria
 
@@ -77,6 +77,11 @@ From the issue:
 - T2 done: `view.ts` (row selection and locks, `initialStake`, `shoeOf`, `replay`, mappers to the API hand, current, history), `game.ts` (`startBlackjackHand`, `actOnBlackjackHand`, `settleHand`), `expiry.ts` (`settleAbandonedHand`); `scopedKey` purposes documented. Integration tests (18): start deals from the seed's shoe and stores no result; a natural settles and pays once; idempotent start returns the current hand, 409 on another stake; one hand in progress; insufficient balance burns no nonce; stake bounds; stand pays as the rules say; hit keeps the turn and forbids double; index replay, 409 on another action or a skipped index; 409 after settlement; double charges once and pays on the doubled total, and replays; double without funds answers 422 and leaves the hand; two concurrent stands pay once; another player's hand is 404; abandonment stands after 10 minutes and not before; current restores the hand; history newest first up to the limit; seed rotation refused mid-hand. Ledger sums checked.
 - T3 done. Final checks: `npm run lint` clean (245 files); `npm run typecheck` clean in every workspace; with the database, `npm test` green: shared 239, backend 310 passed and 4 skipped, frontend 331.
 
+- Branch `feat/63-blackjack-routes` created from PR A.
+- T4 done: `routes.ts` for the four endpoints; each settles an abandoned hand first in its own transaction, after the request checks, so a malformed request settles nothing. Start answers 201, also on a replay or a natural. Registered in `moduleRoutes`. Route tests (13) with `app.inject` and the flow mocked: 401 on every route, Idempotency-Key and stake validation, start (in progress and natural) with abandonment settled first, 409 passed on, action body validation, action handed over without the hole card, 404, 422 on a double without funds, current in progress or null, history default and asked-for limit, limit out of range.
+- T5 done: README §4.4 rewritten for the implemented game (rules, endpoints, shoe from the seed, `index` replay, double, single payout, abandonment, seeds); "opcional" dropped from its title. The priority table (§1) and the Redis row of §2.2 still call Blackjack optional and mention a Redis copy of the hand; left for the team to decide.
+- T6 done. Final checks: `npm run lint` clean (247 files); `npm run typecheck` clean in every workspace; with the database, `npm test` green: shared 239, backend 323 passed and 4 skipped, frontend 331.
+
 ## Next step
 
-PR B on `feat/63-blackjack-routes`: the routes (`apiPaths.blackjackHands`, `blackjackCurrent`, `blackjackActions`), each settling an abandoned hand first, route tests, and README §4.4.
+#64 on `feat/64-blackjack-client`, from this branch: the API client (HTTP and in-memory mock) for the four endpoints, then the game screen.

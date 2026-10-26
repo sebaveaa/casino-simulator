@@ -316,15 +316,18 @@ stateDiagram-v2
 
 Este es el punto de mayor carga del sistema: un pico de apuestas justo antes del cierre, la difusión de eventos a todos los conectados y la liquidación masiva simultánea.
 
-### 4.4 Blackjack (partida con estado) — opcional
+### 4.4 Blackjack (partida con estado)
 
-La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que Redis es solo una caché:
+**Reglas:** zapato de 6 barajas; la banca revisa si tiene blackjack al repartir; el blackjack natural paga 3:2; la banca se planta en todo 17; el jugador puede pedir, plantarse o doblar (solo con las dos primeras cartas: recibe una carta y se planta). Al llegar a 21 se planta solo y al pasarse pierde sin que juegue la banca. Apuestas de 10 a 500 créditos. Dividir, seguro y rendición quedan fuera de esta versión.
 
-- Al iniciar la mano se descuenta la apuesta y se crea la fila en `BETS` con estado `en_curso`, su `seed_pair_id` y su `nonce`.
-- El mazo completo está determinado por la semilla (sección 5), así que no hace falta guardarlo.
-- Cada decisión del jugador (pedir, plantarse, doblar) se añade a `BETS.actions` en PostgreSQL y actualiza la copia en Redis.
-- Mazo + decisiones = estado completo de la mano. Si Redis se pierde, el backend la reconstruye desde PostgreSQL y el jugador continúa.
-- Si el jugador abandona la mano (sin actividad durante el tiempo límite), la mano **no se da por perdida**: el sistema aplica *plantarse* automáticamente y la resuelve con las reglas normales. Un fallo de infraestructura o una desconexión nunca le quita dinero al jugador.
+La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que no necesita Redis:
+
+- **Empezar** (`POST /games/blackjack/hands`, con `Idempotency-Key`): se descuenta la apuesta y se crea la fila en `BETS` con estado `en_curso`, su `seed_pair_id` y su `nonce`. Un jugador tiene como máximo **una mano en curso** (índice único parcial). Si hay blackjack natural de cualquiera de los dos, la mano se liquida en la misma transacción.
+- **El zapato está determinado por la semilla** (sección 5): se baraja con Fisher-Yates a partir del par de semillas y el `nonce` en cada operación, así que no se guarda. Zapato + decisiones = estado completo de la mano. La respuesta de una mano en curso solo muestra la carta visible de la banca, nunca la oculta.
+- **Decidir** (`POST /games/blackjack/hands/current/actions`, `{ handId, action, index }`): cada decisión es una transacción con la billetera y la mano bloqueadas (`SELECT … FOR UPDATE`) y se añade a `BETS.actions`. `index` es la posición de la decisión: repetirla devuelve el mismo estado, sin jugar dos veces. **Doblar** cobra la apuesta otra vez, una sola vez por mano.
+- **Pago**: el premio se paga con la clave `payout:<usuario>:<mano>`, la misma para el blackjack natural, la última decisión y el abandono, así que una mano **no puede pagarse dos veces**. Al liquidar se guardan las cartas en `BETS.result` para el historial (`GET /games/blackjack/hands`) y el verificador.
+- **Abandono**: tras 10 minutos sin actividad, la mano **no se da por perdida**: en la siguiente petición del jugador a Blackjack el sistema aplica *plantarse* automáticamente y la resuelve con las reglas normales. Un fallo de infraestructura o una desconexión nunca le quita dinero al jugador.
+- **Semillas**: mientras haya una mano en curso no se puede rotar el par ni cambiar el `client_seed`, porque revelar el `server_seed` mostraría las cartas que vienen.
 
 ### 4.5 Cruza la Calle (partida por pasos)
 
