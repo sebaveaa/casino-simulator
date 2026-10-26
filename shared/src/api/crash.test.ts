@@ -134,7 +134,15 @@ describe("crashEventSchema", () => {
 
   it("only lets the impact event carry the server seed", () => {
     expect(
-      crashEventSchema.safeParse({ type: "takeoff", roundId: ID, serverSeed: SEED }).success,
+      crashEventSchema.safeParse({
+        type: "takeoff",
+        roundId: ID,
+        startedAt: "2026-10-25T00:00:05.000Z",
+        serverSeed: SEED,
+      }).success,
+    ).toBe(false);
+    expect(
+      crashEventSchema.safeParse({ type: "settled", roundId: ID, serverSeed: SEED }).success,
     ).toBe(false);
   });
 });

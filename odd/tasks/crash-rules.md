@@ -2,7 +2,7 @@
 
 Issue: TBD — letter **B** of `PLAN-CRASH.md` §7 (Claudia creates the GitHub issue).
 Branch: `feat/crash-rules`, from `origin/main` at eed7eaf.
-Status: implemented, PR pending (Claudia commits and opens it).
+Status: implemented, PR #55 in review.
 
 ## Objective
 
@@ -39,7 +39,9 @@ Design source: `PLAN-CRASH.md` §3 (rules) and §5.2/§5.4 (API and events), kep
   This also keeps `game.ts` (not in the allowed-to-touch list) untouched.
 - **Impact point** (PLAN-CRASH §3.2): `resolveCrash(rng)` draws `r = rng.int(1_000_000)` and returns
   `floor(99_000_000 / (1_000_000 - r))` clamped to `[100, 2000]`, in BigInt so it is exact.
-  `P(reach x) = 0.99 / x` → 1 % house edge. Result is `{ crashHundredths, outcome }` where
+  `P(reach x) = 0.99 / x`. A cash-out at `x` needs the impact strictly above `x`, so the effective
+  house edge is `1 - 0.99x / (x + 0.01)`: ~2 % at 1.00x, ~1.5 % at 2x, exactly 1 % held to the cap.
+  About 2 % of rounds end at 1.00x. The rule stays; the docs state it (README §4.6). Result is `{ crashHundredths, outcome }` where
   `outcome = "cap"` iff the point reaches 2000 (20.00x); at the cap everyone still in is paid 20.00x
   (PLAN-CRASH §3.5).
 - **Multiplier curve** (PLAN-CRASH §3.3): `multiplierAtHundredths(ms) = floor(100 * e^(0.00006*ms))`
@@ -62,6 +64,8 @@ Design source: `PLAN-CRASH.md` §3 (rules) and §5.2/§5.4 (API and events), kep
 - [x] T1 Pure rules in `shared/src/games/crash.ts` + tests (`crash.test.ts`).
 - [x] T2 Zod contract in `shared/src/api/crash.ts`, `apiPaths`, exports + tests (`crash.test.ts`).
 - [x] T3 Final checks and task-file close-out.
+- [x] T4 Review fixes on PR #55: strict Crash events (the seed test passed only because `startedAt`
+  was missing), exhaustive curve/inverse test, corrected house-edge and 1.00x figures, README §4.6.
 
 ## Acceptance criteria (letter B)
 
@@ -83,3 +87,5 @@ Known baseline (measured on `main` this session): lint clean, typecheck clean, a
 ## Progress
 
 - Branch `feat/crash-rules` created from `origin/main` at eed7eaf.
+- T1 commit 91afe93, T2 commit 38473bd; PR #55 opened.
+- T4: the old `crashEventSchema` failed the corrected seed test (RED), the strict one passes (GREEN).

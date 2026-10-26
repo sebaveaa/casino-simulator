@@ -337,6 +337,16 @@ Sigue el mismo patrón que el blackjack: la partida vive en PostgreSQL y se reco
 - **Abandono**: tras 10 minutos sin actividad, la partida **no se da por perdida**. En la siguiente petición del jugador a Cruza la Calle se cobra lo acumulado, o se devuelve la apuesta si no cruzó ningún carril.
 - **Semillas**: mientras haya una partida en curso no se puede rotar el par ni cambiar el `client_seed`, porque revelar el `server_seed` mostraría dónde está el auto.
 
+### 4.6 Dino Crash y Despegue (ronda compartida en vivo)
+
+Los dos juegos usan el mismo motor *Crash* (`shared/src/games/crash.ts`); solo cambia la animación. Cada juego tiene sus propias rondas, con el mismo ciclo de vida que las carreras (4.3). En el código, Despegue se identifica como `aviator`, pero ese nombre no aparece en la interfaz.
+
+- **Punto de impacto**: al abrir la ronda queda fijado por la semilla (5.2). Se sortea `r` en `[0, 1 000 000)` y el impacto es `floor(99 000 000 / (1 000 000 − r))` centésimas, acotado entre 1.00x y 20.00x. La probabilidad de que el impacto llegue a `x` es `0,99 / x`.
+- **Curva**: tras el despegue, el multiplicador vale `floor(100 · e^(0,00006 · ms))` centésimas (2x a los ~11,5 s, 20x a los ~50 s). El navegador anima con esa misma función, así que el servidor no envía un evento por cada tick.
+- **Retirar**: es válido mientras el multiplicador no haya llegado al punto de impacto, comprobado con el reloj de PostgreSQL. El premio es `floor(apuesta · multiplicador)`, apuesta incluida. Con el tope de 20.00x se les paga 20.00x a todos los que siguen en vuelo.
+- **Ventaja de la casa**: para cobrar en `x`, el impacto tiene que ser mayor que `x`, así que la ventaja efectiva es `1 − 0,99·x / (x + 0,01)`. Queda entre ~2 % (retirar en 1.00x) y 1 % exacto (esperar al tope): ~1,5 % en 2x y ~1,1 % en 10x. Alrededor del 2 % de las rondas terminan en 1.00x (impacto inmediato) y una de cada ~20 llega al tope.
+- **Apuesta**: de 10 a 500 créditos, con `Idempotency-Key` como en el resto de los juegos.
+
 ---
 
 ## 5. Resultados verificables (*provably fair*)
@@ -364,6 +374,8 @@ En una carrera hay **un solo resultado para todos**, así que no puede depender 
 3. Al correr la carrera se revela el `server_seed`.
 
 Como el hash se publicó antes de la primera apuesta, el servidor no puede cambiar la semilla después de ver dónde apostó la gente.
+
+Dino Crash y Despegue (4.6) usan el mismo esquema: el `server_seed` de la ronda se revela con el evento de impacto, y el punto de impacto se recalcula a partir de `HMAC-SHA256(server_seed, round_id)`.
 
 ### 5.3 Verificador en el navegador
 

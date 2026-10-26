@@ -20,8 +20,10 @@ export const MIN_MULTIPLIER_HUNDREDTHS = 100;
 export const MAX_MULTIPLIER_HUNDREDTHS = 2000;
 
 /**
- * House edge in the impact distribution: the probability of reaching multiplier `x` is `0.99 / x`,
- * so the house keeps 1 %. Encoded as the numerator `99_000_000` over a million-wide draw.
+ * Impact distribution: the probability that the impact point reaches multiplier `x` is `0.99 / x`,
+ * encoded as the numerator `99_000_000` over a million-wide draw. A cash-out at `x` needs the impact
+ * strictly above `x` (see {@link canCashOut}), so the effective house edge is `1 - 0.99x / (x + 0.01)`:
+ * about 2 % at 1.00x, 1.5 % at 2x, 1.1 % at 10x, and exactly 1 % for a bet held to the 20.00x cap.
  */
 export const CRASH_EDGE_NUMERATOR = 99_000_000n;
 export const CRASH_DRAW_RANGE = 1_000_000;
@@ -46,8 +48,8 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * The impact point of a round from its RNG (PLAN-CRASH §3.2): draws `r` in `[0, 1_000_000)` and
  * computes `floor(99_000_000 / (1_000_000 - r))`, clamped to `[100, 2000]`. BigInt division keeps
- * it exact. P(crash >= x) = 0.99 / x, so ~1 % of rounds end at 1.00x (immediate impact) and the
- * cap is reached about once every 20 rounds.
+ * it exact. P(crash >= x) = 0.99 / x, so ~2 % of rounds end at 1.00x (immediate impact: every point
+ * below 1.01x rounds down to 1.00x) and the cap is reached about once every 20 rounds.
  */
 export function resolveCrash(rng: Rng): CrashResult {
   const r = rng.int(CRASH_DRAW_RANGE);

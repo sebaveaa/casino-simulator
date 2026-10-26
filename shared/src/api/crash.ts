@@ -138,20 +138,21 @@ export type CrashHistoryResponse = z.infer<typeof crashHistoryResponseSchema>;
  * Realtime events of a Crash stream. Event type names follow the English convention of the race
  * stream (`opened`, ...); only interface copy is in Spanish. The server never ticks the multiplier:
  * it announces the takeoff and the impact, and the browser animates the curve in between
- * (PLAN-CRASH §3.3, §5.4). Only `impact` carries the revealed `serverSeed`.
+ * (PLAN-CRASH §3.3, §5.4). Only `impact` carries the revealed `serverSeed`; the events are strict,
+ * so any other event that carries it is rejected instead of passing with the key stripped.
  */
 export const crashEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("opened"), round: crashRoundSchema }),
-  z.object({ type: z.literal("takeoff"), roundId: z.uuid(), startedAt: datetimeSchema }),
-  z.object({
+  z.strictObject({ type: z.literal("opened"), round: crashRoundSchema }),
+  z.strictObject({ type: z.literal("takeoff"), roundId: z.uuid(), startedAt: datetimeSchema }),
+  z.strictObject({
     type: z.literal("impact"),
     roundId: z.uuid(),
     result: crashResultSchema,
     serverSeed: z.string().min(1),
   }),
-  z.object({ type: z.literal("settled"), roundId: z.uuid() }),
+  z.strictObject({ type: z.literal("settled"), roundId: z.uuid() }),
   // Aggregate only, never usernames: how many players cashed out and at what multiplier.
-  z.object({
+  z.strictObject({
     type: z.literal("cashout"),
     roundId: z.uuid(),
     count: z.number().int().min(1),
