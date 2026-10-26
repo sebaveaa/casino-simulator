@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  balanceCovers,
   cardName,
   chipsFor,
   chipsOfStake,
@@ -35,6 +36,12 @@ describe("Blackjack format", () => {
     expect(pilesOf([50, 50])).toEqual([[50, 50]]);
     const many = Array.from({ length: PILE_MAX * 2 + 3 }, () => 10);
     expect(pilesOf(many).map((pile) => pile.length)).toEqual([10, 10, 3]);
+  });
+
+  it("tells whether a balance covers the chips on the bet", () => {
+    expect(balanceCovers(6000n, [50, 10])).toBe(true);
+    expect(balanceCovers(5999n, [50, 10])).toBe(false);
+    expect(balanceCovers(0n, [])).toBe(true);
   });
 
   it("keeps the player's chips for the stake they make, and stacks a restored one", () => {

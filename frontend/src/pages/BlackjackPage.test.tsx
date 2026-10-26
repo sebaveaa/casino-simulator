@@ -65,6 +65,19 @@ const cardsOf = (who: "Banca" | "Tú" | "Mano 1" | "Mano 2") =>
     .getAllByRole("listitem")
     .map((card) => card.getAttribute("aria-label"));
 
+/** The history pills: as a screen reader hears them, or as they read on screen without that. */
+const pillItems = () =>
+  within(table())
+    .getAllByRole("listitem")
+    .filter((item) => item.classList.contains("cr-history-pill"));
+const spokenPills = () => pillItems().map((pill) => pill.textContent);
+const historyPills = () =>
+  pillItems().map((pill) => {
+    const copy = pill.cloneNode(true) as HTMLElement;
+    for (const hidden of copy.querySelectorAll(".roulette-sr-only")) hidden.remove();
+    return copy.textContent;
+  });
+
 /** Waits for the panel to finish loading or its request; generous, for a loaded full-suite run. */
 function settled() {
   return waitFor(() => expect(panel().getAttribute("aria-busy")).toBeNull(), { timeout: 4000 });
@@ -348,6 +361,26 @@ describe("BlackjackPage result pop-up and deal", () => {
     expect(inResult("No tienes saldo para repetir la apuesta.")).toBeTruthy();
   });
 
+  it("clears the chips at the bet form when the balance no longer covers them", async () => {
+    // 60 credits on the table with 60 in the wallet: the loss leaves nothing.
+    const lose = shoe("K", "K", "7", "8", "5");
+    await renderPage(client([lose], undefined, 6000n));
+    await press("Ficha de 50 créditos");
+    await deal();
+    await press("Plantarse");
+    fireEvent.click(within(result()).getByRole("button", { name: "Cambiar apuesta" }));
+    expect(within(panel()).getByText("Toca una ficha para apostar")).toBeTruthy();
+    expect((inPanel("Repartir") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the chips when the balance still covers them", async () => {
+    await renderPage(client([shoe("K", "K", "7", "8", "5")]));
+    await deal();
+    await press("Plantarse");
+    fireEvent.click(within(result()).getByRole("button", { name: "Cambiar apuesta" }));
+    expect(inPanel("Repartir · 10 créditos")).toBeTruthy();
+  });
+
   it("waits for the cards to land before the result and the balance", async () => {
     setReducedMotion(false);
     await renderPage(client([STAND_WINS]));
@@ -365,7 +398,21 @@ describe("BlackjackPage result pop-up and deal", () => {
     await deal();
     await press("Plantarse");
     expect(inResult("Perdiste")).toBeTruthy();
-    expect(within(table()).getByText("Perdiste −10")).toBeTruthy();
+    // On screen the tomato pill says only the cost; a screen reader hears "Perdiste −10".
+    expect(historyPills()).toEqual(["−10"]);
+    expect(spokenPills()).toEqual(["Perdiste −10"]);
+  });
+
+  it("names a dealer's natural in the history as Blackjack, and a bust as Te pasaste", async () => {
+    // Player K+7 against A+K: the dealer's natural settles on the deal.
+    await renderPage(client([shoe("K", "A", "7", "K"), shoe("K", "9", "6", "5", "K", "K")]));
+    await deal();
+    expect(inResult("Blackjack de la banca")).toBeTruthy();
+    fireEvent.click(within(result()).getByRole("button", { name: /^Repetir apuesta/ }));
+    await settled();
+    await press("Pedir");
+    expect(historyPills()).toEqual(["Te pasaste −10", "Blackjack −10"]);
+    expect(spokenPills()).toEqual(["Te pasaste −10", "Blackjack de la banca −10"]);
   });
 });
 
@@ -419,7 +466,7 @@ describe("BlackjackPage split", () => {
     expect(inResult("Perdiste 10 créditos")).toBeTruthy();
     expect(inResult("Mano 1: Perdiste")).toBeTruthy();
     expect(inResult("Mano 2: Empate")).toBeTruthy();
-    expect(within(table()).getByText("Perdiste −10")).toBeTruthy();
+    expect(historyPills()).toEqual(["−10"]);
     expect(await headerBalance("990.00")).toBeTruthy();
   });
 });

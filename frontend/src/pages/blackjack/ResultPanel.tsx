@@ -22,22 +22,24 @@ export function ResultPanel({
   return (
     <div className="cr-panel-body">
       <p className="cr-progress">Mano terminada · {roundSummary(hand).title}</p>
-      <button
-        type="button"
-        className="button button-large cr-primary"
-        disabled={disabled || !canRepeat}
-        onClick={onRepeat}
-      >
-        Repetir apuesta · {credits(hand.stake)} créditos
-      </button>
-      <button
-        type="button"
-        className="button button-large cr-cashout"
-        disabled={disabled}
-        onClick={onChangeBet}
-      >
-        Cambiar apuesta
-      </button>
+      <div className="bj-result-panel-actions">
+        <button
+          type="button"
+          className="button button-large cr-primary"
+          disabled={disabled || !canRepeat}
+          onClick={onRepeat}
+        >
+          Repetir apuesta · {credits(hand.stake)} créditos
+        </button>
+        <button
+          type="button"
+          className="button button-large cr-cashout"
+          disabled={disabled}
+          onClick={onChangeBet}
+        >
+          Cambiar apuesta
+        </button>
+      </div>
       {!canRepeat && <p className="bj-hint">No tienes saldo para repetir la apuesta.</p>}
     </div>
   );

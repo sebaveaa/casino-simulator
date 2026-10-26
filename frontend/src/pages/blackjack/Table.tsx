@@ -3,6 +3,7 @@ import { type ReactNode, useId } from "react";
 import { ChipPiles } from "./Chips";
 import { MiniBack } from "./DeckPicker";
 import { cardsOf, type DealPlan } from "./deal";
+import { FeltArc } from "./FeltArc";
 import { type ChipValue, totalLabel } from "./format";
 import { PlayingCard } from "./PlayingCard";
 import type { BlackjackView } from "./useBlackjack";
@@ -75,36 +76,6 @@ function Hand({
           <p className="bj-wait">{waiting.text}</p>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * The table rules printed on the felt in two arcs, like a casino table. Decorative: the same text
- * is in the page for screen readers.
- */
-function FeltLegend() {
-  const outer = useId();
-  const inner = useId();
-  return (
-    <div className="bj-legend">
-      <svg className="bj-legend-art" viewBox="0 0 600 120" aria-hidden="true" focusable="false">
-        <defs>
-          <path id={outer} d="M 30 16 Q 300 106 570 16" />
-          <path id={inner} d="M 130 74 Q 300 140 470 74" />
-        </defs>
-        <text className="bj-legend-main">
-          <textPath href={`#${outer}`} startOffset="50%" textAnchor="middle">
-            BLACKJACK PAGA 3 A 2
-          </textPath>
-        </text>
-        <text className="bj-legend-sub">
-          <textPath href={`#${inner}`} startOffset="50%" textAnchor="middle">
-            LA BANCA SE PLANTA EN 17
-          </textPath>
-        </text>
-      </svg>
-      <p className="roulette-sr-only">Blackjack paga 3 a 2. La banca se planta en 17.</p>
     </div>
   );
 }
@@ -209,7 +180,11 @@ export function Table({
         aside={tools}
         waiting={DEALER_WAITING}
       />
-      <FeltLegend />
+      <FeltArc
+        main="BLACKJACK PAGA 3 A 2"
+        sub="LA BANCA SE PLANTA EN 17"
+        spoken="Blackjack paga 3 a 2. La banca se planta en 17."
+      />
       {player.length === 0 ? (
         <Hand
           title="Tú"

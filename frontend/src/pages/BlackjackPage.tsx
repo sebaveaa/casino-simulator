@@ -1,11 +1,11 @@
 import { parseAmount } from "@casino/shared";
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 import { Link } from "react-router";
 import { useBalanceAmount } from "../app/useBalance";
 import { BetPanel } from "./blackjack/BetPanel";
 import { DeckPicker } from "./blackjack/DeckPicker";
 import { loadDeck, saveDeck } from "./blackjack/decks";
-import { type ChipValue, chipsOfStake } from "./blackjack/format";
+import { balanceCovers, type ChipValue, chipsOfStake } from "./blackjack/format";
 import { HandHistory } from "./blackjack/HandHistory";
 import { PlayingPanel } from "./blackjack/PlayingPanel";
 import { ResultDialog } from "./blackjack/ResultDialog";
@@ -39,6 +39,12 @@ export function BlackjackPage() {
   const [chips, setChips] = useState<ChipValue[]>([10]);
   // The hand whose result pop-up the player closed with "Ver la mesa".
   const [closedHandId, setClosedHandId] = useState<string | null>(null);
+  // Back at the bet form with chips the balance no longer covers (it ran out, or fell below the
+  // last bet), the bet starts over from no chips. Before paint, so the old chips never flash.
+  useLayoutEffect(() => {
+    if (view.kind !== "bet" || balance === null) return;
+    setChips((placed) => (balanceCovers(balance, placed) ? placed : []));
+  }, [view.kind, balance]);
   const takeBackChip = useCallback(() => setChips((placed) => placed.slice(0, -1)), []);
   const [shuffling, setShuffling] = useState(false);
   const endShuffle = useCallback(() => setShuffling(false), []);

@@ -1,6 +1,7 @@
 import { MINOR_UNITS_PER_CREDIT, type Money } from "@casino/shared";
 import { useId } from "react";
 import { Chip, ChipPiles } from "./Chips";
+import { FeltArc } from "./FeltArc";
 import { CHIP_VALUES, type ChipValue, MAX_BET_CREDITS, stakeOfCredits } from "./format";
 import { playChipSound } from "./sound";
 
@@ -47,7 +48,8 @@ function ClearIcon() {
 /**
  * "Apuesta": chips build the stake, one click per chip. They pile on a patch of felt as they were
  * put down; a click on the piles takes back the chip on top, and the icons take back the last one
- * or all of them. Then the deal button and how hands pay.
+ * or all of them. Then the deal button and how hands pay. On a wide panel the felt patch keeps a
+ * small width on the left and the chips and the deal button sit on the right.
  */
 export function BetPanel({
   chips,
@@ -80,74 +82,83 @@ export function BetPanel({
 
   return (
     <div className="cr-panel-body">
-      <div className="bj-bet">
-        <div className="bj-bet-head">
-          <span id={betId} className="cr-field-label">
-            Tu apuesta
-          </span>
-          <output className="bj-bet-total amount" aria-labelledby={betId} aria-live="polite">
-            {total} créditos
-          </output>
-        </div>
-        <div className="bj-bet-spot">
-          {empty ? (
-            <span className="bj-bet-empty">Toca una ficha para apostar</span>
-          ) : (
-            <ChipPiles chips={chips} disabled={disabled} onTakeTop={onTakeBack} />
-          )}
-          <div className="bj-bet-tools">
-            <button
-              type="button"
-              className="bj-bet-tool"
-              aria-label="Deshacer la última ficha"
-              title="Deshacer la última ficha"
-              disabled={disabled || empty}
-              onClick={onTakeBack}
-            >
-              <UndoIcon />
-            </button>
-            <button
-              type="button"
-              className="bj-bet-tool"
-              aria-label="Borrar la apuesta"
-              title="Borrar la apuesta"
-              disabled={disabled || empty}
-              onClick={onClear}
-            >
-              <ClearIcon />
-            </button>
+      <div className="bj-panel-main">
+        <div className="bj-bet">
+          <div className="bj-bet-head">
+            <span id={betId} className="cr-field-label">
+              Tu apuesta
+            </span>
+            <output className="bj-bet-total amount" aria-labelledby={betId} aria-live="polite">
+              {total} créditos
+            </output>
+          </div>
+          <div className="bj-bet-spot">
+            {empty ? (
+              <FeltArc
+                main="TOCA UNA FICHA"
+                sub="PARA APOSTAR"
+                spoken="Toca una ficha para apostar"
+                shape="spot"
+              />
+            ) : (
+              <ChipPiles chips={chips} disabled={disabled} onTakeTop={onTakeBack} />
+            )}
+            <div className="bj-bet-tools">
+              <button
+                type="button"
+                className="bj-bet-tool"
+                aria-label="Deshacer la última ficha"
+                title="Deshacer la última ficha"
+                disabled={disabled || empty}
+                onClick={onTakeBack}
+              >
+                <UndoIcon />
+              </button>
+              <button
+                type="button"
+                className="bj-bet-tool"
+                aria-label="Borrar la apuesta"
+                title="Borrar la apuesta"
+                disabled={disabled || empty}
+                onClick={onClear}
+              >
+                <ClearIcon />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <fieldset className="bj-chips">
-        <legend className="roulette-sr-only">Fichas</legend>
-        {CHIP_VALUES.map((value) => (
+        <div className="bj-panel-controls">
+          <fieldset className="bj-chips">
+            <legend className="roulette-sr-only">Fichas</legend>
+            {CHIP_VALUES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className="bj-chip-button"
+                aria-label={`Ficha de ${value} créditos`}
+                disabled={disabled || value > room}
+                onClick={() => {
+                  playChipSound();
+                  onAdd(value);
+                }}
+              >
+                <Chip value={value} />
+              </button>
+            ))}
+          </fieldset>
+          <p className="cr-help">Cada ficha suma a tu apuesta: entre 10 y 500 créditos.</p>
+
           <button
-            key={value}
             type="button"
-            className="bj-chip-button"
-            aria-label={`Ficha de ${value} créditos`}
-            disabled={disabled || value > room}
-            onClick={() => {
-              playChipSound();
-              onAdd(value);
-            }}
+            className="button button-large cr-primary"
+            disabled={disabled || stake === null}
+            onClick={() => stake !== null && onStart(stake)}
           >
-            <Chip value={value} />
+            {stake === null ? "Repartir" : `Repartir · ${total} créditos`}
           </button>
-        ))}
-      </fieldset>
-      <p className="cr-help">Cada ficha suma a tu apuesta: entre 10 y 500 créditos.</p>
-
-      <button
-        type="button"
-        className="button button-large cr-primary"
-        disabled={disabled || stake === null}
-        onClick={() => stake !== null && onStart(stake)}
-      >
-        {stake === null ? "Repartir" : `Repartir · ${total} créditos`}
-      </button>
+        </div>
+      </div>
 
       <section className="cr-paytable" aria-labelledby={payId}>
         <h2 id={payId} className="cr-subtitle">

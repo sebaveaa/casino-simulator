@@ -48,6 +48,12 @@ export function chipsFor(total: number): ChipValue[] {
   return chips;
 }
 
+/** Whether `balance` (minor units) covers the chips on the bet. */
+export function balanceCovers(balance: Money, chips: readonly ChipValue[]): boolean {
+  const total = chips.reduce((sum, chip) => sum + chip, 0);
+  return BigInt(total) * MINOR_UNITS_PER_CREDIT <= balance;
+}
+
 /** Most chips in one pile; more start a new pile beside it. */
 export const PILE_MAX = 10;
 

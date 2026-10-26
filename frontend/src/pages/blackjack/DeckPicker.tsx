@@ -14,8 +14,8 @@ export function MiniBack({ deck }: { deck: string }) {
 function LockIcon() {
   return (
     <svg
-      width="12"
-      height="12"
+      width="20"
+      height="20"
       viewBox="0 0 12 12"
       fill="none"
       stroke="currentColor"
@@ -31,7 +31,8 @@ function LockIcon() {
 
 /**
  * "Mazos", over the felt: every design for the back of the cards. A free one is used at once;
- * one with a price shows it with a padlock and cannot be picked yet. Escape or Listo closes it.
+ * one with a price is shaded, with a large padlock on it and its price, and cannot be picked
+ * yet. Escape or Listo closes it.
  */
 export function DeckPicker({
   deck,
@@ -75,19 +76,17 @@ export function DeckPicker({
                   disabled={locked}
                   onClick={() => onPick(option.id)}
                 >
-                  <MiniBack deck={option.id} />
+                  <span className="bj-deck-art">
+                    <MiniBack deck={option.id} />
+                    {locked && (
+                      <span className="bj-deck-lock">
+                        <LockIcon />
+                      </span>
+                    )}
+                  </span>
                   <span className="bj-deck-name">{option.name}</span>
                   <span className={locked ? "bj-deck-price amount is-locked" : "bj-deck-price"}>
-                    {locked ? (
-                      <>
-                        <LockIcon />
-                        {option.price} créditos
-                      </>
-                    ) : inUse ? (
-                      "En uso"
-                    ) : (
-                      "Gratis"
-                    )}
+                    {locked ? `${option.price} créditos` : inUse ? "En uso" : "Gratis"}
                   </span>
                 </button>
               </li>
