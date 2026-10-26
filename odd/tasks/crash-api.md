@@ -35,7 +35,7 @@ rounds (branch E).
   enforces one bet per player per round. The "one active round per game" guarantee is the worker's
   advisory lock (branch E), not a DB index.
 - **Settings are fixed constants, not env config.** Stake bounds (`CRASH_MIN_STAKE`/`CRASH_MAX_STAKE`)
-  and timings (`CRASH_BETTING_WINDOW_MS` 5 s, `CRASH_INTERMISSION_MS` 3 s) live in
+  and timings (`CRASH_BETTING_WINDOW_MS` 8 s, `CRASH_INTERMISSION_MS` 3 s) live in
   `shared/src/games/crash.ts`. Reason: `backend/platform/app.ts` (which wires `Config` into the route
   deps) and `services.ts` are **not** in the allowed-to-touch set, so route config cannot be extended
   without them; and PLAN-CRASH §3.1 calls the window "constante". The worker (branch E) reads the same
