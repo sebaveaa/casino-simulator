@@ -37,13 +37,14 @@ export type BlackjackRank = (typeof BLACKJACK_RANKS)[number];
 export const BLACKJACK_SUITS = ["spades", "hearts", "diamonds", "clubs"] as const;
 export type BlackjackSuit = (typeof BLACKJACK_SUITS)[number];
 
-export const blackjackActions = ["hit", "stand", "double"] as const;
+export const blackjackActions = ["hit", "stand", "double", "split"] as const;
 export const blackjackActionSchema = z.enum(blackjackActions);
 export type BlackjackAction = z.infer<typeof blackjackActionSchema>;
 
 /**
- * How a hand ended. `blackjack` is a player natural (3:2); `dealer_blackjack` is a dealer natural
- * against a player without one; `bust` is a player over 21, so the dealer never drew.
+ * How one of the player's hands ended. `blackjack` is a player natural (3:2), never a 21 after a
+ * split; `dealer_blackjack` is a dealer natural against a player without one; `bust` is a hand
+ * over 21, which loses whatever the dealer does.
  */
 export const blackjackOutcomes = [
   "blackjack",
@@ -56,11 +57,17 @@ export const blackjackOutcomes = [
 export const blackjackOutcomeSchema = z.enum(blackjackOutcomes);
 export type BlackjackOutcome = z.infer<typeof blackjackOutcomeSchema>;
 
+/** A pair splits once, so the player plays at most two hands. */
+export const BLACKJACK_MAX_HANDS = 2;
+
+/** Most cards one hand can hold: twenty-one aces make 21, which stands by itself. */
+export const BLACKJACK_MAX_HAND_CARDS = 21;
+
 /**
- * Most actions a hand can take: from two aces (2), 19 more aces reach 21, which stands by
- * itself. Six decks hold 24 aces, so that hand exists.
+ * Most actions a hand can take: a split, then each hand at most 19 (from two cards, 19 more aces
+ * reach 21 and stand by themselves). Without a split a hand takes at most 19.
  */
-export const BLACKJACK_MAX_ACTIONS = 19;
+export const BLACKJACK_MAX_ACTIONS = 1 + 2 * 19;
 
 /** A card as an integer from 0 to 51 (see `BLACKJACK_RANKS` and `BLACKJACK_SUITS`). */
 const cardSchema = z
@@ -69,21 +76,39 @@ const cardSchema = z
   .min(0)
   .max(DECK_SIZE - 1);
 
-/** A finished hand, as `resolve` returns it and the backend stores it once settled. */
-export const blackjackResultSchema = z.object({
-  playerCards: z.array(cardSchema).min(2),
-  dealerCards: z.array(cardSchema).min(2),
+/** One of the player's hands, finished. */
+const playerHandResultSchema = z.object({
+  cards: z.array(cardSchema).min(2).max(BLACKJACK_MAX_HAND_CARDS),
   doubled: z.boolean(),
   outcome: blackjackOutcomeSchema,
 });
+
+/** A finished round, as `resolve` returns it and the backend stores it once settled. */
+export const blackjackResultSchema = z.object({
+  playerHands: z.array(playerHandResultSchema).min(1).max(BLACKJACK_MAX_HANDS),
+  dealerCards: z.array(cardSchema).min(2),
+});
 export type BlackjackResult = z.infer<typeof blackjackResultSchema>;
 
-/** A hand at any point: `outcome` is `null` while it is the player's turn. */
-export type BlackjackHandState = Omit<BlackjackResult, "outcome"> & {
+/** One of the player's hands at any point: `outcome` is `null` until it is decided. */
+export type BlackjackPlayerHand = {
+  cards: number[];
+  doubled: boolean;
   outcome: BlackjackOutcome | null;
 };
 
-/** A hand as one bet: `stake` is the initial stake, `actions` the player's decisions in order. */
+/**
+ * A round at any point. `active` is the hand being played (the left one first after a split);
+ * `finished` once every hand is decided and the dealer has played.
+ */
+export type BlackjackHandState = {
+  playerHands: BlackjackPlayerHand[];
+  active: number;
+  dealerCards: number[];
+  finished: boolean;
+};
+
+/** A round as one bet: `stake` is the initial stake, `actions` the player's decisions in order. */
 export type BlackjackBet = Wager & { actions: readonly BlackjackAction[] };
 
 export function describeCard(card: number): { rank: BlackjackRank; suit: BlackjackSuit } {
@@ -125,17 +150,30 @@ export function shuffleShoe(rng: Rng): number[] {
   return shoe;
 }
 
-/** The actions the player may take next; empty once the hand is over. */
+const isAce = (card: number) => card % 13 === 0;
+const sameRank = (a: number, b: number) => a % 13 === b % 13;
+
+/**
+ * The actions the player may take on the active hand; empty once the round is over. Double and
+ * split need the hand's first two cards; split also needs a pair and no split before.
+ */
 export function legalActions(state: BlackjackHandState): BlackjackAction[] {
-  if (state.outcome !== null) return [];
-  return state.playerCards.length === 2 ? ["hit", "stand", "double"] : ["hit", "stand"];
+  if (state.finished) return [];
+  const cards = state.playerHands[state.active]?.cards ?? [];
+  if (cards.length !== 2) return ["hit", "stand"];
+  const [first, second] = cards as [number, number];
+  const canSplit = state.playerHands.length < BLACKJACK_MAX_HANDS && sameRank(first, second);
+  return canSplit ? ["hit", "stand", "double", "split"] : ["hit", "stand", "double"];
 }
 
 /**
- * Replays a hand from the shoe and the player's actions (README §4.4: shoe + decisions = the whole
- * hand). Deals player, dealer, player, dealer; a natural on either side ends the hand at once
- * (the dealer peeks). 21 stands by itself, a bust ends the hand, and the dealer then draws to 17,
- * standing on soft 17. Throws on an action `legalActions` would not allow.
+ * Replays a round from the shoe and the player's actions (README §4.4: shoe + decisions = the whole
+ * round). Deals player, dealer, player, dealer; a natural on either side ends the round at once
+ * (the dealer peeks). Each action plays the active hand: 21 stands by itself and a bust ends the
+ * hand. A split makes two hands from the pair: the left one draws its second card at once, the
+ * right one when its turn comes; split aces take one card each and stand. Once every hand is
+ * done the dealer draws to 17, standing on soft 17, unless every hand busted. Throws on an action
+ * `legalActions` would not allow.
  */
 export function playHand(
   shoe: readonly number[],
@@ -147,41 +185,87 @@ export function playHand(
     if (card === undefined) throw new RangeError("The shoe ran out of cards");
     return card;
   };
-  const playerCards = [draw()];
+  const firstCards = [draw()];
   const dealerCards = [draw()];
-  playerCards.push(draw());
+  firstCards.push(draw());
   dealerCards.push(draw());
-  const state: BlackjackHandState = { playerCards, dealerCards, doubled: false, outcome: null };
+  const state: BlackjackHandState = {
+    playerHands: [{ cards: firstCards, doubled: false, outcome: null }],
+    active: 0,
+    dealerCards,
+    finished: false,
+  };
+  const active = () => state.playerHands[state.active] as BlackjackPlayerHand;
 
-  const playerNatural = isNatural(playerCards);
+  const playerNatural = isNatural(firstCards);
   const dealerNatural = isNatural(dealerCards);
   if (playerNatural || dealerNatural) {
-    state.outcome = playerNatural ? (dealerNatural ? "push" : "blackjack") : "dealer_blackjack";
+    active().outcome = playerNatural ? (dealerNatural ? "push" : "blackjack") : "dealer_blackjack";
+    state.finished = true;
   }
 
-  const finish = () => {
+  const dealerPlays = () => {
+    state.finished = true;
+    const live = state.playerHands.filter((hand) => hand.outcome === null);
+    // Every hand busted: there is nothing left to beat.
+    if (live.length === 0) return;
     while (handValue(dealerCards).total < 17) dealerCards.push(draw());
-    const player = handValue(playerCards).total;
     const dealer = handValue(dealerCards).total;
-    state.outcome = dealer > 21 || player > dealer ? "win" : player === dealer ? "push" : "lose";
+    for (const hand of live) {
+      const player = handValue(hand.cards).total;
+      hand.outcome = dealer > 21 || player > dealer ? "win" : player === dealer ? "push" : "lose";
+    }
+  };
+
+  /** Whether the active hand takes no decision: split aces, or 21. */
+  const standsAlone = () => {
+    const { cards } = active();
+    const splitAces = state.playerHands.length > 1 && isAce(cards[0] as number);
+    return splitAces || handValue(cards).total === 21;
+  };
+
+  /** The active hand is done: the next one draws its second card, or the dealer plays. */
+  const nextHand = () => {
+    while (state.active + 1 < state.playerHands.length) {
+      state.active += 1;
+      active().cards.push(draw());
+      if (!standsAlone()) return;
+    }
+    dealerPlays();
   };
 
   for (const action of actions) {
     if (!legalActions(state).includes(action)) {
       throw new Error(`Action "${action}" is not allowed now`);
     }
-    if (action !== "stand") playerCards.push(draw());
-    if (action === "double") state.doubled = true;
-
-    const total = handValue(playerCards).total;
-    if (total > 21) state.outcome = "bust";
-    else if (action !== "hit" || total === 21) finish();
+    const hand = active();
+    if (action === "split") {
+      const [left, right] = hand.cards as [number, number];
+      state.playerHands = [
+        { cards: [left, draw()], doubled: false, outcome: null },
+        { cards: [right], doubled: false, outcome: null },
+      ];
+      if (standsAlone()) nextHand();
+      continue;
+    }
+    if (action === "stand") {
+      nextHand();
+      continue;
+    }
+    hand.cards.push(draw());
+    if (action === "double") hand.doubled = true;
+    const total = handValue(hand.cards).total;
+    if (total > 21) hand.outcome = "bust";
+    if (action === "double" || total >= 21) nextHand();
   }
   return state;
 }
 
-/** Total returned to the player, stake included; `0n` for any loss. Integers only. */
-export function blackjackPayout(stake: Money, hand: Pick<BlackjackResult, "doubled" | "outcome">) {
+/** What one hand returns, stake included; `0n` for any loss. Integers only. */
+export function blackjackHandPayout(
+  stake: Money,
+  hand: { doubled: boolean; outcome: BlackjackOutcome },
+): Money {
   const wagered = hand.doubled ? stake * 2n : stake;
   switch (hand.outcome) {
     case "blackjack":
@@ -198,21 +282,30 @@ export function blackjackPayout(stake: Money, hand: Pick<BlackjackResult, "doubl
   }
 }
 
+/** What the round returns: the sum over the player's hands. */
+export function blackjackPayout(stake: Money, result: Pick<BlackjackResult, "playerHands">): Money {
+  return result.playerHands.reduce((sum, hand) => sum + blackjackHandPayout(stake, hand), 0n);
+}
+
+/** How many stakes the actions put on the table: the first, one per split, one per double. */
+export function blackjackWagerCount(actions: readonly BlackjackAction[]): bigint {
+  return 1n + BigInt(actions.filter((action) => action === "split" || action === "double").length);
+}
+
 export function isValidBlackjackStake(stake: Money): boolean {
   return stake >= BLACKJACK_MIN_STAKE && stake <= BLACKJACK_MAX_STAKE;
 }
 
 /**
- * The shape of an action list, before any card is known: `double` only first, and nothing after
- * `stand` or `double`. `playHand` checks the rest, which depends on the cards.
+ * The shape of an action list, before any card is known: known actions, not too many, and a split
+ * only as the first one. `playHand` checks the rest, which depends on the cards.
  */
 function isValidActionShape(actions: readonly BlackjackAction[]): boolean {
   if (actions.length > BLACKJACK_MAX_ACTIONS) return false;
-  return actions.every((action, i) => {
-    if (!blackjackActionSchema.safeParse(action).success) return false;
-    if (action === "double" && i !== 0) return false;
-    return action === "hit" || i === actions.length - 1;
-  });
+  return actions.every(
+    (action, i) =>
+      blackjackActionSchema.safeParse(action).success && (action !== "split" || i === 0),
+  );
 }
 
 /** Blackjack rules (README §4.4). Pure, so the browser verifier runs this exact code. */
@@ -224,16 +317,24 @@ export const blackjack: Game<BlackjackBet, BlackjackResult> & { readonly id: "bl
   },
 
   /**
-   * Shuffles the shoe and replays the actions. When they leave the player's turn open, the player
-   * stands, as an abandoned hand does (README §4.4), so the result is always a finished hand.
+   * Shuffles the shoe and replays the actions. When they leave a hand open, the player stands on
+   * it, as an abandoned round does (README §4.4), so the result is always a finished round.
    */
   resolve(bet, rng) {
     const shoe = shuffleShoe(rng);
-    const state = playHand(shoe, bet.actions);
-    const { outcome, ...cards } =
-      state.outcome === null ? playHand(shoe, [...bet.actions, "stand"]) : state;
-    if (outcome === null) throw new Error("A resolved hand has no outcome");
-    return { ...cards, outcome };
+    const actions = [...bet.actions];
+    let state = playHand(shoe, actions);
+    while (!state.finished) {
+      actions.push("stand");
+      state = playHand(shoe, actions);
+    }
+    return {
+      playerHands: state.playerHands.map(({ cards, doubled, outcome }) => {
+        if (outcome === null) throw new Error("A resolved hand has no outcome");
+        return { cards, doubled, outcome };
+      }),
+      dealerCards: state.dealerCards,
+    };
   },
 
   payout(bet, result) {

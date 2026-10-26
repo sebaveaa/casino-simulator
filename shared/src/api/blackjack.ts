@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   BLACKJACK_MAX_ACTIONS,
+  BLACKJACK_MAX_HAND_CARDS,
+  BLACKJACK_MAX_HANDS,
   BLACKJACK_RANKS,
   BLACKJACK_SUITS,
   blackjackActionSchema,
@@ -21,13 +23,35 @@ export const blackjackCardSchema = z.object({
 });
 export type BlackjackCard = z.infer<typeof blackjackCardSchema>;
 
-/** Best total of a hand (`handValue`): from 4 (two twos) up to 30 (20 plus a ten). */
-const handTotalSchema = z.object({ total: z.number().int().min(4).max(30), soft: z.boolean() });
+/**
+ * Best total of a hand (`handValue`): from 2 (a lone two, waiting for its second card after a
+ * split) up to 30 (20 plus a ten).
+ */
+const handTotalSchema = z.object({ total: z.number().int().min(2).max(30), soft: z.boolean() });
 
-const playerCardsSchema = z
-  .array(blackjackCardSchema)
-  .min(2)
-  .max(2 + BLACKJACK_MAX_ACTIONS);
+const cardsSchema = (min: number) =>
+  z.array(blackjackCardSchema).min(min).max(BLACKJACK_MAX_HAND_CARDS);
+
+/**
+ * One of the player's hands while the round runs. After a split the right hand holds one card
+ * until its turn comes.
+ */
+const playerHandInPlaySchema = z.strictObject({
+  cards: cardsSchema(1),
+  total: handTotalSchema,
+  doubled: z.boolean(),
+});
+export type BlackjackPlayerHandInPlay = z.infer<typeof playerHandInPlaySchema>;
+
+/** One of the player's hands once settled: its outcome, and what it paid, stake included. */
+const playerHandSettledSchema = z.object({
+  cards: cardsSchema(2),
+  total: handTotalSchema,
+  doubled: z.boolean(),
+  outcome: blackjackOutcomeSchema,
+  payout: amountSchema,
+});
+export type BlackjackPlayerHandSettled = z.infer<typeof playerHandSettledSchema>;
 
 // Zod 4 runs refinements even after a failed regex, so the digits are checked before `BigInt`.
 const stakeSchema = positiveAmountSchema.refine(
@@ -35,24 +59,29 @@ const stakeSchema = positiveAmountSchema.refine(
   "Stake must be between 10 and 500 credits",
 );
 
-/** Fields every hand carries. `handId` is the id of its bet; `stake` is the initial stake. */
+/** Fields every round carries. `handId` is the id of its bet; `stake` is the initial stake. */
 const handFields = {
   handId: z.uuid(),
   stake: amountSchema,
   fairness: fairnessSchema,
-  playerCards: playerCardsSchema,
-  playerTotal: handTotalSchema,
 };
 
 /**
- * A hand waiting for the player. Strict: it never carries the dealer's hole card, a dealer total
- * or the shoe, which would tell the player what comes next. `actionCount` is the `index` of the
- * next action; `canDouble` holds on the first two cards. The last possible action always ends
- * the hand, so a hand in progress has taken at most `BLACKJACK_MAX_ACTIONS - 1`.
+ * A round waiting for the player. Strict: it never carries the dealer's hole card, a dealer total
+ * or the shoe, which would tell the player what comes next. `activeHand` is the hand being played
+ * (0, or 1 after a split); `actionCount` is the `index` of the next action. `canDouble` and
+ * `canSplit` say what the active hand allows. The last possible action always ends the round, so
+ * a round in progress has taken at most `BLACKJACK_MAX_ACTIONS - 1`.
  */
 export const blackjackInProgressHandSchema = z.strictObject({
   status: z.literal("player_turn"),
   ...handFields,
+  playerHands: z.array(playerHandInPlaySchema).min(1).max(BLACKJACK_MAX_HANDS),
+  activeHand: z
+    .number()
+    .int()
+    .min(0)
+    .max(BLACKJACK_MAX_HANDS - 1),
   dealerUpCard: blackjackCardSchema,
   actionCount: z
     .number()
@@ -60,20 +89,21 @@ export const blackjackInProgressHandSchema = z.strictObject({
     .min(0)
     .max(BLACKJACK_MAX_ACTIONS - 1),
   canDouble: z.boolean(),
+  canSplit: z.boolean(),
 });
 export type BlackjackInProgressHand = z.infer<typeof blackjackInProgressHandSchema>;
 
 /**
- * A finished hand with every card. `totalStake` is the stake, doubled after `double`; `payout`
- * includes it and is "0" on any loss. The verifier (#15) replays it with `blackjack.resolve`.
+ * A finished round with every card. `totalStake` is every stake put on the table (the first, a
+ * split, each double); `payout` is the sum of the hands' payouts and is "0" when all lost. The
+ * verifier (#15) replays it with `blackjack.resolve`.
  */
 export const blackjackSettledHandSchema = z.object({
   status: z.literal("settled"),
   ...handFields,
+  playerHands: z.array(playerHandSettledSchema).min(1).max(BLACKJACK_MAX_HANDS),
   dealerCards: z.array(blackjackCardSchema).min(2),
   dealerTotal: handTotalSchema,
-  doubled: z.boolean(),
-  outcome: blackjackOutcomeSchema,
   totalStake: positiveAmountSchema,
   payout: amountSchema,
 });

@@ -24,27 +24,45 @@ const base = {
   handId: uuid,
   stake: "1000",
   fairness: { seedPairId: uuid, serverSeedHash: "a".repeat(64), clientSeed: "c", nonce: 3 },
-  playerCards: [king, seven],
-  playerTotal: { total: 17, soft: false },
 };
 
 const inProgress = {
   ...base,
   status: "player_turn",
+  playerHands: [{ cards: [king, seven], total: { total: 17, soft: false }, doubled: false }],
+  activeHand: 0,
   dealerUpCard: nine,
   actionCount: 0,
   canDouble: true,
+  canSplit: false,
 };
 
 const settled = {
   ...base,
   status: "settled",
+  playerHands: [
+    {
+      cards: [king, seven],
+      total: { total: 17, soft: false },
+      doubled: false,
+      outcome: "lose",
+      payout: "0",
+    },
+  ],
   dealerCards: [nine, king],
   dealerTotal: { total: 19, soft: false },
-  doubled: false,
-  outcome: "lose",
   totalStake: "1000",
   payout: "0",
+};
+
+/** A split in progress: the right hand waits with one card. */
+const splitInProgress = {
+  ...inProgress,
+  playerHands: [
+    { cards: [seven, king], total: { total: 17, soft: false }, doubled: false },
+    { cards: [seven], total: { total: 7, soft: false }, doubled: false },
+  ],
+  actionCount: 1,
 };
 
 describe("blackjackCardSchema", () => {
@@ -66,8 +84,18 @@ describe("blackjackHandSchema", () => {
     for (const hand of [inProgress, settled]) {
       expect(blackjackHandSchema.parse(hand)).toEqual(hand);
     }
-    const doubledWin = { ...settled, doubled: true, outcome: "win", totalStake: "2000" };
-    expect(blackjackHandSchema.parse({ ...doubledWin, payout: "4000" })).toBeTruthy();
+    const [hand] = settled.playerHands;
+    const split = {
+      ...settled,
+      playerHands: [
+        { ...hand, doubled: true, outcome: "win", payout: "4000" },
+        { ...hand, outcome: "push", payout: "1000" },
+      ],
+      totalStake: "3000",
+      payout: "5000",
+    };
+    expect(blackjackHandSchema.parse(split)).toEqual(split);
+    expect(blackjackHandSchema.parse(splitInProgress)).toEqual(splitInProgress);
   });
 
   it("never lets a hand in progress reveal the hole card or the shoe", () => {
@@ -75,19 +103,25 @@ describe("blackjackHandSchema", () => {
       { dealerCards: [nine, king] },
       { dealerTotal: { total: 19, soft: false } },
       { shoe: [1, 2, 3] },
-      { outcome: "lose" },
     ]) {
       expect(blackjackHandSchema.safeParse({ ...inProgress, ...extra }).success).toBe(false);
     }
+    const decided = [{ ...inProgress.playerHands[0], outcome: "lose" }];
+    expect(blackjackHandSchema.safeParse({ ...inProgress, playerHands: decided }).success).toBe(
+      false,
+    );
   });
 
   it("rejects values that do not fit a hand", () => {
     const invalid = [
-      { ...inProgress, playerCards: [king] },
+      { ...inProgress, playerHands: [] },
+      { ...inProgress, playerHands: [...splitInProgress.playerHands, inProgress.playerHands[0]] },
+      { ...inProgress, activeHand: 2 },
       { ...inProgress, actionCount: BLACKJACK_MAX_ACTIONS },
-      { ...inProgress, playerTotal: { total: 31, soft: false } },
+      { ...inProgress, canSplit: undefined },
+      { ...settled, playerHands: [{ ...settled.playerHands[0], cards: [king] }] },
+      { ...settled, playerHands: [{ ...settled.playerHands[0], outcome: "surrender" }] },
       { ...settled, dealerCards: [nine] },
-      { ...settled, outcome: "surrender" },
       { ...settled, payout: 0 },
       { ...settled, totalStake: "0" },
       { ...settled, status: "won" },
@@ -110,7 +144,12 @@ describe("blackjackStartRequestSchema", () => {
   });
 
   it("answers with a hand in progress, or a settled one after a natural", () => {
-    for (const hand of [inProgress, { ...settled, outcome: "blackjack", payout: "2500" }]) {
+    const natural = {
+      ...settled,
+      playerHands: [{ ...settled.playerHands[0], outcome: "blackjack", payout: "2500" }],
+      payout: "2500",
+    };
+    for (const hand of [inProgress, natural]) {
       const body = { hand, balance: "9000" };
       expect(blackjackStartResponseSchema.parse(body)).toEqual(body);
     }
@@ -119,7 +158,7 @@ describe("blackjackStartRequestSchema", () => {
 
 describe("blackjackActionRequestSchema", () => {
   it("names the hand, the action and its index", () => {
-    for (const action of ["hit", "stand", "double"]) {
+    for (const action of ["hit", "stand", "double", "split"]) {
       const body = { handId: uuid, action, index: 0 };
       expect(blackjackActionRequestSchema.parse(body)).toEqual(body);
     }
@@ -129,7 +168,7 @@ describe("blackjackActionRequestSchema", () => {
 
   it("rejects unknown actions, bad indexes and bad ids", () => {
     const invalid = [
-      { handId: uuid, action: "split", index: 0 },
+      { handId: uuid, action: "surrender", index: 0 },
       { handId: uuid, action: "hit", index: -1 },
       { handId: uuid, action: "hit", index: 1.5 },
       { handId: uuid, action: "hit", index: BLACKJACK_MAX_ACTIONS },
