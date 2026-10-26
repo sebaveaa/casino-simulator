@@ -26,6 +26,7 @@ describe("Blackjack format", () => {
   it("shows both totals while an ace still counts 11", () => {
     expect(totalLabel({ total: 17, soft: true })).toBe("7 / 17");
     expect(totalLabel({ total: 17, soft: false })).toBe("17");
+    expect(totalLabel({ total: 21, soft: true })).toBe("21");
   });
 
   it("counts only a natural and a win as wins", () => {

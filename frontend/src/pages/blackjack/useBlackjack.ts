@@ -11,6 +11,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, useApi } from "../../api";
 import { useApplyBalance, useRefreshBalance } from "../../app/useBalance";
 import { betErrorMessage } from "../betErrorMessage";
+import { prefersReducedMotion } from "../roulette/motion";
+import { cardsOf, type DealPlan, NO_DEAL, planDeal } from "./deal";
 
 /** What the screen shows: the bet form, a hand on the player's turn, or a settled hand. */
 export type BlackjackView =
@@ -26,20 +28,42 @@ export function viewOf(hand: BlackjackHand): BlackjackView {
   return hand.status === "player_turn" ? { kind: "playing", hand } : { kind: "over", hand };
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const isConflict = (error: unknown) => error instanceof ApiError && error.code === "conflict";
 const isNetwork = (error: unknown) => error instanceof ApiError && error.code === "network";
 
 /**
  * State and requests of the Blackjack screen. The server deals every card and settles every hand;
- * this hook only sends the request and shows what came back. While a request is pending every
- * action is refused, and `pending` always clears afterwards, so the screen never stays stuck.
+ * this hook only sends the request and shows what came back. While a request is pending, or its
+ * cards are still landing, every action is refused, and `pending` always clears afterwards, so the
+ * screen never stays stuck. The balance and the history follow once the cards have landed, so
+ * neither gives the result away first.
  */
 export function useBlackjack() {
   const api = useApi();
   const applyBalance = useApplyBalance();
   const refreshBalance = useRefreshBalance();
 
-  const [view, setView] = useState<BlackjackView>({ kind: "bet" });
+  const [view, setViewState] = useState<BlackjackView>({ kind: "bet" });
+  const [deal, setDeal] = useState<DealPlan>(NO_DEAL);
+  // The view on the felt right now, read when the next one arrives to know which cards are new.
+  const shown = useRef<BlackjackView>({ kind: "bet" });
+
+  /** Shows `next` and plans the cards that land; returns how long they take. */
+  const setView = useCallback((next: BlackjackView) => {
+    const reduced = prefersReducedMotion();
+    const plan = planDeal(
+      cardsOf(shown.current),
+      cardsOf(next),
+      reduced ? 0 : undefined,
+      reduced ? 0 : undefined,
+    );
+    shown.current = next;
+    setDeal(plan);
+    setViewState(next);
+    return plan.durationMs;
+  }, []);
   const [history, setHistory] = useState<BlackjackSettledHand[]>([]);
   const [seedPair, setSeedPair] = useState<SeedPairResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +118,7 @@ export function useBlackjack() {
     return () => {
       active = false;
     };
-  }, [api, loadHistory, loadSeedPair]);
+  }, [api, loadHistory, loadSeedPair, setView]);
 
   async function run(action: () => Promise<void>) {
     if (busy.current) return;
@@ -170,7 +194,7 @@ export function useBlackjack() {
         try {
           const res = await api.startBlackjackHand({ stake }, key);
           pendingKey.current = null;
-          setView(viewOf(res.hand));
+          await sleep(setView(viewOf(res.hand)));
           applyBalance(res.balance);
           // A natural settles at once.
           if (res.hand.status === "settled") await afterHandEnds();
@@ -191,7 +215,7 @@ export function useBlackjack() {
         async () => {
           // A retry after a network failure sends the same index, which the server replays.
           const res = await api.playBlackjackAction({ handId, action, index: actionCount });
-          setView(viewOf(res.hand));
+          await sleep(setView(viewOf(res.hand)));
           applyBalance(res.balance);
           if (res.hand.status === "settled") await afterHandEnds();
           else void refreshBalance();
@@ -207,5 +231,5 @@ export function useBlackjack() {
     setView({ kind: "bet" });
   }
 
-  return { view, history, seedPair, loading, pending, message, start, act, playAgain };
+  return { view, deal, history, seedPair, loading, pending, message, start, act, playAgain };
 }

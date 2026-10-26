@@ -13,8 +13,17 @@ const PATH = "/games/blackjack";
 // Each test plays a whole hand through the UI; under full-suite load that can pass 5 s.
 vi.setConfig({ testTimeout: 15_000 });
 
+/** jsdom has no `matchMedia`; without it motion is on and each deal waits for its cards. */
+function setReducedMotion(reduced: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: reduced && query.includes("prefers-reduced-motion"),
+  }));
+}
+
 beforeEach(() => {
   seedSession();
+  // Most tests look at the end state, which reduced motion shows at once.
+  setReducedMotion(true);
 });
 
 afterEach(() => {
@@ -47,6 +56,8 @@ const panel = () => screen.getByRole("complementary", { name: "Tu mano" });
 const table = () => screen.getByRole("region", { name: "Mesa" });
 const inPanel = (name: string | RegExp) => within(panel()).getByRole("button", { name });
 const alertText = () => within(panel()).queryByRole("alert")?.textContent ?? null;
+const result = () => screen.getByRole("dialog");
+const inResult = (text: string | RegExp) => within(result()).getByText(text);
 
 /** The cards of one hand, as a screen reader names them. */
 const cardsOf = (who: "Banca" | "Tú") =>
@@ -111,10 +122,11 @@ describe("BlackjackPage hand", () => {
     await renderPage(client([STAND_WINS]));
     await deal();
     await press("Plantarse");
-    expect(within(panel()).getByText("¡Ganaste!")).toBeTruthy();
-    expect(within(panel()).getByText("20 créditos")).toBeTruthy();
+    expect(inResult("¡Ganaste!")).toBeTruthy();
+    expect(inResult("Ganaste 10 créditos")).toBeTruthy();
+    expect(inResult("Cobras 20 créditos")).toBeTruthy();
     expect(cardsOf("Banca")).toEqual(["6 de picas", "5 de picas", "3 de picas", "4 de picas"]);
-    expect(within(panel()).getByText("19 contra 18 de la banca")).toBeTruthy();
+    expect(inResult("19 contra 18 de la banca")).toBeTruthy();
     expect(within(table()).getByText("+10")).toBeTruthy();
     expect(await headerBalance("1,010.00")).toBeTruthy();
   });
@@ -135,9 +147,9 @@ describe("BlackjackPage hand", () => {
     await deal();
     await press(/^Doblar/);
     expect(cardsOf("Tú")).toEqual(["5 de picas", "6 de picas", "K de picas"]);
-    expect(within(panel()).getByText("¡Ganaste!")).toBeTruthy();
-    expect(within(panel()).getByText(/con la apuesta doblada/)).toBeTruthy();
-    expect(within(panel()).getByText("40 créditos")).toBeTruthy();
+    expect(inResult("¡Ganaste!")).toBeTruthy();
+    expect(inResult(/Apuesta doblada/)).toBeTruthy();
+    expect(inResult("Cobras 40 créditos")).toBeTruthy();
     expect(await headerBalance("1,020.00")).toBeTruthy();
   });
 
@@ -145,22 +157,24 @@ describe("BlackjackPage hand", () => {
     await renderPage(client([shoe("K", "9", "6", "5", "K", "K")]));
     await deal();
     await press("Pedir");
-    expect(within(panel()).getByText("Te pasaste")).toBeTruthy();
-    expect(within(panel()).getByText("Sumaste más de 21.")).toBeTruthy();
+    expect(inResult("Te pasaste")).toBeTruthy();
+    expect(inResult("Perdiste 10 créditos")).toBeTruthy();
+    expect(inResult("Sumaste más de 21.")).toBeTruthy();
     expect(cardsOf("Banca")).toEqual(["9 de picas", "5 de picas"]);
+    expect(within(table()).getByText("Te pasaste −10")).toBeTruthy();
   });
 
   it("settles a natural on the deal and a push on equal totals", async () => {
     await renderPage(client([shoe("A", "9", "K", "8"), shoe("K", "K", "8", "8")]));
     await deal();
-    expect(within(panel()).getByText("¡Blackjack!")).toBeTruthy();
-    expect(within(panel()).getByText("25 créditos")).toBeTruthy();
+    expect(inResult("¡Blackjack!")).toBeTruthy();
+    expect(inResult("Cobras 25 créditos")).toBeTruthy();
 
-    await press("Jugar otra vez");
+    fireEvent.click(within(result()).getByRole("button", { name: "Jugar otra vez" }));
     await deal();
     await press("Plantarse");
-    expect(within(panel()).getByText("Empate")).toBeTruthy();
-    expect(within(panel()).getByText("Recuperas tu apuesta de 10 créditos.")).toBeTruthy();
+    expect(inResult("Empate")).toBeTruthy();
+    expect(inResult("Recuperas 10 créditos")).toBeTruthy();
   });
 
   it("restores a hand in progress after a reload", async () => {
@@ -205,7 +219,7 @@ describe("BlackjackPage errors", () => {
     await renderPage(api);
     await deal();
     await press("Pedir");
-    expect(within(panel()).getByText("¡Ganaste!")).toBeTruthy();
+    expect(inResult("¡Ganaste!")).toBeTruthy();
     expect(alertText()).toBeNull();
   });
 
@@ -220,5 +234,38 @@ describe("BlackjackPage errors", () => {
     await deal();
     expect(alertText()).toBe(ALREADY_IN_PROGRESS);
     expect(inPanel("Pedir")).toBeTruthy();
+  });
+});
+
+describe("BlackjackPage result pop-up and deal", () => {
+  it("closes with Ver la mesa and keeps Jugar otra vez in the panel", async () => {
+    await renderPage(client([STAND_WINS]));
+    await deal();
+    await press("Plantarse");
+    fireEvent.click(within(result()).getByRole("button", { name: "Ver la mesa" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(panel()).getByText("Mano terminada · ¡Ganaste!")).toBeTruthy();
+    await press("Jugar otra vez");
+    expect(inPanel(/^Repartir/)).toBeTruthy();
+  });
+
+  it("waits for the cards to land before the result and the balance", async () => {
+    setReducedMotion(false);
+    await renderPage(client([STAND_WINS]));
+    await deal();
+    fireEvent.click(inPanel("Plantarse"));
+    // The dealer's hole card and two draws are still landing: no result, no payout yet.
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(panel().getAttribute("aria-busy")).toBe("true");
+    expect(await screen.findByRole("dialog", {}, { timeout: 4000 })).toBeTruthy();
+    expect(await headerBalance("1,010.00")).toBeTruthy();
+  });
+
+  it("shows what a lost hand cost in the history", async () => {
+    await renderPage(client([shoe("K", "K", "7", "8", "5")]));
+    await deal();
+    await press("Plantarse");
+    expect(inResult("Perdiste")).toBeTruthy();
+    expect(within(table()).getByText("Perdiste −10")).toBeTruthy();
   });
 });

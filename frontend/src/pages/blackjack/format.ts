@@ -71,9 +71,9 @@ export function isRedSuit(suit: BlackjackCard["suit"]): boolean {
   return suit === "hearts" || suit === "diamonds";
 }
 
-/** A total as the table shows it: "17", or "7 / 17" while an ace still counts 11. */
+/** A total as the table shows it: "17", or "7 / 17" while an ace still counts 11 (21 is 21). */
 export function totalLabel(hand: { total: number; soft: boolean }): string {
-  return hand.soft ? `${hand.total - 10} / ${hand.total}` : String(hand.total);
+  return hand.soft && hand.total !== 21 ? `${hand.total - 10} / ${hand.total}` : String(hand.total);
 }
 
 /** The headline of a settled hand. */

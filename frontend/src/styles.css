@@ -2601,29 +2601,55 @@ main {
   }
 }
 
-/* Blackjack: a green felt with the dealer on top and the player below; the panel reuses the
-   Cruza la Calle panel classes. The felt greens #1f7a4d and #17633e are the only colors outside
-   the tokens. */
+/* Blackjack: a patterned green felt with the dealer on top and the player below; the panel
+   reuses the Cruza la Calle panel classes. The felt greens #1f7a4d, #17633e and the legend's
+   #3d9a6a are the only colors outside the tokens. */
 .blackjack {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
+.bj-sound {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.bj-felt-wrap {
+  position: relative;
+}
+
+/* Casino felt: a fine diamond weave over a soft spotlight, and a racetrack line inside the rail. */
 .bj-table {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  min-height: 420px;
-  padding: 24px;
+  gap: 12px;
+  min-height: 440px;
+  padding: 28px;
   border: var(--outline);
   border-radius: var(--radius-lg);
-  background: radial-gradient(circle at 50% 40%, #1f7a4d, #17633e);
-  box-shadow: var(--shadow-lg);
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.035) 0 2px, transparent 2px 16px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 0.06) 0 2px, transparent 2px 16px),
+    radial-gradient(ellipse at 50% 35%, #1f7a4d 0%, #17633e 75%);
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 0 60px rgb(0 0 0 / 0.35);
   color: var(--chalk);
 }
 
+.bj-table::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 2px solid rgb(255 201 51 / 0.35);
+  border-radius: calc(var(--radius-lg) - 8px);
+  pointer-events: none;
+}
+
 .bj-hand {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2661,23 +2687,59 @@ main {
   margin: 0;
   padding: 0;
   list-style: none;
+  perspective: 900px;
 }
 
+/* A card lands from the shoe (top right), then the hole card turns over in place. */
 .bj-card {
   position: relative;
   width: 88px;
   height: 128px;
-  border: var(--outline);
-  border-radius: var(--radius-sm);
-  background: var(--chalk);
-  box-shadow: var(--shadow-sm);
-  color: var(--ink);
-  animation: bj-deal 320ms var(--ease-spring) both;
-  animation-delay: calc(var(--deal, 0) * 90ms);
+  animation: bj-deal 520ms var(--ease-spring) both;
+  animation-delay: var(--deal-delay, 0ms);
 }
 
-.bj-card.is-red {
+.bj-card-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 650ms cubic-bezier(0.2, 0.8, 0.25, 1) var(--deal-delay, 0ms);
+}
+
+.bj-card.is-down .bj-card-inner {
+  transform: rotateY(180deg);
+}
+
+.bj-card-face,
+.bj-card-back {
+  position: absolute;
+  inset: 0;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  backface-visibility: hidden;
+}
+
+.bj-card-face {
+  background: var(--chalk);
+  color: var(--ink);
+}
+
+.bj-card.is-red .bj-card-face {
   color: var(--tomato);
+}
+
+.bj-card-back {
+  background: var(--tomato);
+  transform: rotateY(180deg);
+}
+
+.bj-card-back-pattern {
+  position: absolute;
+  inset: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: repeating-linear-gradient(45deg, var(--sun) 0 6px, var(--tomato) 6px 12px);
 }
 
 .bj-card-corner {
@@ -2691,6 +2753,14 @@ main {
   text-align: center;
 }
 
+.bj-card-corner.is-bottom {
+  top: auto;
+  right: 8px;
+  bottom: 6px;
+  left: auto;
+  transform: rotate(180deg);
+}
+
 .bj-card-pip {
   position: absolute;
   inset: 0;
@@ -2699,33 +2769,36 @@ main {
   font-size: 2.6rem;
 }
 
-.bj-card.is-hidden {
-  background: var(--tomato);
-}
-
-.bj-card-back {
-  position: absolute;
-  inset: 8px;
-  border: 2px solid var(--ink);
-  border-radius: 8px;
-  background: repeating-linear-gradient(45deg, var(--sun) 0 6px, var(--tomato) 6px 12px);
-}
-
 .bj-empty {
   display: grid;
   place-items: center;
   min-height: 132px;
   margin: 0;
-  border: 2px dashed var(--chalk);
+  border: 2px dashed rgb(255 255 255 / 0.45);
   border-radius: var(--radius-md);
-  opacity: 0.8;
+  color: rgb(255 255 255 / 0.75);
 }
 
-.bj-rules-line {
-  margin: 0;
-  font-weight: 700;
-  text-align: center;
-  opacity: 0.9;
+/* The rules printed on the felt, in two arcs, a lighter green that sits into the cloth. */
+.bj-legend-art {
+  display: block;
+  width: min(100%, 560px);
+  margin: 0 auto;
+}
+
+.bj-legend text {
+  fill: #3d9a6a;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.bj-legend-main {
+  font-size: 30px;
+}
+
+.bj-legend-sub {
+  font-size: 17px;
 }
 
 .bj-actions {
@@ -2742,10 +2815,90 @@ main {
   text-align: center;
 }
 
+/* The result pops up over the felt once the last card has landed. */
+.bj-result-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgb(20 20 20 / 0.35);
+  animation: bj-fade 200ms ease-out both;
+}
+
+.bj-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 380px);
+  padding: 24px;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  animation: bj-pop 380ms var(--ease-spring) both;
+}
+
+.bj-result p {
+  margin: 0;
+}
+
+.bj-result-amount {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.bj-result-title {
+  margin: 0;
+  padding: 4px 18px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  box-shadow: var(--shadow-sm);
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 800;
+  transform: rotate(-2deg);
+}
+
+.bj-result.is-won .bj-result-title {
+  background: var(--sun);
+}
+
+.bj-result.is-lost .bj-result-title {
+  background: var(--tomato);
+}
+
+.bj-result-prize {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.bj-result-detail {
+  color: var(--muted);
+}
+
+.bj-result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.bj-result-close {
+  justify-content: center;
+  background: var(--chalk);
+}
+
 @keyframes bj-deal {
   from {
     opacity: 0;
-    transform: translateY(-24px) rotate(-6deg);
+    transform: translate(180px, -120px) rotate(18deg);
   }
   to {
     opacity: 1;
@@ -2753,11 +2906,24 @@ main {
   }
 }
 
+@keyframes bj-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes bj-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
 /* Narrow phones: smaller cards, so a long hand still fits two rows. */
 @media (max-width: 480px) {
   .bj-table {
     min-height: 0;
-    padding: 16px;
+    padding: 18px;
   }
 
   .bj-card {
@@ -2776,8 +2942,14 @@ main {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bj-card {
+  .bj-card,
+  .bj-result,
+  .bj-result-backdrop {
     animation: none;
+  }
+
+  .bj-card-inner {
+    transition: none;
   }
 }
 

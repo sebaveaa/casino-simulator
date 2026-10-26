@@ -5,7 +5,9 @@ import { useBalanceAmount } from "../app/useBalance";
 import { BetPanel } from "./blackjack/BetPanel";
 import { HandHistory } from "./blackjack/HandHistory";
 import { PlayingPanel } from "./blackjack/PlayingPanel";
+import { ResultDialog } from "./blackjack/ResultDialog";
 import { ResultPanel } from "./blackjack/ResultPanel";
+import { SoundToggle } from "./blackjack/SoundToggle";
 import { Table } from "./blackjack/Table";
 import { useBlackjack } from "./blackjack/useBlackjack";
 import { FairnessBlock } from "./chicken-road/FairnessBlock";
@@ -15,11 +17,15 @@ import { FairnessBlock } from "./chicken-road/FairnessBlock";
  * action; the screen sends the request and shows the cards that came back (README §4.4).
  */
 export function BlackjackPage() {
-  const { view, history, seedPair, loading, pending, message, start, act, playAgain } =
+  const { view, deal, history, seedPair, loading, pending, message, start, act, playAgain } =
     useBlackjack();
   const balance = useBalanceAmount();
   const [amount, setAmount] = useState("10");
+  // The hand whose result pop-up the player closed with "Ver la mesa".
+  const [closedHandId, setClosedHandId] = useState<string | null>(null);
   const disabled = loading || pending;
+  // `pending` holds through the deal, so the result pops up once the last card has landed.
+  const showResult = view.kind === "over" && !pending && closedHandId !== view.hand.handId;
 
   const fairness =
     view.kind === "bet"
@@ -53,11 +59,21 @@ export function BlackjackPage() {
         <h1>Blackjack</h1>
         <span className="cr-pill">Contra la banca</span>
         <span className="cr-top-sticker amount">Blackjack paga 3:2</span>
+        <SoundToggle />
       </header>
 
       <div className="cr-content">
         <section className="cr-road-area" aria-label="Mesa">
-          <Table view={view} />
+          <div className="bj-felt-wrap">
+            <Table view={view} deal={deal} dealing={pending} />
+            {showResult && (
+              <ResultDialog
+                hand={view.hand}
+                onPlayAgain={playAgain}
+                onClose={() => setClosedHandId(view.hand.handId)}
+              />
+            )}
+          </div>
           <HandHistory hands={history} />
         </section>
 
