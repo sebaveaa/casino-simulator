@@ -33,12 +33,19 @@ export const CRASH_GROWTH_PER_MS = 0.00006;
 
 /**
  * The round outcome, fixed when the round opens and revealed with the seed at impact. `cap` means
- * the flight reached the 20.00x ceiling; everyone still in is paid 20.00x (PLAN-CRASH §3.5).
+ * the flight reached the 20.00x ceiling; everyone still in is paid 20.00x (PLAN-CRASH §3.5). The
+ * outcome is `cap` exactly when the impact point is 20.00x, as {@link resolveCrash} decides it.
  */
-export const crashResultSchema = z.object({
-  crashHundredths: z.number().int().min(MIN_MULTIPLIER_HUNDREDTHS).max(MAX_MULTIPLIER_HUNDREDTHS),
-  outcome: z.enum(["impact", "cap"]),
-});
+export const crashResultSchema = z
+  .object({
+    crashHundredths: z.number().int().min(MIN_MULTIPLIER_HUNDREDTHS).max(MAX_MULTIPLIER_HUNDREDTHS),
+    outcome: z.enum(["impact", "cap"]),
+  })
+  .refine(
+    (result) =>
+      (result.outcome === "cap") === (result.crashHundredths === MAX_MULTIPLIER_HUNDREDTHS),
+    { message: "outcome must be cap exactly when the impact point is 20.00x", path: ["outcome"] },
+  );
 export type CrashResult = z.infer<typeof crashResultSchema>;
 
 function clamp(value: number, min: number, max: number): number {

@@ -5,6 +5,7 @@ import {
   canCashOut,
   crashPayout,
   crashResultFromOutcome,
+  crashResultSchema,
   impactAtMs,
   isValidCrashStake,
   MAX_MULTIPLIER_HUNDREDTHS,
@@ -70,6 +71,33 @@ describe("resolveCrash", () => {
     expect(reachedTwo / total).toBeCloseTo(0.495, 2);
     expect(capped / total).toBeCloseTo(0.0495, 2);
     expect(immediate / total).toBeCloseTo(0.0198, 3);
+  });
+});
+
+describe("crashResultSchema", () => {
+  it("accepts a result whose outcome matches its impact point", () => {
+    expect(crashResultSchema.safeParse({ crashHundredths: 245, outcome: "impact" }).success).toBe(
+      true,
+    );
+    expect(crashResultSchema.safeParse({ crashHundredths: 2000, outcome: "cap" }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a cap below 20.00x and an impact at 20.00x", () => {
+    expect(crashResultSchema.safeParse({ crashHundredths: 500, outcome: "cap" }).success).toBe(
+      false,
+    );
+    expect(crashResultSchema.safeParse({ crashHundredths: 2000, outcome: "impact" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts every result resolveCrash produces", () => {
+    for (let i = 0; i <= 1000; i++) {
+      const r = Math.min(Math.floor((i / 1000) * CRASH_DRAW_RANGE), CRASH_DRAW_RANGE - 1);
+      expect(crashResultSchema.safeParse(resolveCrash(fixedDraw(r))).success).toBe(true);
+    }
   });
 });
 

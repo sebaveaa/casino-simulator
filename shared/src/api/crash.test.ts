@@ -49,6 +49,14 @@ describe("crashRoundSchema", () => {
     expect(crashRoundSchema.safeParse(resolvedRound).success).toBe(true);
     expect(crashRoundSchema.safeParse({ ...openRound, status: "resolved" }).success).toBe(false);
   });
+
+  it("requires the seed and result once settled", () => {
+    expect(crashRoundSchema.safeParse({ ...resolvedRound, status: "settled" }).success).toBe(true);
+    expect(crashRoundSchema.safeParse({ ...openRound, status: "settled" }).success).toBe(false);
+    expect(
+      crashRoundSchema.safeParse({ ...openRound, status: "settled", serverSeed: SEED }).success,
+    ).toBe(false);
+  });
 });
 
 describe("crashBetRequestSchema", () => {

@@ -66,6 +66,9 @@ Design source: `PLAN-CRASH.md` §3 (rules) and §5.2/§5.4 (API and events), kep
 - [x] T3 Final checks and task-file close-out.
 - [x] T4 Review fixes on PR #55: strict Crash events (the seed test passed only because `startedAt`
   was missing), exhaustive curve/inverse test, corrected house-edge and 1.00x figures, README §4.6.
+- [x] T5 Native review findings (lineage review-27ead1f022491130, approved): `crashResultSchema`
+  requires `outcome` to be `cap` exactly at 20.00x (R3 WARNING), and tests cover `settled` rounds
+  (R3 SUGGESTION). The cross-engine `Math.exp` note is left as is: only the server decides a cash-out.
 
 ## Acceptance criteria (letter B)
 
