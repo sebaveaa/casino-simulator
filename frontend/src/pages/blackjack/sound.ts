@@ -67,7 +67,8 @@ export function preloadCardSound(): Promise<AudioBuffer | null> {
   return buffer;
 }
 
-export function playCardSound(): void {
+/** One card landing; `level` below the default for the quick cards of a shuffle. */
+export function playCardSound(level = 0.8): void {
   if (!liveContext()) return;
   void preloadCardSound().then((decoded) => {
     if (!decoded) return;
@@ -75,7 +76,7 @@ export function playCardSound(): void {
       const source = ctx.createBufferSource();
       source.buffer = decoded;
       const gain = ctx.createGain();
-      gain.gain.value = 0.8;
+      gain.gain.value = level;
       source.connect(gain).connect(ctx.destination);
       source.start(at);
     });

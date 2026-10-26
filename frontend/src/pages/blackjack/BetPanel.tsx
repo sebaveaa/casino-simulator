@@ -1,32 +1,69 @@
 import { MINOR_UNITS_PER_CREDIT, type Money } from "@casino/shared";
 import { useId } from "react";
-import { CHIP_VALUES, type ChipValue, chipsFor, MAX_BET_CREDITS, stakeOfCredits } from "./format";
+import { Chip, ChipPiles } from "./Chips";
+import { CHIP_VALUES, type ChipValue, MAX_BET_CREDITS, stakeOfCredits } from "./format";
 import { playChipSound } from "./sound";
 
-/** A casino chip: its value in the middle, its color by denomination. */
-export function Chip({ value }: { value: ChipValue }) {
+/** An arrow turning back: take back the last chip. */
+function UndoIcon() {
   return (
-    <span className={`bj-chip is-${value}`}>
-      <span className="bj-chip-value amount">{value}</span>
-    </span>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 4L3 8l4 4" />
+      <path d="M3 8h9a5 5 0 0 1 0 10H8" />
+    </svg>
+  );
+}
+
+/** A bin: take every chip off the bet. */
+function ClearIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 5h14M8 5V3h4v2M5 5l1 12h8l1-12" />
+      <path d="M8.5 9v5M11.5 9v5" />
+    </svg>
   );
 }
 
 /**
- * "Apuesta": chips build the stake, one click per chip. The bet stacks them the way a dealer
- * would, with the fewest chips; Deshacer takes back the last one, Borrar all of them. Then the
- * deal button and how hands pay.
+ * "Apuesta": chips build the stake, one click per chip. They pile on a patch of felt as they were
+ * put down; a click on the piles takes back the chip on top, and the icons take back the last one
+ * or all of them. Then the deal button and how hands pay.
  */
 export function BetPanel({
   chips,
-  onChips,
+  onAdd,
+  onTakeBack,
+  onClear,
   onStart,
   balance,
   disabled,
 }: {
   /** The chips on the bet, in the order they were put down, in credits. */
   chips: readonly ChipValue[];
-  onChips: (chips: ChipValue[]) => void;
+  onAdd: (chip: ChipValue) => void;
+  /** Takes back the last chip put down. */
+  onTakeBack: () => void;
+  onClear: () => void;
   onStart: (stake: string) => void;
   /** Null while it loads: the server still refuses a stake it cannot cover. */
   balance: Money | null;
@@ -39,6 +76,7 @@ export function BetPanel({
   // Whole credits the balance covers; chips beyond it stay off.
   const affordable = balance === null ? Infinity : Number(balance / MINOR_UNITS_PER_CREDIT);
   const room = Math.min(MAX_BET_CREDITS, affordable) - total;
+  const empty = chips.length === 0;
 
   return (
     <div className="cr-panel-body">
@@ -52,37 +90,33 @@ export function BetPanel({
           </output>
         </div>
         <div className="bj-bet-spot">
-          {total === 0 ? (
+          {empty ? (
             <span className="bj-bet-empty">Toca una ficha para apostar</span>
           ) : (
-            <span className="bj-bet-stack" aria-hidden="true">
-              {chipsFor(total).map((value, i) => (
-                // A stack is drawn bottom up; the position is its identity.
-                // biome-ignore lint/suspicious/noArrayIndexKey: chips in a stack keep their place
-                <span key={i} className="bj-bet-chip" style={{ bottom: `${i * 9}px` }}>
-                  <Chip value={value} />
-                </span>
-              ))}
-            </span>
+            <ChipPiles chips={chips} disabled={disabled} onTakeTop={onTakeBack} />
           )}
-        </div>
-        <div className="bj-bet-tools">
-          <button
-            type="button"
-            className="bj-bet-tool"
-            disabled={disabled || chips.length === 0}
-            onClick={() => onChips(chips.slice(0, -1))}
-          >
-            Deshacer
-          </button>
-          <button
-            type="button"
-            className="bj-bet-tool"
-            disabled={disabled || chips.length === 0}
-            onClick={() => onChips([])}
-          >
-            Borrar
-          </button>
+          <div className="bj-bet-tools">
+            <button
+              type="button"
+              className="bj-bet-tool"
+              aria-label="Deshacer la última ficha"
+              title="Deshacer la última ficha"
+              disabled={disabled || empty}
+              onClick={onTakeBack}
+            >
+              <UndoIcon />
+            </button>
+            <button
+              type="button"
+              className="bj-bet-tool"
+              aria-label="Borrar la apuesta"
+              title="Borrar la apuesta"
+              disabled={disabled || empty}
+              onClick={onClear}
+            >
+              <ClearIcon />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -97,7 +131,7 @@ export function BetPanel({
             disabled={disabled || value > room}
             onClick={() => {
               playChipSound();
-              onChips([...chips, value]);
+              onAdd(value);
             }}
           >
             <Chip value={value} />

@@ -17,7 +17,7 @@ export function PlayingCard({
 }) {
   useEffect(() => {
     if (delayMs === null) return;
-    const timer = setTimeout(playCardSound, delayMs);
+    const timer = setTimeout(() => playCardSound(), delayMs);
     return () => clearTimeout(timer);
   }, [delayMs]);
 

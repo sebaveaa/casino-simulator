@@ -2605,6 +2605,9 @@ main {
    reuses the Cruza la Calle panel classes. The felt greens #1f7a4d, #17633e and the legend's
    #3d9a6a are the only colors outside the tokens. */
 .blackjack {
+  --back-base: var(--tomato);
+  --back-pattern: repeating-linear-gradient(45deg, var(--sun) 0 6px, var(--tomato) 6px 12px);
+
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -2783,7 +2786,7 @@ main {
 }
 
 .bj-card-back {
-  background: var(--tomato);
+  background: var(--back-base);
   transform: rotateY(180deg);
 }
 
@@ -2792,7 +2795,7 @@ main {
   inset: 8px;
   border: 2px solid var(--ink);
   border-radius: 8px;
-  background: repeating-linear-gradient(45deg, var(--sun) 0 6px, var(--tomato) 6px 12px);
+  background: var(--back-pattern);
 }
 
 .bj-card-corner {
@@ -2820,16 +2823,6 @@ main {
   display: grid;
   place-items: center;
   font-size: 2.6rem;
-}
-
-.bj-empty {
-  display: grid;
-  place-items: center;
-  min-height: 132px;
-  margin: 0;
-  border: 2px dashed rgb(255 255 255 / 0.45);
-  border-radius: var(--radius-md);
-  color: rgb(255 255 255 / 0.75);
 }
 
 /* The rules printed on the felt, in two arcs, a lighter green that sits into the cloth. */
@@ -2944,10 +2937,11 @@ main {
 }
 
 .bj-bet-spot {
+  position: relative;
   display: grid;
-  place-items: center;
-  min-height: 120px;
-  padding: 12px;
+  place-items: end center;
+  min-height: 150px;
+  padding: 48px 12px 14px;
   border: var(--outline);
   border-radius: var(--radius-md);
   background:
@@ -2957,42 +2951,44 @@ main {
 }
 
 .bj-bet-empty {
+  align-self: center;
   color: rgb(255 255 255 / 0.75);
   font-size: 0.875rem;
   font-weight: 700;
 }
 
-.bj-bet-stack {
-  position: relative;
-  width: 64px;
-  height: 108px;
-}
-
-/* Seen from the player's seat: each chip squashed into its top face, its edge the shadow below. */
-.bj-bet-chip {
-  position: absolute;
-  left: 0;
-  width: 64px;
-  transform: scaleY(0.55);
-  transform-origin: bottom;
-  animation: bj-chip-drop 220ms var(--ease-spring) both;
-}
-
 .bj-bet-tools {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .bj-bet-tool {
-  padding: 2px 10px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: 2px solid var(--ink);
   border-radius: var(--radius-pill);
   background: var(--lilac);
+  box-shadow: 2px 2px 0 var(--ink);
   color: var(--ink);
-  font-size: 0.8rem;
-  font-weight: 700;
   cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.bj-bet-tool:hover:not(:disabled) {
+  background: var(--sun);
+}
+
+.bj-bet-tool:active:not(:disabled) {
+  box-shadow: none;
+  transform: translate(2px, 2px);
 }
 
 .bj-bet-tool:disabled {
@@ -3078,14 +3074,390 @@ main {
   font-weight: 700;
 }
 
-/* In the stack, a chip's shadow falls straight down: the edge of the chip below. */
-.bj-bet-chip .bj-chip {
+/* Piles of chips as they were put down, ten to a pile, seen from the player's seat: each chip is
+   squashed into its top face and its edge is the shadow below. --count and --i come from the
+   markup. On the felt (`is-sm`) they are smaller, without the value, and rise above the hand's
+   title row instead of pushing the cards down. */
+.bj-piles {
+  --chip-size: 48px;
+  --chip-step: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.bj-piles.is-sm {
+  --chip-size: 34px;
+  --chip-step: 5px;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+button.bj-piles {
+  cursor: pointer;
+}
+
+.bj-pile {
+  position: relative;
+  width: var(--chip-size);
+  height: calc(var(--chip-size) * 0.55 + 6px + (var(--count) - 1) * var(--chip-step));
+}
+
+.bj-pile-chip {
+  position: absolute;
+  bottom: calc(6px + var(--i) * var(--chip-step));
+  left: 0;
+  width: var(--chip-size);
+  transform: scaleY(0.55);
+  transform-origin: bottom;
+  transition: translate 120ms ease;
+  animation: bj-chip-drop 220ms var(--ease-spring) both;
+}
+
+/* The chip a click would take back lifts a little. */
+button.bj-piles:hover:not(:disabled) .bj-pile:last-child .bj-pile-chip:last-child {
+  translate: 0 -5px;
+}
+
+.bj-pile-chip .bj-chip {
   max-width: none;
   box-shadow: 0 10px 0 var(--ink);
 }
 
-.bj-bet-chip .bj-chip-value {
+.bj-pile-chip .bj-chip-value {
+  font-size: 0.7rem;
+}
+
+.bj-piles.is-sm .bj-chip {
+  border-width: 2px;
+  box-shadow: 0 5px 0 var(--ink);
+}
+
+.bj-piles.is-sm .bj-chip-value {
+  font-size: 0;
+}
+
+.bj-hand-chips {
+  display: flex;
+  align-items: flex-end;
+  height: 26px;
+}
+
+/* Before the deal: two card places, lit in turn like a table waiting for its cards. */
+.bj-waiting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  min-height: 132px;
+}
+
+.bj-ghosts {
+  display: flex;
+  gap: 10px;
+}
+
+.bj-ghost {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 128px;
+  border: 2px dashed rgb(255 255 255 / 0.35);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.04);
+  color: rgb(255 255 255 / 0.2);
+  font-size: 2rem;
+  animation: bj-breathe 2.4s ease-in-out infinite;
+}
+
+.bj-ghost:nth-child(2) {
+  animation-delay: 1.2s;
+}
+
+.bj-wait {
+  margin: 0;
+  color: rgb(255 255 255 / 0.75);
+  font-weight: 700;
+}
+
+/* The dealing shoe in the dealer's corner: a slanted box with the backs of the cards inside. */
+.bj-shoe {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 6px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+  box-shadow: 2px 2px 0 var(--ink);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.bj-shoe:hover:not(:disabled) {
+  background: var(--sun);
+}
+
+.bj-shoe:active:not(:disabled) {
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+.bj-shoe:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bj-shoe-box {
+  position: relative;
+  width: 30px;
+  height: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 4px 10px 4px 4px;
+  background: var(--ink);
+  transform: skewX(-12deg);
+  overflow: hidden;
+}
+
+.bj-shoe-cards {
+  position: absolute;
+  inset: 3px 3px 5px 8px;
+  border-radius: 2px;
+  background: var(--back-pattern);
+}
+
+/* The shuffle over the felt: two halves riffle into one pile three times (in, apart, in). Each
+   card's --k is its place in its half, --i its place in the riffled pile. */
+.bj-shuffle {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  border-radius: var(--radius-lg);
+  background: rgb(20 20 20 / 0.45);
+  animation: bj-fade 200ms ease-out both;
+}
+
+.bj-shuffle-deck {
+  position: relative;
+  width: 260px;
+  height: 150px;
+}
+
+.bj-shuffle-card {
+  --side: -70px;
+  --tilt: -10deg;
+  --offset: 0ms;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 88px;
+  margin: -44px 0 0 -30px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--back-pattern);
+  box-shadow: 0 2px 0 var(--ink);
+  animation: bj-riffle 1600ms cubic-bezier(0.5, 0, 0.3, 1) calc(var(--k) * 70ms + var(--offset)) 3
+    alternate both;
+}
+
+.bj-shuffle-card.is-right {
+  --side: 70px;
+  --tilt: 10deg;
+  --offset: 35ms;
+}
+
+.bj-shuffle-text {
+  margin: 0;
+  padding: 4px 16px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--chalk);
+  box-shadow: var(--shadow-sm);
+  font-weight: 800;
+}
+
+.bj-table-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Card-back designs: each sets the frame color and the pattern inside it. Colors outside the
+   tokens are the felt greens, midnight #241a4d / #2d2163 and gold #b8860b / #e0a526 / #ffd966. */
+.bj-back-clasico {
+  --back-base: var(--tomato);
+  --back-pattern: repeating-linear-gradient(45deg, var(--sun) 0 6px, var(--tomato) 6px 12px);
+}
+
+.bj-back-lila {
+  --back-base: var(--lilac);
+  --back-pattern:
+    radial-gradient(circle, var(--ink) 0 2px, transparent 2.5px) 0 0 / 10px 10px, var(--lilac);
+}
+
+.bj-back-pano {
+  --back-base: #17633e;
+  --back-pattern:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.12) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 0.15) 0 2px, transparent 2px 9px), #1f7a4d;
+}
+
+.bj-back-ajedrez {
+  --back-base: var(--chalk);
+  --back-pattern: repeating-conic-gradient(var(--ink) 0 25%, var(--chalk) 0 50%) 0 0 / 12px 12px;
+}
+
+.bj-back-medianoche {
+  --back-base: #241a4d;
+  --back-pattern:
+    radial-gradient(circle at 30% 30%, var(--sun) 0 1.5px, transparent 2px) 0 0 / 16px 16px,
+    radial-gradient(circle at 75% 70%, rgb(255 255 255 / 0.8) 0 1px, transparent 1.5px) 0 0 / 16px
+    16px,
+    #2d2163;
+}
+
+.bj-back-oro {
+  --back-base: #b8860b;
+  --back-pattern: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    #ffd966 0 10deg,
+    #e0a526 10deg 20deg
+  );
+}
+
+/* A small card back: the Mazos button and the picker's tiles. */
+.bj-mini-back {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 24px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--back-base);
+}
+
+.bj-mini-back-pattern {
+  position: absolute;
+  inset: 2px;
+  border-radius: 2px;
+  background: var(--back-pattern);
+}
+
+/* Mazos: the designs in a grid over the felt; the one in use is outlined in sun, a sold one
+   shows its price with a padlock. */
+.bj-decks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 420px);
+  max-height: 100%;
+  padding: 20px 22px;
+  overflow-y: auto;
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--chalk);
+  box-shadow: var(--shadow-lg);
+  animation: bj-pop 380ms var(--ease-spring) both;
+}
+
+.bj-decks-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.bj-decks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bj-deck {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 6px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.bj-deck:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.bj-deck.is-current {
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+}
+
+.bj-deck:disabled {
+  cursor: not-allowed;
+}
+
+.bj-deck .bj-mini-back {
+  width: 46px;
+  height: 64px;
+  border-radius: 7px;
+}
+
+.bj-deck .bj-mini-back-pattern {
+  inset: 5px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+}
+
+.bj-deck:disabled .bj-mini-back {
+  filter: saturate(0.7);
+  opacity: 0.8;
+}
+
+.bj-deck-name {
+  font-weight: 800;
+}
+
+.bj-deck-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
   font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.bj-deck-price.is-locked {
+  color: var(--ink);
+}
+
+/* How hands pay: the three boxes wrap when the panel is narrow, so "Devuelve" fits. */
+.blackjack .cr-paytable-grid {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }
 
 /* The result pops up over the felt once the last card has landed. */
@@ -3198,6 +3570,25 @@ main {
   }
 }
 
+@keyframes bj-breathe {
+  50% {
+    border-color: rgb(255 201 51 / 0.6);
+    background: rgb(255 201 51 / 0.07);
+  }
+}
+
+@keyframes bj-riffle {
+  0%,
+  15% {
+    transform: translate(var(--side), calc(var(--k) * -2px)) rotate(var(--tilt));
+  }
+
+  60%,
+  100% {
+    transform: translate(0, calc(var(--i) * -1px)) rotate(0deg);
+  }
+}
+
 @keyframes bj-chip-drop {
   from {
     opacity: 0;
@@ -3225,7 +3616,8 @@ main {
     padding: 18px;
   }
 
-  .bj-card {
+  .bj-card,
+  .bj-ghost {
     width: 64px;
     height: 94px;
   }
@@ -3235,14 +3627,16 @@ main {
   }
 
   .bj-cards,
-  .bj-empty {
+  .bj-waiting {
     min-height: 98px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bj-card,
-  .bj-bet-chip,
+  .bj-pile-chip,
+  .bj-ghost,
+  .bj-shuffle-card,
   .bj-result,
   .bj-result-backdrop {
     animation: none;

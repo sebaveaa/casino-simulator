@@ -1,13 +1,16 @@
 import { parseAmount } from "@casino/shared";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router";
 import { useBalanceAmount } from "../app/useBalance";
 import { BetPanel } from "./blackjack/BetPanel";
-import { type ChipValue, chipsFor, creditsOfStake } from "./blackjack/format";
+import { DeckPicker } from "./blackjack/DeckPicker";
+import { loadDeck, saveDeck } from "./blackjack/decks";
+import { type ChipValue, chipsOfStake } from "./blackjack/format";
 import { HandHistory } from "./blackjack/HandHistory";
 import { PlayingPanel } from "./blackjack/PlayingPanel";
 import { ResultDialog } from "./blackjack/ResultDialog";
 import { ResultPanel } from "./blackjack/ResultPanel";
+import { Shuffle } from "./blackjack/Shuffle";
 import { SoundToggle } from "./blackjack/SoundToggle";
 import { Table } from "./blackjack/Table";
 import { useBlackjack } from "./blackjack/useBlackjack";
@@ -36,19 +39,28 @@ export function BlackjackPage() {
   const [chips, setChips] = useState<ChipValue[]>([10]);
   // The hand whose result pop-up the player closed with "Ver la mesa".
   const [closedHandId, setClosedHandId] = useState<string | null>(null);
-  const disabled = loading || pending;
+  const takeBackChip = useCallback(() => setChips((placed) => placed.slice(0, -1)), []);
+  const [shuffling, setShuffling] = useState(false);
+  const endShuffle = useCallback(() => setShuffling(false), []);
+  // The design on the back of the cards, kept in this browser, and whether its picker is open.
+  const [deck, setDeck] = useState(loadDeck);
+  const [picking, setPicking] = useState(false);
+  const closeDecks = useCallback(() => setPicking(false), []);
+  const disabled = loading || pending || shuffling;
   // `pending` holds through the deal, so the result pops up once the last card has landed.
-  const showResult = view.kind === "over" && !pending && closedHandId !== view.hand.handId;
+  const showResult =
+    view.kind === "over" && !disabled && !picking && closedHandId !== view.hand.handId;
 
   // Unknown while the balance loads: the server still refuses a stake it cannot cover.
   const covers = (stake: string) => balance === null || balance >= parseAmount(stake);
 
-  /** Deals again with the round's stake, stacking its chips on the bet if they changed. */
+  /** Deals again with the round's stake, putting its chips on the bet if they changed. */
   const repeatBet = (stake: string) => {
-    const total = creditsOfStake(stake);
-    if (chips.reduce((sum, chip) => sum + chip, 0) !== total) setChips(chipsFor(total));
+    setChips(chipsOfStake(stake, chips));
     void repeat(stake);
   };
+  // The chips on the felt: the bet being built, or the stake of the round on the table.
+  const tableChips = view.kind === "bet" ? chips : chipsOfStake(view.hand.stake, chips);
 
   const fairness =
     view.kind === "bet"
@@ -87,8 +99,30 @@ export function BlackjackPage() {
 
       <div className="cr-content">
         <section className="cr-road-area" aria-label="Mesa">
-          <div className="bj-felt-wrap">
-            <Table view={view} deal={deal} dealing={pending} />
+          <div className={`bj-felt-wrap bj-back-${deck}`}>
+            <Table
+              view={view}
+              deal={deal}
+              dealing={pending}
+              chips={tableChips}
+              onTakeChip={view.kind === "bet" && !disabled ? takeBackChip : undefined}
+              onShuffle={() => setShuffling(true)}
+              canShuffle={!disabled && !picking && view.kind !== "playing"}
+              deck={deck}
+              onDecks={() => setPicking(true)}
+              canPickDeck={!shuffling && !picking}
+            />
+            {shuffling && <Shuffle onDone={endShuffle} />}
+            {picking && (
+              <DeckPicker
+                deck={deck}
+                onPick={(id) => {
+                  setDeck(id);
+                  saveDeck(id);
+                }}
+                onClose={closeDecks}
+              />
+            )}
             {showResult && (
               <ResultDialog
                 hand={view.hand}
@@ -106,7 +140,9 @@ export function BlackjackPage() {
           {view.kind === "bet" && (
             <BetPanel
               chips={chips}
-              onChips={setChips}
+              onAdd={(chip) => setChips((placed) => [...placed, chip])}
+              onTakeBack={takeBackChip}
+              onClear={() => setChips([])}
               onStart={start}
               balance={balance}
               disabled={disabled}

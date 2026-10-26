@@ -92,7 +92,8 @@ describe("BlackjackPage bet form", () => {
   it("shows the title, an empty table and the bet form with how hands pay", async () => {
     await renderPage(client());
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Blackjack");
-    expect(within(table()).getAllByText("Esperando el reparto")).toHaveLength(2);
+    expect(within(table()).getByText("La banca espera")).toBeTruthy();
+    expect(within(table()).getByText("Listo para repartir")).toBeTruthy();
     expect(inPanel("Repartir · 10 créditos")).toBeTruthy();
     expect(within(panel()).getByText("3:2")).toBeTruthy();
     expect(within(panel()).getByText("Partida verificable")).toBeTruthy();
@@ -104,16 +105,70 @@ describe("BlackjackPage bet form", () => {
     await press("Ficha de 100 créditos");
     expect(inPanel("Repartir · 160 créditos")).toBeTruthy();
     expect(within(panel()).getByText("160 créditos")).toBeTruthy();
-    await press("Deshacer");
+    await press("Deshacer la última ficha");
     expect(inPanel("Repartir · 60 créditos")).toBeTruthy();
-    await press("Borrar");
+    await press("Borrar la apuesta");
     expect((inPanel("Repartir") as HTMLButtonElement).disabled).toBe(true);
     expect(within(panel()).getByText("Toca una ficha para apostar")).toBeTruthy();
+    expect(within(table()).getByText("Pon tus fichas y reparte")).toBeTruthy();
+  });
+
+  it("piles the chips as they were put down, and a click on them takes back the top one", async () => {
+    await renderPage(client());
+    await press("Ficha de 50 créditos");
+    await press("Ficha de 50 créditos");
+    // Two 50s and the 10 stay three chips; they are not stacked as a 100 and a 10.
+    const spot = panel().querySelector(".bj-bet-spot") as HTMLElement;
+    expect(spot.querySelectorAll(".bj-chip.is-50")).toHaveLength(2);
+    expect(spot.querySelectorAll(".bj-chip.is-100")).toHaveLength(0);
+    // The same chips sit next to "Tú" on the felt, and a click there takes one back too.
+    fireEvent.click(
+      within(table()).getByRole("button", { name: "Quitar la ficha de 50 créditos" }),
+    );
+    expect(inPanel("Repartir · 60 créditos")).toBeTruthy();
+    await press("Quitar la ficha de 50 créditos");
+    expect(inPanel("Repartir · 10 créditos")).toBeTruthy();
+  });
+
+  it("starts a new pile every ten chips", async () => {
+    await renderPage(client());
+    for (let i = 0; i < 10; i++) await press("Ficha de 10 créditos");
+    const piles = [...panel().querySelectorAll(".bj-bet-spot .bj-pile")];
+    expect(piles.map((pile) => pile.children.length)).toEqual([10, 1]);
+  });
+
+  it("picks a free card back from Mazos and keeps it; a priced one shows its price, locked", async () => {
+    await renderPage(client());
+    fireEvent.click(within(table()).getByRole("button", { name: "Mazos" }));
+    const picker = within(screen.getByRole("dialog", { name: "Mazos" }));
+    expect(picker.getByRole("button", { name: /Clásico/ }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    const gold = picker.getByRole("button", { name: /Oro/ }) as HTMLButtonElement;
+    expect(gold.disabled).toBe(true);
+    expect(gold.textContent).toContain("500 créditos");
+    fireEvent.click(picker.getByRole("button", { name: /Lila/ }));
+    expect(picker.getByRole("button", { name: /Lila/ }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(picker.getByRole("button", { name: "Listo" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(table().querySelector(".bj-felt-wrap.bj-back-lila")).toBeTruthy();
+    expect(localStorage.getItem("casino.blackjack.deck")).toBe("lila");
+  });
+
+  it("plays the shuffle from the shoe, holding the table meanwhile", async () => {
+    await renderPage(client());
+    fireEvent.click(within(table()).getByRole("button", { name: "Barajar" }));
+    expect(within(table()).getByRole("status").textContent).toBe("Barajando el zapato…");
+    expect((inPanel(/^Repartir/) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(screen.queryByText("Barajando el zapato…")).toBeNull(), {
+      timeout: 3000,
+    });
+    expect((inPanel(/^Repartir/) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("keeps the bet within 500 credits and the balance", async () => {
     await renderPage(client([], undefined, 20000n));
-    await press("Borrar");
+    await press("Borrar la apuesta");
     // A 200-credit balance: the 500 chip is off, and so is a third 100.
     expect((inPanel("Ficha de 500 créditos") as HTMLButtonElement).disabled).toBe(true);
     await press("Ficha de 100 créditos");
@@ -336,6 +391,14 @@ describe("BlackjackPage split", () => {
     await renderPage(client([shoe("J", "9", "10", "7")]));
     await deal();
     expect((inPanel(/^Separar/) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("shows each hand's chips next to it, twice on a doubled hand", async () => {
+    await renderPage(client([PAIR]));
+    await deal();
+    await press(/^Separar/);
+    const hands = table().querySelectorAll(".bj-player-hands .bj-hand");
+    expect([...hands].map((hand) => hand.querySelectorAll(".bj-chip").length)).toEqual([1, 1]);
   });
 
   it("splits into two hands, plays them in turn and shows each result", async () => {

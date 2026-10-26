@@ -48,6 +48,25 @@ export function chipsFor(total: number): ChipValue[] {
   return chips;
 }
 
+/** Most chips in one pile; more start a new pile beside it. */
+export const PILE_MAX = 10;
+
+/** Chips in the order they were put down, cut into piles of at most `PILE_MAX`. */
+export function pilesOf<T>(chips: readonly T[]): T[][] {
+  const piles: T[][] = [];
+  for (let i = 0; i < chips.length; i += PILE_MAX) piles.push(chips.slice(i, i + PILE_MAX));
+  return piles;
+}
+
+/**
+ * The chips of a round's stake: the ones the player put down when they add up to it, or else (a
+ * hand restored after a reload) the fewest that do.
+ */
+export function chipsOfStake(stake: string, placed: readonly ChipValue[]): ChipValue[] {
+  const total = creditsOfStake(stake);
+  return placed.reduce((sum, chip) => sum + chip, 0) === total ? [...placed] : chipsFor(total);
+}
+
 export const SUIT_SYMBOLS: Record<BlackjackCard["suit"], string> = {
   spades: "♠",
   hearts: "♥",
