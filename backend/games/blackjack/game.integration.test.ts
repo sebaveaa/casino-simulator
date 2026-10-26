@@ -105,7 +105,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
    * instead of hard-coding a seed. Hands that do not fit are played out.
    */
   async function startWithShoe(userId: string, fits: (shoe: number[]) => boolean) {
-    // A pair to split comes about once in 13 deals, so the search allows plenty.
+    // A pair to split (two cards of the same value) comes about once in seven deals.
     for (let attempt = 0; attempt < 250; attempt++) {
       const key = randomUUID();
       const res = await start(userId, key);

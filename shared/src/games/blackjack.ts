@@ -151,18 +151,20 @@ export function shuffleShoe(rng: Rng): number[] {
 }
 
 const isAce = (card: number) => card % 13 === 0;
-const sameRank = (a: number, b: number) => a % 13 === b % 13;
+/** A pair splits by value, as many tables allow: two 8s, or any two of 10, J, Q and K. */
+const samePoints = (a: number, b: number) => cardPoints(a) === cardPoints(b);
 
 /**
  * The actions the player may take on the active hand; empty once the round is over. Double and
- * split need the hand's first two cards; split also needs a pair and no split before.
+ * split need the hand's first two cards; split also needs a pair (two cards of the same value) and
+ * no split before.
  */
 export function legalActions(state: BlackjackHandState): BlackjackAction[] {
   if (state.finished) return [];
   const cards = state.playerHands[state.active]?.cards ?? [];
   if (cards.length !== 2) return ["hit", "stand"];
   const [first, second] = cards as [number, number];
-  const canSplit = state.playerHands.length < BLACKJACK_MAX_HANDS && sameRank(first, second);
+  const canSplit = state.playerHands.length < BLACKJACK_MAX_HANDS && samePoints(first, second);
   return canSplit ? ["hit", "stand", "double", "split"] : ["hit", "stand", "double"];
 }
 

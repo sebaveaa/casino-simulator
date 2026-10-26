@@ -192,9 +192,12 @@ describe("playHand: split", () => {
   // Player 8+8 against a dealer 9 up (9+7 = 16).
   const eights = (...rest: BlackjackRank[]) => shoe("8", "9", "8", "7", ...rest);
 
-  it("offers split on a pair of the same rank only", () => {
+  it("offers split on two cards of the same value only", () => {
     expect(legalActions(playHand(eights(), []))).toEqual(["hit", "stand", "double", "split"]);
-    expect(legalActions(playHand(shoe("K", "9", "Q", "7"), []))).not.toContain("split");
+    // Any two ten-value cards are a pair: J and 10, K and Q.
+    expect(legalActions(playHand(shoe("J", "9", "10", "7"), []))).toContain("split");
+    expect(legalActions(playHand(shoe("K", "9", "Q", "7"), []))).toContain("split");
+    expect(legalActions(playHand(shoe("K", "9", "9", "7"), []))).not.toContain("split");
   });
 
   it("plays the left hand first; the right one draws its second card when its turn comes", () => {

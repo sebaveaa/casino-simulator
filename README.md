@@ -318,7 +318,7 @@ Este es el punto de mayor carga del sistema: un pico de apuestas justo antes del
 
 ### 4.4 Blackjack (partida con estado)
 
-**Reglas:** zapato de 6 barajas; la banca revisa si tiene blackjack al repartir; el blackjack natural paga 3:2; la banca se planta en todo 17; el jugador puede pedir, plantarse, doblar (solo con las dos primeras cartas: recibe una carta y se planta) o **separar** un par (dos primeras cartas del mismo rango, una sola vez: se juegan dos manos, primero la izquierda, con otra apuesta igual; los ases separados reciben una carta cada uno y un 21 tras separar paga 1:1). Se puede doblar después de separar. Al llegar a 21 una mano se planta sola y al pasarse pierde; si todas las manos se pasan, la banca no juega. Apuestas de 10 a 500 créditos. Seguro y rendición quedan fuera de esta versión.
+**Reglas:** zapato de 6 barajas; la banca revisa si tiene blackjack al repartir; el blackjack natural paga 3:2; la banca se planta en todo 17; el jugador puede pedir, plantarse, doblar (solo con las dos primeras cartas: recibe una carta y se planta) o **separar** un par (dos primeras cartas del mismo valor, como un 8 y un 8 o una J y un 10, una sola vez: se juegan dos manos, primero la izquierda, con otra apuesta igual; los ases separados reciben una carta cada uno y un 21 tras separar paga 1:1). Se puede doblar después de separar. Al llegar a 21 una mano se planta sola y al pasarse pierde; si todas las manos se pasan, la banca no juega. Apuestas de 10 a 500 créditos. Seguro y rendición quedan fuera de esta versión.
 
 La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que no necesita Redis:
 

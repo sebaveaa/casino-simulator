@@ -286,6 +286,12 @@ describe("BlackjackPage split", () => {
     expect(within(panel()).getByText("Tienes un par: puedes separarlo en dos manos.")).toBeTruthy();
   });
 
+  it("splits any two ten-value cards, like a J and a 10", async () => {
+    await renderPage(client([shoe("J", "9", "10", "7")]));
+    await deal();
+    expect((inPanel(/^Separar/) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("splits into two hands, plays them in turn and shows each result", async () => {
     await renderPage(client([PAIR]));
     await deal();

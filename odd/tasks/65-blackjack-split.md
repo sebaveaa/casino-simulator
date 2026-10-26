@@ -22,7 +22,7 @@ Out of scope: resplitting, insurance and surrender; the verifier (#15).
 
 - **One stacked branch over #64**, not edits to the five pushed branches: they stay as reviewed units, and this one PR carries the whole feature. It touches every layer, so it goes with `size:exception`, as #40 did.
 - **Rules.**
-  - Split needs the first two cards of the same rank (8-8, K-K; not K-Q). Once per round: at most two hands. It charges one more stake.
+  - Split needs the first two cards of the same value (8-8, K-K, and any two ten-value cards such as J-10 or K-Q, as many tables allow). Once per round: at most two hands. It charges one more stake.
   - The left hand is played first and draws its second card at once; the right one draws its second card when its turn comes.
   - Split aces take one card each and stand. A 21 after a split is not a natural: it pays 1:1.
   - Double after split is allowed, on each hand's first two cards.
@@ -67,6 +67,9 @@ From the issue:
 - T4 done: `planDeal` over the player's hands (a split lands the left hand's new card and the pair's other card; the right hand's second card on its turn); the felt shows two hands side by side, the active one outlined with "Tu turno"; Separar next to Doblar, both needing the server's flag and a balance for one more stake; the pop-up, the panel and the history read a round through `roundSummary` (one hand: its outcome; two: the net); settled totals read as one number. Page tests (+2): Separar only on a pair; a split played hand by hand with each result in the pop-up and the net in the history. Deal tests (+1): the split. Checked in the browser with the mock: split aces and a split played hand by hand; on a clean reload, dozens of rounds with no console errors.
 - T5 done: README §4.4 (split rules, charges, payout over the hands, abandonment of every open hand). Final checks: `npm run lint` clean (264 files); `npm run typecheck` clean; with the database, `npm test` green: shared 247, backend 329 passed and 4 skipped, frontend 378.
 
+- Playtest (Juan Sebastián): a J and a 10 would not split. A pair is now two cards of the same value, so any two ten-value cards split (`legalActions`, README §4.4); the backend and the mock follow from the shared rules. Tests: shared (J-10 and K-Q split, K-9 does not), page (Separar on a J and a 10). Issue #65's criterion updated to match.
+- The other playtest changes (chips, sounds, card backs, shuffle, responsive panel) moved to #67, stacked on this branch, so each PR stays reviewable.
+
 ## Next step
 
-Open the stacked PRs in order with the rest of Blackjack: #62 → #63 A → #63 B → #64 A → #64 B → #65 (`size:exception`).
+Open the stacked PRs in order with the rest of Blackjack: #62 → #63 A → #63 B → #64 A → #64 B → #65 (`size:exception`) → #67.
