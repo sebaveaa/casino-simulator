@@ -21,6 +21,14 @@ export const apiPaths = {
   chickenRoadCurrent: "/games/chicken-road/games/current",
   chickenRoadSteps: "/games/chicken-road/games/current/steps",
   chickenRoadCashout: "/games/chicken-road/games/current/cashout",
+  /** `:game` is one of CRASH_GAMES ("dino-crash" | "aviator"); each game has its own rounds. */
+  crashCurrent: "/games/crash/:game/rounds/current",
+  /** GET lists the latest finished rounds (`?limit=`). */
+  crashRounds: "/games/crash/:game/rounds",
+  crashBets: "/games/crash/:game/bets",
+  crashCashout: "/games/crash/:game/bets/:betId/cashout",
+  /** SSE stream of the game's round events. */
+  crashStream: "/games/crash/:game/events",
 } as const;
 
 export type ApiPath = (typeof apiPaths)[keyof typeof apiPaths];
