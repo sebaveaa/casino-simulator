@@ -6,6 +6,7 @@ import { chickenRoadRoutes } from "../games/chicken-road/routes";
 import { crashRoutes } from "../games/crash/routes";
 import { racesRoutes } from "../games/races/routes";
 import { rouletteRoutes } from "../games/roulette/routes";
+import { crashStreamRoutes } from "../realtime/crash-stream-routes";
 import { streamRoutes } from "../realtime/stream-routes";
 import { seedPairRoutes } from "../rng/routes";
 import { walletRoutes } from "../wallet/routes";
@@ -37,4 +38,5 @@ export const moduleRoutes: ModuleRoutes[] = [
   streamRoutes,
   chickenRoadRoutes,
   crashRoutes,
+  crashStreamRoutes,
 ];
