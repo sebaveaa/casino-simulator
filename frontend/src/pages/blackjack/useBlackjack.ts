@@ -1,0 +1,211 @@
+import {
+  BLACKJACK_HISTORY_DEFAULT_LIMIT,
+  BLACKJACK_HISTORY_MAX_LIMIT,
+  type BlackjackAction,
+  type BlackjackHand,
+  type BlackjackInProgressHand,
+  type BlackjackSettledHand,
+  type SeedPairResponse,
+} from "@casino/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, useApi } from "../../api";
+import { useApplyBalance, useRefreshBalance } from "../../app/useBalance";
+import { betErrorMessage } from "../betErrorMessage";
+
+/** What the screen shows: the bet form, a hand on the player's turn, or a settled hand. */
+export type BlackjackView =
+  | { kind: "bet" }
+  | { kind: "playing"; hand: BlackjackInProgressHand }
+  | { kind: "over"; hand: BlackjackSettledHand };
+
+export const ALREADY_IN_PROGRESS = "Ya tienes una mano en curso.";
+export const ALREADY_FINISHED = "Esa mano ya terminó.";
+export const HAND_GONE = "No encontramos esa mano. Empieza una nueva.";
+
+export function viewOf(hand: BlackjackHand): BlackjackView {
+  return hand.status === "player_turn" ? { kind: "playing", hand } : { kind: "over", hand };
+}
+
+const isConflict = (error: unknown) => error instanceof ApiError && error.code === "conflict";
+const isNetwork = (error: unknown) => error instanceof ApiError && error.code === "network";
+
+/**
+ * State and requests of the Blackjack screen. The server deals every card and settles every hand;
+ * this hook only sends the request and shows what came back. While a request is pending every
+ * action is refused, and `pending` always clears afterwards, so the screen never stays stuck.
+ */
+export function useBlackjack() {
+  const api = useApi();
+  const applyBalance = useApplyBalance();
+  const refreshBalance = useRefreshBalance();
+
+  const [view, setView] = useState<BlackjackView>({ kind: "bet" });
+  const [history, setHistory] = useState<BlackjackSettledHand[]>([]);
+  const [seedPair, setSeedPair] = useState<SeedPairResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // A ref as well as state: two clicks in the same frame both see `busy` before React re-renders.
+  const busy = useRef(false);
+  // One Idempotency-Key per stake, kept only after a network failure so a retry charges once.
+  const pendingKey = useRef<{ stake: string; key: string } | null>(null);
+
+  const loadSeedPair = useCallback(async () => {
+    try {
+      setSeedPair(await api.getSeedPair());
+    } catch {
+      // The hash is informative; the game works without it.
+    }
+  }, [api]);
+
+  /** History for display; `limit` 20 when a resync must find a hand in it. */
+  const loadHistory = useCallback(
+    async (limit = BLACKJACK_HISTORY_DEFAULT_LIMIT) => {
+      const { hands } = await api.listBlackjackHistory({ limit });
+      setHistory(hands.slice(0, BLACKJACK_HISTORY_DEFAULT_LIMIT));
+      return hands;
+    },
+    [api],
+  );
+
+  /** After a hand settles: new history, the next nonce, and the balance from the server. */
+  const afterHandEnds = useCallback(async () => {
+    await Promise.allSettled([loadHistory(), loadSeedPair(), refreshBalance()]);
+  }, [loadHistory, loadSeedPair, refreshBalance]);
+
+  // On load: restore a hand in progress, so a reload never loses it.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const [current] = await Promise.allSettled([
+        api.getCurrentBlackjackHand(),
+        loadHistory(),
+        loadSeedPair(),
+      ]);
+      if (!active) return;
+      if (current.status === "fulfilled" && current.value.hand) {
+        setView({ kind: "playing", hand: current.value.hand });
+      } else if (current.status === "rejected") {
+        setMessage(betErrorMessage(current.reason));
+      }
+      setLoading(false);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [api, loadHistory, loadSeedPair]);
+
+  async function run(action: () => Promise<void>) {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setMessage(null);
+    try {
+      await action();
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }
+
+  /** Runs `request`; a 409 resyncs with `onConflict`, anything else shows its message. */
+  async function guarded(request: () => Promise<void>, onConflict: () => Promise<void>) {
+    try {
+      await request();
+    } catch (caught) {
+      if (!isConflict(caught)) {
+        setMessage(betErrorMessage(caught));
+        return;
+      }
+      try {
+        await onConflict();
+      } catch (again) {
+        setMessage(betErrorMessage(again));
+      }
+    }
+  }
+
+  /**
+   * An action answered 409: the server's state wins. A hand still in progress is shown as it
+   * really is (for example after another tab played it); a settled one shows its real result.
+   */
+  async function resyncHand(handId: string) {
+    const { hand: current } = await api.getCurrentBlackjackHand();
+    if (current) {
+      setView({ kind: "playing", hand: current });
+      return;
+    }
+    const hands = await loadHistory(BLACKJACK_HISTORY_MAX_LIMIT);
+    const settled = hands.find((h) => h.handId === handId);
+    if (settled) {
+      setView({ kind: "over", hand: settled });
+    } else {
+      setView({ kind: "bet" });
+      setMessage(HAND_GONE);
+    }
+    await Promise.allSettled([loadSeedPair(), refreshBalance()]);
+  }
+
+  /** A start answered 409: a hand is already in progress, or this key's hand already finished. */
+  async function resyncStart() {
+    const { hand: current } = await api.getCurrentBlackjackHand();
+    if (current) {
+      setView({ kind: "playing", hand: current });
+      setMessage(ALREADY_IN_PROGRESS);
+      return;
+    }
+    setView({ kind: "bet" });
+    setMessage(ALREADY_FINISHED);
+    await afterHandEnds();
+  }
+
+  function start(stake: string) {
+    return run(() =>
+      guarded(async () => {
+        if (pendingKey.current?.stake !== stake) {
+          pendingKey.current = { stake, key: crypto.randomUUID() };
+        }
+        const { key } = pendingKey.current;
+        try {
+          const res = await api.startBlackjackHand({ stake }, key);
+          pendingKey.current = null;
+          setView(viewOf(res.hand));
+          applyBalance(res.balance);
+          // A natural settles at once.
+          if (res.hand.status === "settled") await afterHandEnds();
+          else void refreshBalance();
+        } catch (caught) {
+          if (!isNetwork(caught)) pendingKey.current = null;
+          throw caught;
+        }
+      }, resyncStart),
+    );
+  }
+
+  function act(action: BlackjackAction) {
+    if (view.kind !== "playing") return Promise.resolve();
+    const { handId, actionCount } = view.hand;
+    return run(() =>
+      guarded(
+        async () => {
+          // A retry after a network failure sends the same index, which the server replays.
+          const res = await api.playBlackjackAction({ handId, action, index: actionCount });
+          setView(viewOf(res.hand));
+          applyBalance(res.balance);
+          if (res.hand.status === "settled") await afterHandEnds();
+          else void refreshBalance();
+        },
+        () => resyncHand(handId),
+      ),
+    );
+  }
+
+  function playAgain() {
+    if (busy.current) return;
+    setMessage(null);
+    setView({ kind: "bet" });
+  }
+
+  return { view, history, seedPair, loading, pending, message, start, act, playAgain };
+}

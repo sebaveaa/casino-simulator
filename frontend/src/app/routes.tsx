@@ -1,4 +1,5 @@
 import type { RouteObject } from "react-router";
+import { BlackjackPage } from "../pages/BlackjackPage";
 import { ChickenRoadPage } from "../pages/ChickenRoadPage";
 import { LobbyPage } from "../pages/LobbyPage";
 import { LoginPage } from "../pages/LoginPage";
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
           { path: "games/races", element: <RacesPage /> },
           { path: "games/mini", element: <MiniGamesPage /> },
           { path: "games/mini/chicken-road", element: <ChickenRoadPage /> },
+          { path: "games/blackjack", element: <BlackjackPage /> },
         ],
       },
       { path: "*", element: <NotFoundPage /> },
