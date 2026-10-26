@@ -1,13 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { cardName, credits, gainOf, isRedSuit, isWin, stakeFromInput, totalLabel } from "./format";
+import {
+  cardName,
+  chipsFor,
+  credits,
+  creditsOfStake,
+  gainOf,
+  isRedSuit,
+  isWin,
+  stakeOfCredits,
+  totalLabel,
+} from "./format";
 
 describe("Blackjack format", () => {
-  it("reads a stake in whole credits from 10 to 500, in steps of 10", () => {
-    expect(stakeFromInput("10")).toBe("1000");
-    expect(stakeFromInput(" 500 ")).toBe("50000");
-    for (const text of ["", "5", "15", "510", "1e2", "-10", "10.5"]) {
-      expect(stakeFromInput(text)).toBeNull();
-    }
+  it("takes chips worth 10 to 500 credits as a stake", () => {
+    expect(stakeOfCredits(10)).toBe("1000");
+    expect(stakeOfCredits(500)).toBe("50000");
+    expect(stakeOfCredits(0)).toBeNull();
+    expect(stakeOfCredits(510)).toBeNull();
+    expect(creditsOfStake("25000")).toBe(250);
+  });
+
+  it("stacks a bet with the fewest chips, largest first", () => {
+    expect(chipsFor(0)).toEqual([]);
+    expect(chipsFor(500)).toEqual([500]);
+    expect(chipsFor(490)).toEqual([100, 100, 100, 100, 50, 10, 10, 10, 10]);
+    expect(chipsFor(160)).toEqual([100, 50, 10]);
   });
 
   it("shows credits and the gain over what was wagered", () => {

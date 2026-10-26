@@ -2610,9 +2610,31 @@ main {
   gap: 24px;
 }
 
+/* The sound toggle: a speaker drawn like the rest of the icons, in a round chip. */
 .bj-sound {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
   cursor: pointer;
-  font-family: inherit;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.bj-sound[aria-pressed="false"] {
+  background: var(--lilac);
+}
+
+.bj-sound:active {
+  box-shadow: none;
+  transform: translate(3px, 3px);
 }
 
 .bj-felt-wrap {
@@ -2838,12 +2860,232 @@ main {
   gap: 12px;
 }
 
-.bj-double {
+/* Doblar and Separar: quieter than Pedir and Plantarse, outlined buttons in a lilac tray with the
+   hint in small type. The cost follows the action in the amount font. */
+.bj-wagers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+}
+
+.bj-wager-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.bj-wager {
+  display: inline-flex;
+  align-items: baseline;
   justify-content: center;
-  width: 100%;
-  padding: 0 12px;
-  background: var(--chalk);
+  gap: 6px;
+  min-height: 40px;
+  padding: 4px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.bj-wager:hover:not(:disabled) {
+  background: var(--sun);
+}
+
+.bj-wager:active:not(:disabled) {
+  transform: translate(1px, 1px);
+}
+
+.bj-wager:disabled {
+  border-style: dashed;
+  border-color: rgb(20 20 20 / 0.3);
+  color: rgb(20 20 20 / 0.4);
+  cursor: not-allowed;
+}
+
+.bj-wager-cost {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.bj-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
   text-align: center;
+}
+
+/* The bet: chips stacked on a patch of felt, the way a dealer colors them up. */
+.bj-bet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bj-bet-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bj-bet-total {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.bj-bet-spot {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  padding: 12px;
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.035) 0 2px, transparent 2px 12px),
+    radial-gradient(ellipse at 50% 40%, #1f7a4d 0%, #17633e 80%);
+  box-shadow: inset 0 0 24px rgb(0 0 0 / 0.3);
+}
+
+.bj-bet-empty {
+  color: rgb(255 255 255 / 0.75);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.bj-bet-stack {
+  position: relative;
+  width: 64px;
+  height: 108px;
+}
+
+/* Seen from the player's seat: each chip squashed into its top face, its edge the shadow below. */
+.bj-bet-chip {
+  position: absolute;
+  left: 0;
+  width: 64px;
+  transform: scaleY(0.55);
+  transform-origin: bottom;
+  animation: bj-chip-drop 220ms var(--ease-spring) both;
+}
+
+.bj-bet-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.bj-bet-tool {
+  padding: 2px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bj-bet-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Casino chips: eight edge spots around a ring, the value in an inner disc. 10 sun, 50 tomato,
+   100 ink, 500 purple (#7b5cff, outside the tokens like the felt). */
+.bj-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bj-chip-button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.bj-chip-button:hover:not(:disabled) {
+  transform: translateY(-3px);
+}
+
+.bj-chip-button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.96);
+}
+
+.bj-chip-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bj-chip {
+  --chip: var(--sun);
+  --chip-ink: var(--ink);
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 64px;
+  aspect-ratio: 1;
+  border: var(--outline);
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--chip) 0 30deg, var(--chalk) 30deg 45deg);
+  box-shadow: var(--shadow-sm);
+}
+
+.bj-chip.is-50 {
+  --chip: var(--tomato);
+}
+
+.bj-chip.is-100 {
+  --chip: var(--ink);
+  --chip-ink: var(--chalk);
+}
+
+.bj-chip.is-500 {
+  --chip: #7b5cff;
+  --chip-ink: var(--chalk);
+}
+
+.bj-chip-value {
+  display: grid;
+  place-items: center;
+  width: 64%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--chip);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 3px var(--chip),
+    inset 0 0 0 4px rgb(255 255 255 / 0.7);
+  color: var(--chip-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* In the stack, a chip's shadow falls straight down: the edge of the chip below. */
+.bj-bet-chip .bj-chip {
+  max-width: none;
+  box-shadow: 0 10px 0 var(--ink);
+}
+
+.bj-bet-chip .bj-chip-value {
+  font-size: 0.75rem;
 }
 
 /* The result pops up over the felt once the last card has landed. */
@@ -2863,8 +3105,8 @@ main {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: min(100%, 380px);
-  padding: 24px;
+  width: min(100%, 360px);
+  padding: 20px 22px;
   border: var(--outline);
   border-radius: var(--radius-lg);
   background: var(--chalk);
@@ -2879,19 +3121,19 @@ main {
 
 .bj-result-amount {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   font-weight: 600;
   opacity: 0.85;
 }
 
 .bj-result-title {
   margin: 0;
-  padding: 4px 18px;
+  padding: 2px 14px;
   border: var(--outline);
   border-radius: var(--radius-pill);
-  background: var(--chalk);
+  background: var(--lilac);
   box-shadow: var(--shadow-sm);
-  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-size: clamp(1.3rem, 3vw, 1.6rem);
   font-weight: 800;
   transform: rotate(-2deg);
 }
@@ -2905,7 +3147,7 @@ main {
 }
 
 .bj-result-prize {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -2916,11 +3158,13 @@ main {
   margin: 0;
   padding: 0;
   color: var(--muted);
+  font-size: 0.8125rem;
   list-style: none;
 }
 
 .bj-result-detail {
   color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .bj-result-actions {
@@ -2931,9 +3175,16 @@ main {
   margin-top: 8px;
 }
 
+.bj-result-more {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .bj-result-close {
   justify-content: center;
-  background: var(--chalk);
+  padding: 0 10px;
+  background: var(--lilac);
 }
 
 @keyframes bj-deal {
@@ -2944,6 +3195,13 @@ main {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes bj-chip-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scaleY(0.55);
   }
 }
 
@@ -2984,6 +3242,7 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
   .bj-card,
+  .bj-bet-chip,
   .bj-result,
   .bj-result-backdrop {
     animation: none;

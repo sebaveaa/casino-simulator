@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useBalanceAmount } from "../app/useBalance";
 import { BetPanel } from "./blackjack/BetPanel";
+import { type ChipValue, chipsFor, creditsOfStake } from "./blackjack/format";
 import { HandHistory } from "./blackjack/HandHistory";
 import { PlayingPanel } from "./blackjack/PlayingPanel";
 import { ResultDialog } from "./blackjack/ResultDialog";
@@ -17,15 +18,37 @@ import { FairnessBlock } from "./chicken-road/FairnessBlock";
  * action; the screen sends the request and shows the cards that came back (README §4.4).
  */
 export function BlackjackPage() {
-  const { view, deal, history, seedPair, loading, pending, message, start, act, playAgain } =
-    useBlackjack();
+  const {
+    view,
+    deal,
+    history,
+    seedPair,
+    loading,
+    pending,
+    message,
+    start,
+    act,
+    changeBet,
+    repeat,
+  } = useBlackjack();
   const balance = useBalanceAmount();
-  const [amount, setAmount] = useState("10");
+  // The chips on the bet; they stay between rounds, like on a real table.
+  const [chips, setChips] = useState<ChipValue[]>([10]);
   // The hand whose result pop-up the player closed with "Ver la mesa".
   const [closedHandId, setClosedHandId] = useState<string | null>(null);
   const disabled = loading || pending;
   // `pending` holds through the deal, so the result pops up once the last card has landed.
   const showResult = view.kind === "over" && !pending && closedHandId !== view.hand.handId;
+
+  // Unknown while the balance loads: the server still refuses a stake it cannot cover.
+  const covers = (stake: string) => balance === null || balance >= parseAmount(stake);
+
+  /** Deals again with the round's stake, stacking its chips on the bet if they changed. */
+  const repeatBet = (stake: string) => {
+    const total = creditsOfStake(stake);
+    if (chips.reduce((sum, chip) => sum + chip, 0) !== total) setChips(chipsFor(total));
+    void repeat(stake);
+  };
 
   const fairness =
     view.kind === "bet"
@@ -69,7 +92,9 @@ export function BlackjackPage() {
             {showResult && (
               <ResultDialog
                 hand={view.hand}
-                onPlayAgain={playAgain}
+                canRepeat={covers(view.hand.stake)}
+                onRepeat={() => repeatBet(view.hand.stake)}
+                onChangeBet={changeBet}
                 onClose={() => setClosedHandId(view.hand.handId)}
               />
             )}
@@ -79,19 +104,30 @@ export function BlackjackPage() {
 
         <aside className="cr-panel" aria-label="Tu mano" aria-busy={disabled || undefined}>
           {view.kind === "bet" && (
-            <BetPanel amount={amount} onAmount={setAmount} onStart={start} disabled={disabled} />
+            <BetPanel
+              chips={chips}
+              onChips={setChips}
+              onStart={start}
+              balance={balance}
+              disabled={disabled}
+            />
           )}
           {view.kind === "playing" && (
             <PlayingPanel
               hand={view.hand}
-              // Unknown while the balance loads: the server still refuses a stake it cannot cover.
-              canAffordStake={balance === null || balance >= parseAmount(view.hand.stake)}
+              canAffordStake={covers(view.hand.stake)}
               onAction={act}
               disabled={disabled}
             />
           )}
           {view.kind === "over" && (
-            <ResultPanel hand={view.hand} onPlayAgain={playAgain} disabled={disabled} />
+            <ResultPanel
+              hand={view.hand}
+              canRepeat={covers(view.hand.stake)}
+              onRepeat={() => repeatBet(view.hand.stake)}
+              onChangeBet={changeBet}
+              disabled={disabled}
+            />
           )}
           {message && (
             <p className="wallet-error" role="alert">

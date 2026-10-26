@@ -1,70 +1,110 @@
+import { MINOR_UNITS_PER_CREDIT, type Money } from "@casino/shared";
 import { useId } from "react";
-import { credits, QUICK_STAKES, stakeFromInput } from "./format";
+import { CHIP_VALUES, type ChipValue, chipsFor, MAX_BET_CREDITS, stakeOfCredits } from "./format";
+import { playChipSound } from "./sound";
 
-/** "Apuesta": the stake field, the quick amounts, the deal button and how hands pay. */
+/** A casino chip: its value in the middle, its color by denomination. */
+export function Chip({ value }: { value: ChipValue }) {
+  return (
+    <span className={`bj-chip is-${value}`}>
+      <span className="bj-chip-value amount">{value}</span>
+    </span>
+  );
+}
+
+/**
+ * "Apuesta": chips build the stake, one click per chip. The bet stacks them the way a dealer
+ * would, with the fewest chips; Deshacer takes back the last one, Borrar all of them. Then the
+ * deal button and how hands pay.
+ */
 export function BetPanel({
-  amount,
-  onAmount,
+  chips,
+  onChips,
   onStart,
+  balance,
   disabled,
 }: {
-  /** The field's text, in whole credits. */
-  amount: string;
-  onAmount: (text: string) => void;
+  /** The chips on the bet, in the order they were put down, in credits. */
+  chips: readonly ChipValue[];
+  onChips: (chips: ChipValue[]) => void;
   onStart: (stake: string) => void;
+  /** Null while it loads: the server still refuses a stake it cannot cover. */
+  balance: Money | null;
   disabled: boolean;
 }) {
-  const inputId = useId();
-  const helpId = useId();
+  const betId = useId();
   const payId = useId();
-  const stake = stakeFromInput(amount);
-  const label = stake === null ? amount.trim() || "0" : credits(stake);
+  const total = chips.reduce((sum, chip) => sum + chip, 0);
+  const stake = stakeOfCredits(total);
+  // Whole credits the balance covers; chips beyond it stay off.
+  const affordable = balance === null ? Infinity : Number(balance / MINOR_UNITS_PER_CREDIT);
+  const room = Math.min(MAX_BET_CREDITS, affordable) - total;
 
   return (
     <div className="cr-panel-body">
-      <div className="cr-field">
-        <label htmlFor={inputId} className="cr-field-label">
-          Tu apuesta
-        </label>
-        <div className="cr-field-row">
-          <input
-            id={inputId}
-            className="cr-stake-input"
-            type="number"
-            inputMode="numeric"
-            min={10}
-            max={500}
-            step={10}
-            value={amount}
-            aria-describedby={helpId}
-            aria-invalid={stake === null || undefined}
-            disabled={disabled}
-            onChange={(event) => onAmount(event.target.value)}
-          />
-          <span>créditos</span>
+      <div className="bj-bet">
+        <div className="bj-bet-head">
+          <span id={betId} className="cr-field-label">
+            Tu apuesta
+          </span>
+          <output className="bj-bet-total amount" aria-labelledby={betId} aria-live="polite">
+            {total} créditos
+          </output>
         </div>
-        <p id={helpId} className="cr-help">
-          Entre 10 y 500 créditos.
-        </p>
+        <div className="bj-bet-spot">
+          {total === 0 ? (
+            <span className="bj-bet-empty">Toca una ficha para apostar</span>
+          ) : (
+            <span className="bj-bet-stack" aria-hidden="true">
+              {chipsFor(total).map((value, i) => (
+                // A stack is drawn bottom up; the position is its identity.
+                // biome-ignore lint/suspicious/noArrayIndexKey: chips in a stack keep their place
+                <span key={i} className="bj-bet-chip" style={{ bottom: `${i * 9}px` }}>
+                  <Chip value={value} />
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+        <div className="bj-bet-tools">
+          <button
+            type="button"
+            className="bj-bet-tool"
+            disabled={disabled || chips.length === 0}
+            onClick={() => onChips(chips.slice(0, -1))}
+          >
+            Deshacer
+          </button>
+          <button
+            type="button"
+            className="bj-bet-tool"
+            disabled={disabled || chips.length === 0}
+            onClick={() => onChips([])}
+          >
+            Borrar
+          </button>
+        </div>
       </div>
 
-      <div className="cr-quick">
-        {QUICK_STAKES.map((value) => {
-          const selected = amount.trim() === String(value);
-          return (
-            <button
-              key={value}
-              type="button"
-              className={selected ? "cr-quick-button is-selected" : "cr-quick-button"}
-              aria-pressed={selected}
-              disabled={disabled}
-              onClick={() => onAmount(String(value))}
-            >
-              {value}
-            </button>
-          );
-        })}
-      </div>
+      <fieldset className="bj-chips">
+        <legend className="roulette-sr-only">Fichas</legend>
+        {CHIP_VALUES.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className="bj-chip-button"
+            aria-label={`Ficha de ${value} créditos`}
+            disabled={disabled || value > room}
+            onClick={() => {
+              playChipSound();
+              onChips([...chips, value]);
+            }}
+          >
+            <Chip value={value} />
+          </button>
+        ))}
+      </fieldset>
+      <p className="cr-help">Cada ficha suma a tu apuesta: entre 10 y 500 créditos.</p>
 
       <button
         type="button"
@@ -72,7 +112,7 @@ export function BetPanel({
         disabled={disabled || stake === null}
         onClick={() => stake !== null && onStart(stake)}
       >
-        Repartir · {label} créditos
+        {stake === null ? "Repartir" : `Repartir · ${total} créditos`}
       </button>
 
       <section className="cr-paytable" aria-labelledby={payId}>
@@ -94,8 +134,9 @@ export function BetPanel({
           </div>
         </dl>
         <p className="cr-note">
-          Gana quien quede más cerca de 21 sin pasarse. La banca pide hasta llegar a 17. Puedes
-          doblar con tus dos primeras cartas: recibes una carta más y te plantas.
+          Gana quien quede más cerca de 21 sin pasarse. La banca pide hasta llegar a 17. Con tus dos
+          primeras cartas puedes doblar (recibes una carta más y te plantas) o, si son un par,
+          separarlas en dos manos.
         </p>
       </section>
     </div>

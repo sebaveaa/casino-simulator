@@ -1,14 +1,22 @@
 import type { BlackjackSettledHand } from "@casino/shared";
-import { roundSummary } from "./format";
+import { credits, roundSummary } from "./format";
 
-/** The panel after a round: the result itself pops up over the felt; here only "Jugar otra vez". */
+/**
+ * The panel after a round: the result itself pops up over the felt; here "Repetir apuesta" deals
+ * again with the same stake, and "Cambiar apuesta" goes back to the chips.
+ */
 export function ResultPanel({
   hand,
-  onPlayAgain,
+  canRepeat,
+  onRepeat,
+  onChangeBet,
   disabled,
 }: {
   hand: BlackjackSettledHand;
-  onPlayAgain: () => void;
+  /** Whether the balance covers the same stake again. */
+  canRepeat: boolean;
+  onRepeat: () => void;
+  onChangeBet: () => void;
   disabled: boolean;
 }) {
   return (
@@ -17,11 +25,20 @@ export function ResultPanel({
       <button
         type="button"
         className="button button-large cr-primary"
-        disabled={disabled}
-        onClick={onPlayAgain}
+        disabled={disabled || !canRepeat}
+        onClick={onRepeat}
       >
-        Jugar otra vez
+        Repetir apuesta · {credits(hand.stake)} créditos
       </button>
+      <button
+        type="button"
+        className="button button-large cr-cashout"
+        disabled={disabled}
+        onClick={onChangeBet}
+      >
+        Cambiar apuesta
+      </button>
+      {!canRepeat && <p className="bj-hint">No tienes saldo para repetir la apuesta.</p>}
     </div>
   );
 }

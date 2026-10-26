@@ -19,20 +19,25 @@ function versus(hand: BlackjackSettledHand["playerHands"][number], dealer: strin
 /**
  * The result of a settled round, popped up over the felt once its cards have landed: what it left
  * the player with in small light type, the result large, and how the totals compared; after a
- * split, one line per hand. "Jugar otra vez" goes back to the bet form; "Ver la mesa" closes it to
- * look at the cards.
+ * split, one line per hand. "Repetir apuesta" deals the next hand at once with the same stake,
+ * "Cambiar apuesta" goes back to the chips, and "Ver la mesa" closes it to look at the cards.
  */
 export function ResultDialog({
   hand,
-  onPlayAgain,
+  canRepeat,
+  onRepeat,
+  onChangeBet,
   onClose,
 }: {
   hand: BlackjackSettledHand;
-  onPlayAgain: () => void;
+  /** Whether the balance covers the same stake again. */
+  canRepeat: boolean;
+  onRepeat: () => void;
+  onChangeBet: () => void;
   onClose: () => void;
 }) {
   const titleId = useId();
-  const playAgain = useRef<HTMLButtonElement>(null);
+  const first = useRef<HTMLButtonElement>(null);
   const { title, net, tone } = roundSummary(hand);
   // A settled hand reads its final total only: "16", not "6 / 16".
   const dealer = String(hand.dealerTotal.total);
@@ -40,7 +45,7 @@ export function ResultDialog({
   const split = hand.playerHands.length > 1;
 
   useEffect(() => {
-    playAgain.current?.focus();
+    first.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -82,17 +87,31 @@ export function ResultDialog({
           )
         )}
         <div className="bj-result-actions">
-          <button
-            ref={playAgain}
-            type="button"
-            className="button button-large cr-primary"
-            onClick={onPlayAgain}
-          >
-            Jugar otra vez
-          </button>
-          <button type="button" className="button bj-result-close" onClick={onClose}>
-            Ver la mesa
-          </button>
+          {canRepeat ? (
+            <button
+              ref={first}
+              type="button"
+              className="button button-large cr-primary"
+              onClick={onRepeat}
+            >
+              Repetir apuesta · {credits(hand.stake)} créditos
+            </button>
+          ) : (
+            <p className="bj-hint">No tienes saldo para repetir la apuesta.</p>
+          )}
+          <div className="bj-result-more">
+            <button
+              ref={canRepeat ? undefined : first}
+              type="button"
+              className="button bj-result-close"
+              onClick={onChangeBet}
+            >
+              Cambiar apuesta
+            </button>
+            <button type="button" className="button bj-result-close" onClick={onClose}>
+              Ver la mesa
+            </button>
+          </div>
         </div>
       </section>
     </div>

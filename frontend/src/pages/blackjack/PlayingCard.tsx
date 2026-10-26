@@ -1,7 +1,7 @@
 import type { BlackjackCard } from "@casino/shared";
 import { type CSSProperties, useEffect } from "react";
-import { playCardSound } from "./cardSound";
 import { cardName, isRedSuit, SUIT_SYMBOLS } from "./format";
+import { playCardSound } from "./sound";
 
 /**
  * One card on the felt. It has a face and a back, so the dealer's hole card turns over in 3D

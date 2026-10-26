@@ -98,12 +98,28 @@ describe("BlackjackPage bet form", () => {
     expect(within(panel()).getByText("Partida verificable")).toBeTruthy();
   });
 
-  it("disables Repartir for a stake outside 10 to 500 credits", async () => {
+  it("adds a chip per click, and takes back the last one or all of them", async () => {
     await renderPage(client());
-    fireEvent.change(within(panel()).getByLabelText("Tu apuesta"), { target: { value: "5" } });
-    expect((inPanel(/^Repartir/) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(within(panel()).getByRole("button", { name: "500" }));
-    expect(inPanel("Repartir · 500 créditos")).toBeTruthy();
+    await press("Ficha de 50 créditos");
+    await press("Ficha de 100 créditos");
+    expect(inPanel("Repartir · 160 créditos")).toBeTruthy();
+    expect(within(panel()).getByText("160 créditos")).toBeTruthy();
+    await press("Deshacer");
+    expect(inPanel("Repartir · 60 créditos")).toBeTruthy();
+    await press("Borrar");
+    expect((inPanel("Repartir") as HTMLButtonElement).disabled).toBe(true);
+    expect(within(panel()).getByText("Toca una ficha para apostar")).toBeTruthy();
+  });
+
+  it("keeps the bet within 500 credits and the balance", async () => {
+    await renderPage(client([], undefined, 20000n));
+    await press("Borrar");
+    // A 200-credit balance: the 500 chip is off, and so is a third 100.
+    expect((inPanel("Ficha de 500 créditos") as HTMLButtonElement).disabled).toBe(true);
+    await press("Ficha de 100 créditos");
+    await press("Ficha de 100 créditos");
+    expect((inPanel("Ficha de 10 créditos") as HTMLButtonElement).disabled).toBe(true);
+    expect(inPanel("Repartir · 200 créditos")).toBeTruthy();
   });
 });
 
@@ -170,8 +186,11 @@ describe("BlackjackPage hand", () => {
     expect(inResult("¡Blackjack!")).toBeTruthy();
     expect(inResult("Cobras 25 créditos")).toBeTruthy();
 
-    fireEvent.click(within(result()).getByRole("button", { name: "Jugar otra vez" }));
-    await deal();
+    // Repetir apuesta deals the next hand at once.
+    fireEvent.click(
+      within(result()).getByRole("button", { name: "Repetir apuesta · 10 créditos" }),
+    );
+    await settled();
     await press("Plantarse");
     expect(inResult("Empate")).toBeTruthy();
     expect(inResult("Recuperas 10 créditos")).toBeTruthy();
@@ -238,15 +257,40 @@ describe("BlackjackPage errors", () => {
 });
 
 describe("BlackjackPage result pop-up and deal", () => {
-  it("closes with Ver la mesa and keeps Jugar otra vez in the panel", async () => {
+  it("closes with Ver la mesa and keeps Repetir apuesta and Cambiar apuesta in the panel", async () => {
     await renderPage(client([STAND_WINS]));
     await deal();
     await press("Plantarse");
     fireEvent.click(within(result()).getByRole("button", { name: "Ver la mesa" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(within(panel()).getByText("Mano terminada · ¡Ganaste!")).toBeTruthy();
-    await press("Jugar otra vez");
-    expect(inPanel(/^Repartir/)).toBeTruthy();
+    expect(inPanel("Repetir apuesta · 10 créditos")).toBeTruthy();
+    await press("Cambiar apuesta");
+    expect(inPanel("Repartir · 10 créditos")).toBeTruthy();
+  });
+
+  it("repeats the round's stake, and goes back to the chips to change it", async () => {
+    await renderPage(client([OPEN, OPEN]));
+    await press("Ficha de 50 créditos");
+    await deal();
+    await press("Plantarse");
+    fireEvent.click(
+      within(result()).getByRole("button", { name: "Repetir apuesta · 60 créditos" }),
+    );
+    await settled();
+    expect(inPanel("Pedir")).toBeTruthy();
+    expect(within(panel()).getByText("60 créditos")).toBeTruthy();
+    await press("Plantarse");
+    fireEvent.click(within(result()).getByRole("button", { name: "Cambiar apuesta" }));
+    expect(inPanel("Repartir · 60 créditos")).toBeTruthy();
+  });
+
+  it("does not offer to repeat a stake the balance cannot cover", async () => {
+    await renderPage(client([shoe("K", "K", "7", "8", "5")], undefined, 1000n));
+    await deal();
+    await press("Plantarse");
+    expect(within(result()).queryByRole("button", { name: /^Repetir apuesta/ })).toBeNull();
+    expect(inResult("No tienes saldo para repetir la apuesta.")).toBeTruthy();
   });
 
   it("waits for the cards to land before the result and the balance", async () => {
@@ -280,8 +324,10 @@ describe("BlackjackPage split", () => {
     await deal();
     expect((inPanel(/^Separar/) as HTMLButtonElement).disabled).toBe(true);
     await press("Plantarse");
-    fireEvent.click(within(result()).getByRole("button", { name: "Jugar otra vez" }));
-    await deal();
+    fireEvent.click(
+      within(result()).getByRole("button", { name: "Repetir apuesta · 10 créditos" }),
+    );
+    await settled();
     expect((inPanel(/^Separar/) as HTMLButtonElement).disabled).toBe(false);
     expect(within(panel()).getByText("Tienes un par: puedes separarlo en dos manos.")).toBeTruthy();
   });
