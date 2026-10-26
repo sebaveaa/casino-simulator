@@ -22,7 +22,7 @@ export const CRASH_MAX_STAKE: Money = 500n * MINOR_UNITS_PER_CREDIT;
  * bets before takeoff; `CRASH_INTERMISSION_MS` is the pause after a round settles before the next
  * one opens (and how long the finished round stays on screen).
  */
-export const CRASH_BETTING_WINDOW_MS = 5000;
+export const CRASH_BETTING_WINDOW_MS = 8000;
 export const CRASH_INTERMISSION_MS = 3000;
 
 /** Multiplier bounds in hundredths: 1.00x to the 20.00x cap (PLAN-CRASH §3.1). */
