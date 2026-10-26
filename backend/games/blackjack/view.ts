@@ -6,7 +6,9 @@ import {
   type BlackjackSettledHand,
   blackjack,
   blackjackActionSchema,
+  blackjackHandPayout,
   blackjackResultSchema,
+  blackjackWagerCount,
   computeOutcome,
   createRng,
   describeCard,
@@ -91,12 +93,13 @@ export function parseActions(value: unknown): BlackjackActions {
 }
 
 /**
- * The stake the hand started with. `bets.stake` is the total wagered (README §3.4), so it doubles
- * when the player doubles.
+ * The stake the round started with. `bets.stake` is the total on the table (README §3.4): the first
+ * stake, plus one per split and per double, so it is the initial stake times the wager count of the
+ * actions stored with it.
  */
 export function initialStake(row: HandRow): Money {
-  const doubled = parseActions(row.actions).some((entry) => entry.action === "double");
-  return doubled ? row.stake / 2n : row.stake;
+  const actions = parseActions(row.actions).map((entry) => entry.action);
+  return row.stake / blackjackWagerCount(actions);
 }
 
 /**
@@ -121,7 +124,7 @@ export function replay(shoe: readonly number[], actions: BlackjackActions): Blac
   );
 }
 
-function fieldsOf(row: HandRow, playerCards: readonly number[]) {
+function fieldsOf(row: HandRow) {
   return {
     handId: row.id,
     stake: toAmount(initialStake(row)),
@@ -131,14 +134,12 @@ function fieldsOf(row: HandRow, playerCards: readonly number[]) {
       clientSeed: row.client_seed,
       nonce: row.nonce,
     },
-    playerCards: playerCards.map(describeCard),
-    playerTotal: handValue(playerCards),
   };
 }
 
 /**
- * A hand waiting for the player, as the API shows it: only the dealer's up card, never the hole
- * card or the shoe.
+ * A round waiting for the player, as the API shows it: the player's hands, and only the dealer's
+ * up card, never the hole card or the shoe.
  */
 export function toInProgressHand(
   row: HandRow,
@@ -146,29 +147,43 @@ export function toInProgressHand(
   actionCount: number,
 ): BlackjackInProgressHand {
   const upCard = state.dealerCards[0];
-  if (state.outcome !== null || upCard === undefined) {
-    throw new Error("A Blackjack hand in progress has an outcome");
+  if (state.finished || upCard === undefined) {
+    throw new Error("A Blackjack round in progress is finished");
   }
+  const legal = legalActions(state);
   return {
     status: "player_turn",
-    ...fieldsOf(row, state.playerCards),
+    ...fieldsOf(row),
+    playerHands: state.playerHands.map((hand) => ({
+      cards: hand.cards.map(describeCard),
+      total: handValue(hand.cards),
+      doubled: hand.doubled,
+    })),
+    activeHand: state.active,
     dealerUpCard: describeCard(upCard),
     actionCount,
-    canDouble: legalActions(state).includes("double"),
+    canDouble: legal.includes("double"),
+    canSplit: legal.includes("split"),
   };
 }
 
-/** A settled hand from its stored result, with every card. */
+/** A settled round from its stored result, with every card and what each hand paid. */
 export function toSettledHand(row: HandRow): BlackjackSettledHand {
   if (row.payout === null) throw new Error("A settled Blackjack hand has no payout");
   const result: BlackjackResult = blackjackResultSchema.parse(row.result);
+  const stake = initialStake(row);
   return {
     status: "settled",
-    ...fieldsOf(row, result.playerCards),
+    ...fieldsOf(row),
+    playerHands: result.playerHands.map((hand) => ({
+      cards: hand.cards.map(describeCard),
+      total: handValue(hand.cards),
+      doubled: hand.doubled,
+      outcome: hand.outcome,
+      payout: toAmount(blackjackHandPayout(stake, hand)),
+    })),
     dealerCards: result.dealerCards.map(describeCard),
     dealerTotal: handValue(result.dealerCards),
-    doubled: result.doubled,
-    outcome: result.outcome,
     totalStake: toAmount(row.stake),
     payout: toAmount(row.payout),
   };

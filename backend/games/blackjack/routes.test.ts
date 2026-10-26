@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   apiPaths,
+  type BlackjackCard,
   type BlackjackInProgressHand,
   type BlackjackSettledHand,
   blackjackActionResponseSchema,
@@ -56,36 +57,32 @@ const fairness = {
   clientSeed: "client",
   nonce: 3,
 };
-const fields = {
-  handId,
-  stake: "1000",
-  fairness,
-  playerCards: [
-    { rank: "K", suit: "spades" },
-    { rank: "7", suit: "hearts" },
-  ],
-  playerTotal: { total: 17, soft: false },
-} as const;
+const fields = { handId, stake: "1000", fairness };
+const cards: BlackjackCard[] = [
+  { rank: "K", suit: "spades" },
+  { rank: "7", suit: "hearts" },
+];
+const total = { total: 17, soft: false };
 const inProgress: BlackjackInProgressHand = {
   status: "player_turn",
   ...fields,
-  playerCards: [...fields.playerCards],
+  playerHands: [{ cards, total, doubled: false }],
+  activeHand: 0,
   dealerUpCard: { rank: "9", suit: "clubs" },
   actionCount: 0,
   canDouble: true,
+  canSplit: false,
 };
 const settled: BlackjackSettledHand = {
   status: "settled",
   ...fields,
-  playerCards: [...fields.playerCards],
+  playerHands: [{ cards, total, doubled: false, outcome: "win", payout: "2000" }],
   dealerCards: [
     { rank: "9", suit: "clubs" },
     { rank: "6", suit: "diamonds" },
     { rank: "8", suit: "spades" },
   ],
   dealerTotal: { total: 23, soft: false },
-  doubled: false,
-  outcome: "win",
   totalStake: "1000",
   payout: "2000",
 };
@@ -196,7 +193,11 @@ describe("Blackjack routes", () => {
     });
 
     it("answers 201 with a hand settled by a natural", async () => {
-      const natural = { ...settled, outcome: "blackjack" as const, payout: "2500" };
+      const natural: BlackjackSettledHand = {
+        ...settled,
+        playerHands: [{ cards, total, doubled: false, outcome: "blackjack", payout: "2500" }],
+        payout: "2500",
+      };
       vi.mocked(startBlackjackHand).mockResolvedValue({ hand: natural, balance: "10500" });
       const app = await build();
       const res = await post(
@@ -231,7 +232,7 @@ describe("Blackjack routes", () => {
       for (const payload of [
         {},
         { handId, action: "hit" },
-        { handId, action: "split", index: 0 },
+        { handId, action: "surrender", index: 0 },
         { handId, action: "hit", index: -1 },
         { handId, action: "hit", index: 1.5 },
         { handId, action: "hit", index: "0" },
@@ -256,6 +257,19 @@ describe("Blackjack routes", () => {
         index: 0,
       });
       expect(settleAbandonedHand).toHaveBeenCalledOnce();
+    });
+
+    it("hands a split over like any other action", async () => {
+      vi.mocked(actOnBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "8000" });
+      const app = await build();
+      const res = await post(app, apiPaths.blackjackActions, { handId, action: "split", index: 0 });
+      expect(res.statusCode).toBe(200);
+      expect(actOnBlackjackHand).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+        userId,
+        handId,
+        action: "split",
+        index: 0,
+      });
     });
 
     it("answers 404 for a hand that is not the player's", async () => {

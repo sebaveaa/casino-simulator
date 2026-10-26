@@ -283,7 +283,10 @@ export function blackjackHandPayout(
 }
 
 /** What the round returns: the sum over the player's hands. */
-export function blackjackPayout(stake: Money, result: Pick<BlackjackResult, "playerHands">): Money {
+export function blackjackPayout(
+  stake: Money,
+  result: { playerHands: readonly { doubled: boolean; outcome: BlackjackOutcome }[] },
+): Money {
   return result.playerHands.reduce((sum, hand) => sum + blackjackHandPayout(stake, hand), 0n);
 }
 

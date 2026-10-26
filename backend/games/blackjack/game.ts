@@ -5,6 +5,7 @@ import {
   type BlackjackStartResponse,
   blackjack,
   blackjackPayout,
+  blackjackWagerCount,
   isValidBlackjackStake,
   legalActions,
   type Money,
@@ -88,7 +89,7 @@ export async function startBlackjackHand(
 
   const row = await lockHand(trx, userId, handId);
   const state = replay(await shoeOf(row), []);
-  if (state.outcome !== null) {
+  if (state.finished) {
     await settleHand(trx, wallet, { userId, row, actions: [], state, now: await databaseNow(trx) });
   }
   return respond(trx, wallet, userId, handId);
@@ -113,9 +114,10 @@ async function replayStart(
 }
 
 /**
- * Plays `action` as the hand's action number `index`. An index already played with the same
- * action returns the hand unchanged, so a retried or double-clicked action never plays twice.
- * Doubling charges the stake again; the action that ends the hand settles it.
+ * Plays `action` on the active hand as the round's action number `index`. An index already played
+ * with the same action returns the round unchanged, so a retried or double-clicked action never
+ * plays twice. Splitting and doubling each charge the initial stake again; the action that ends
+ * the round settles it.
  */
 export async function actOnBlackjackHand(
   trx: Db,
@@ -142,19 +144,25 @@ export async function actOnBlackjackHand(
   }
 
   const shoe = await shoeOf(row);
-  if (!legalActions(replay(shoe, actions)).includes(action)) {
+  const before = replay(shoe, actions);
+  if (!legalActions(before).includes(action)) {
     throw new AppError("conflict", `"${action}" is not allowed in this hand now`);
   }
 
-  if (action === "double") {
-    if (balance < row.stake) throw new InsufficientFundsError();
-    // One key per hand: a hand doubles at most once.
+  const stake = initialStake(row);
+  if (action === "split" || action === "double") {
+    if (balance < stake) throw new InsufficientFundsError();
+    // A round splits at most once and each hand doubles at most once, so these keys charge once.
+    const key =
+      action === "split"
+        ? scopedKey("blackjack-split", userId, row.id)
+        : scopedKey("blackjack-double", userId, `${row.id}:${before.active}`);
     await wallet.transfer(trx, {
       from: { userId },
       to: "house",
-      amount: row.stake,
+      amount: stake,
       type: "bet",
-      idempotencyKey: scopedKey("blackjack-double", userId, row.id),
+      idempotencyKey: key,
       betId: row.id,
     });
   }
@@ -162,12 +170,12 @@ export async function actOnBlackjackHand(
   const now = await databaseNow(trx);
   const next = [...actions, { action, at: now.toISOString() }];
   const state = replay(shoe, next);
-  if (state.outcome !== null) {
+  if (state.finished) {
     await settleHand(trx, wallet, { userId, row, actions: next, state, now });
   } else {
     await trx
       .updateTable("bets")
-      .set({ actions: JSON.stringify(next) })
+      .set({ actions: JSON.stringify(next), stake: stake * wagerCountOf(next) })
       .where("id", "=", row.id)
       .execute();
   }
@@ -175,8 +183,8 @@ export async function actOnBlackjackHand(
 }
 
 /**
- * Settles a locked hand: stores the cards for the verifier and pays once. Every payout of a hand
- * (natural, last action, abandonment) uses the same key, so a second one is impossible: the caller
+ * Settles a locked round: stores the cards for the verifier and pays once, the sum over the
+ * player's hands. Every payout of a round (natural, last action, abandonment) uses the same key, so a second one is impossible: the caller
  * sees `status = 'settled'` first, and `transactions.idempotency_key` is unique anyway.
  */
 export async function settleHand(
@@ -191,18 +199,20 @@ export async function settleHand(
   },
 ): Promise<void> {
   const { userId, row, actions, state, now } = input;
-  const { outcome, ...cards } = state;
-  if (outcome === null) throw new Error("Only a finished Blackjack hand settles");
-  // `row` is still in progress, so `bets.stake` is the initial stake: a double always ends the
-  // hand, and settling is what writes the doubled total.
-  const stake = row.stake;
-  const payout = blackjackPayout(stake, { doubled: state.doubled, outcome });
+  if (!state.finished) throw new Error("Only a finished Blackjack round settles");
+  const playerHands = state.playerHands.map(({ cards, doubled, outcome }) => {
+    if (outcome === null) throw new Error("A settled Blackjack hand has no outcome");
+    return { cards, doubled, outcome };
+  });
+  // `row` was read before this action, so its stake and actions still agree.
+  const stake = initialStake(row);
+  const payout = blackjackPayout(stake, { playerHands });
   await trx
     .updateTable("bets")
     .set({
-      stake: state.doubled ? stake * 2n : stake,
+      stake: stake * wagerCountOf(actions),
       actions: JSON.stringify(actions),
-      result: { ...cards, outcome },
+      result: { playerHands, dealerCards: state.dealerCards },
       payout,
       status: "settled",
       settled_at: now,
@@ -221,6 +231,9 @@ export async function settleHand(
     });
   }
 }
+
+const wagerCountOf = (actions: BlackjackActions) =>
+  blackjackWagerCount(actions.map((entry) => entry.action));
 
 async function respond(trx: Db, wallet: WalletService, userId: string, handId: string) {
   const hand = await toHand(await lockHand(trx, userId, handId));
