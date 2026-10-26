@@ -343,28 +343,36 @@
 }
 .crash-plane {
   fill: var(--sun);
-  transform: translate(10px, 96px);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(8px, 84px) rotate(-12deg);
+}
+.crash-plane-tail {
+  fill: var(--sun);
 }
 .crash-plane-wing {
   fill: var(--chalk);
+}
+.crash-plane-window {
+  fill: var(--ink);
 }
 .crash-cloud {
   fill: var(--chalk);
 }
 .crash-scene-plane[data-phase="flying"] .crash-plane {
-  animation: crash-climb 1.2s var(--ease-spring) forwards;
+  animation: crash-climb 1.4s var(--ease-spring) forwards;
 }
 @keyframes crash-climb {
   from {
-    transform: translate(10px, 96px);
+    transform: translate(8px, 84px) rotate(-8deg);
   }
   to {
-    transform: translate(150px, 20px);
+    transform: translate(140px, 14px) rotate(-22deg);
   }
 }
 .crash-scene-plane[data-phase="impact"] .crash-plane,
 .crash-scene-plane[data-phase="cap"] .crash-plane {
-  transform: translate(170px, 14px);
+  transform: translate(160px, 10px) rotate(-22deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -375,6 +383,6 @@
   }
   .crash-scene-plane[data-phase="flying"] .crash-plane {
     animation: none;
-    transform: translate(80px, 58px);
+    transform: translate(80px, 52px) rotate(-16deg);
   }
 }
