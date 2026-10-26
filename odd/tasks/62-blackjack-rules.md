@@ -2,7 +2,7 @@
 
 Issue: https://github.com/sebaveaa/casino-simulator/issues/62
 Branch: `feat/62-blackjack-rules`, from `main` at eed7eaf.
-Status: in progress
+Status: implemented; push and PR pending (Juan Sebastián)
 
 ## Objective
 
@@ -37,8 +37,8 @@ Design source: README §4.4 and §5.1, issue #62, and the Chicken Road contract 
 ## Tasks
 
 - [x] T1 Pure rules in `shared/src/games/blackjack.ts`: cards, hand value, shuffle, `playHand`, `legalActions`, payout, `blackjack: Game`; exported from `index.ts`; tests with stacked shoes, a fake `Rng` and fixed seeds.
-- [ ] T2 Zod schemas in `shared/src/api/blackjack.ts` (start, action, current, history), `apiPaths`, exports; tests.
-- [ ] T3 Final checks and task file close-out.
+- [x] T2 Zod schemas in `shared/src/api/blackjack.ts` (start, action, current, history), `apiPaths`, exports; tests.
+- [x] T3 Final checks and task file close-out.
 
 ## Acceptance criteria
 
@@ -59,9 +59,15 @@ From the issue:
 
 ## Delivery
 
-Forecast: about 450 authored changed lines, most of them tests. Strategy: `single-pr` to `main`; #63 stacks on it. Commit after each task; Juan Sebastián reviews before the push and the PR (`Closes #62`).
+Size: 925 added lines: 392 of rules and contract, 460 of tests, 73 of this file. Above the 400-line guide, like #44; splitting rules from contract would leave the contract PR without the types it imports. Strategy: `single-pr` to `main`; #63 stacks on it. Commit after each task; Juan Sebastián reviews before the push and the PR (`Closes #62`).
 
 ## Progress
 
 - Planned. Branch `feat/62-blackjack-rules` created from `main`.
 - T1 done: `games/blackjack.ts` (config, ranks and suits, `describeCard`, `handValue`, `isNatural`, `shuffleShoe`, `playHand`, `legalActions`, `blackjackPayout`, `isValidBlackjackStake`, `blackjack`), exported from `index.ts`. `"blackjack"` was already in `gameIds`. Tests: card mapping, soft and hard totals, naturals, the shoe holds each card six times and draws `rng.int(312 … 2)`, deal order, naturals on either side, dealer to 17 and S17, totals compared, bust without dealer draws, auto stand on 21, double (win and bust), double after a hit refused, shoe exhaustion, every payout (3:2 rounded down, doubled), stake and action-shape validation, fixed seeds (nonce 0 and 2), outcome depends on the actions, implicit stand. Checks: Biome, typecheck, shared tests pass.
+- T2 done: `api/blackjack.ts` with the card schema, the hand union (`player_turn` strict, `settled`), start/action/current/history request and response schemas, the stake bounds refined on the start request, `index` bounded by `BLACKJACK_MAX_ACTIONS`, and the history query (`limit` coerced, default 5, max 20); three `apiPaths` entries; exported from `api/index.ts`. Tests: every card `describeCard` builds, each state, hole card, dealer total, shoe and outcome rejected in progress, values that do not fit a hand, stake bounds and malformed stakes, start answers in progress or settled, action names and index bounds, current is in progress or null, history limits and settled hands only, the paths. Checks: Biome, typecheck, shared tests pass.
+- T3 done. Final checks: `npm run lint` clean (240 files); `npm run typecheck` clean in every workspace; `npm test` green: shared 239, backend 173 passed and 122 skipped (no database), frontend 331.
+
+## Next step
+
+Juan Sebastián reviews the diff, pushes and opens the PR (`Closes #62`) to `main`. #63 branches from this one: migration `0008_blackjack` (one hand in progress per player), the game service with the shoe recomputed from the seed, the action replay by `index`, the double charge and abandonment by auto stand.

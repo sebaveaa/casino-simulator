@@ -1,4 +1,5 @@
 export * from "./auth";
+export * from "./blackjack";
 export * from "./chicken-road";
 export * from "./errors";
 export * from "./idempotency";
