@@ -20,26 +20,57 @@ export function gainOf(payout: string, totalStake: string): Money {
   return parseAmount(payout) - parseAmount(totalStake);
 }
 
-/** Step of the amount field and quick buttons, in credits. */
-export const STAKE_STEP_CREDITS = 10n;
-export const QUICK_STAKES = [10, 50, 100, 500] as const;
+/** The chips a player puts on the bet, in credits. */
+export const CHIP_VALUES = [10, 50, 100, 500] as const;
+export type ChipValue = (typeof CHIP_VALUES)[number];
+
+/** The most the bet holds, in credits. */
+export const MAX_BET_CREDITS = Number(BLACKJACK_MAX_STAKE / MINOR_UNITS_PER_CREDIT);
+
+/** Chips worth `total` credits as an API stake, or null below 10 or above 500 credits. */
+export function stakeOfCredits(total: number): string | null {
+  const minor = BigInt(total) * MINOR_UNITS_PER_CREDIT;
+  return minor < BLACKJACK_MIN_STAKE || minor > BLACKJACK_MAX_STAKE ? null : minor.toString();
+}
+
+/** An API stake in whole credits, as the chips count it. */
+export function creditsOfStake(stake: string): number {
+  return Number(parseAmount(stake) / MINOR_UNITS_PER_CREDIT);
+}
+
+/** The fewest chips worth `total` credits, largest first: how a dealer stacks a bet. */
+export function chipsFor(total: number): ChipValue[] {
+  const chips: ChipValue[] = [];
+  let left = total;
+  for (const value of [...CHIP_VALUES].reverse()) {
+    for (; left >= value; left -= value) chips.push(value);
+  }
+  return chips;
+}
+
+/** Whether `balance` (minor units) covers the chips on the bet. */
+export function balanceCovers(balance: Money, chips: readonly ChipValue[]): boolean {
+  const total = chips.reduce((sum, chip) => sum + chip, 0);
+  return BigInt(total) * MINOR_UNITS_PER_CREDIT <= balance;
+}
+
+/** Most chips in one pile; more start a new pile beside it. */
+export const PILE_MAX = 10;
+
+/** Chips in the order they were put down, cut into piles of at most `PILE_MAX`. */
+export function pilesOf<T>(chips: readonly T[]): T[][] {
+  const piles: T[][] = [];
+  for (let i = 0; i < chips.length; i += PILE_MAX) piles.push(chips.slice(i, i + PILE_MAX));
+  return piles;
+}
 
 /**
- * The stake typed in whole credits as an API amount (minor units), or null when it is not a whole
- * number of credits from 10 to 500 in steps of 10, like the field's min, max and step.
+ * The chips of a round's stake: the ones the player put down when they add up to it, or else (a
+ * hand restored after a reload) the fewest that do.
  */
-export function stakeFromInput(text: string): string | null {
-  if (!/^\d{1,4}$/.test(text.trim())) return null;
-  const creditsTyped = BigInt(text.trim());
-  const minor = creditsTyped * MINOR_UNITS_PER_CREDIT;
-  if (
-    minor < BLACKJACK_MIN_STAKE ||
-    minor > BLACKJACK_MAX_STAKE ||
-    creditsTyped % STAKE_STEP_CREDITS !== 0n
-  ) {
-    return null;
-  }
-  return minor.toString();
+export function chipsOfStake(stake: string, placed: readonly ChipValue[]): ChipValue[] {
+  const total = creditsOfStake(stake);
+  return placed.reduce((sum, chip) => sum + chip, 0) === total ? [...placed] : chipsFor(total);
 }
 
 export const SUIT_SYMBOLS: Record<BlackjackCard["suit"], string> = {

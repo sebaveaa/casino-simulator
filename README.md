@@ -31,7 +31,7 @@ La guía del proyecto establece que la complejidad funcional no es el criterio p
 | **Núcleo** | **Ruleta** | Una apuesta → un resultado inmediato | Sin estado entre apuestas. Es el caso más simple y escala fácil. |
 | **Núcleo** | **Carreras de animalitos** | Evento compartido entre muchos jugadores | Ventana de apuestas, tiempo real, cierre, carrera y liquidación masiva. Es el juego más exigente en concurrencia. |
 | Extra | **Minijuegos**: Cruza la Calle, Dino Crash y Despegue | Cruza la Calle: partida por pasos (con estado). Dino Crash y Despegue: ronda compartida en vivo | Reutilizan los dos patrones del núcleo sin tablas nuevas: Cruza la Calle guarda la partida entre pasos como el blackjack (4.4), y los dos Crash usan rondas, worker y SSE como los animalitos (4.3). Reemplazan a las tragamonedas. |
-| Opcional | **Blackjack** | Partida con estado (mano en curso) | Requiere guardar la sesión de juego entre decisiones del jugador. Solo si el núcleo está terminado. |
+| Extra | **Blackjack** | Partida con estado (mano en curso) | Guarda la mano en PostgreSQL entre las decisiones del jugador y la reconstruye desde el par de semillas (4.4). Incluye separar pares, doblar y fichas de casino en la mesa. |
 
 La arquitectura se diseña y se defiende sobre **ruleta** (patrón sin estado) y **animalitos** (patrón de evento compartido en tiempo real). Los demás juegos reutilizan la misma base.
 
@@ -82,7 +82,7 @@ flowchart LR
 | **Backend / API** | Valida solicitudes, autentica, ejecuta la lógica de juego y de dinero. Toda decisión importante ocurre aquí, nunca en el cliente. |
 | **Tiempo real** | El backend mantiene conexiones SSE con los clientes y les reenvía los eventos de las carreras (ver 2.5). |
 | **Persistencia** | PostgreSQL: usuarios, ledger, apuestas, rondas. Es la única fuente de verdad del dinero. |
-| **Caché / estado efímero** | Redis: ventanas de apuesta, caché de la mano de blackjack, caché de configuración, límites de tasa y canal pub/sub de eventos. |
+| **Caché / estado efímero** | Redis: ventanas de apuesta, caché de configuración, límites de tasa y canal pub/sub de eventos. La mano de blackjack no pasa por Redis: se reconstruye desde PostgreSQL (4.4). |
 | **Worker** | Proceso aparte que abre, cierra, corre y liquida las carreras, y publica cada cambio de estado. |
 | **Servicios externos** | Ninguno obligatorio. El depósito es simulado detrás de un adaptador de pagos (ver 2.4). |
 
@@ -382,13 +382,13 @@ El frontend incluye una pantalla de verificación que usa la misma función `res
 | Backend (API) | **No de negocio** | Todas las instancias son intercambiables. Solo mantiene conexiones SSE abiertas, que se pueden perder sin consecuencias porque el cliente reconecta y recupera el estado por REST. |
 | Worker | No | El estado de cada ronda está en la base de datos. |
 | PostgreSQL | **Sí** | Fuente de verdad del dinero y de todo el estado de juego. Es el principal cuello de botella al crecer. |
-| Redis | **Sí (efímero)** | Estado temporal: cuenta regresiva, caché de manos, caché, límites de tasa y pub/sub. Todo se puede reconstruir o perder sin perder dinero. |
+| Redis | **Sí (efímero)** | Estado temporal: cuenta regresiva, caché, límites de tasa y pub/sub. Todo se puede reconstruir o perder sin perder dinero. |
 
 ### Comportamiento ante fallos
 
 | Si falla... | Qué ocurre |
 |---|---|
-| **Redis** | Ruleta y tragamonedas siguen funcionando (solo usan PostgreSQL). Blackjack sigue, más lento, reconstruyendo las manos desde PostgreSQL. Animalitos pausa la apertura de nuevas carreras porque no hay difusión en vivo; las apuestas ya hechas se liquidan igual. No se pierde dinero. |
+| **Redis** | Ruleta y tragamonedas siguen funcionando (solo usan PostgreSQL). Blackjack sigue igual, porque sus manos viven en PostgreSQL. Animalitos pausa la apertura de nuevas carreras porque no hay difusión en vivo; las apuestas ya hechas se liquidan igual. No se pierde dinero. |
 | **PostgreSQL** | El sistema **no acepta apuestas** (falla cerrado). Es preferible detener el juego que arriesgar la consistencia del dinero. |
 | **Una instancia del backend** | El balanceador envía las peticiones a otra instancia. Los clientes con SSE abierto en la instancia caída reconectan por sí mismos a otra y piden el estado actual por REST. |
 | **El worker a medias** | Al reiniciar retoma las rondas no liquidadas; la idempotencia evita pagos dobles. |

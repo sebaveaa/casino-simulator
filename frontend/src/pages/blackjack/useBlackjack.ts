@@ -2,9 +2,11 @@ import {
   BLACKJACK_HISTORY_DEFAULT_LIMIT,
   BLACKJACK_HISTORY_MAX_LIMIT,
   type BlackjackAction,
+  type BlackjackActionResponse,
   type BlackjackHand,
   type BlackjackInProgressHand,
   type BlackjackSettledHand,
+  type BlackjackStartResponse,
   type SeedPairResponse,
 } from "@casino/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -13,6 +15,8 @@ import { useApplyBalance, useRefreshBalance } from "../../app/useBalance";
 import { betErrorMessage } from "../betErrorMessage";
 import { prefersReducedMotion } from "../roulette/motion";
 import { cardsOf, type DealPlan, NO_DEAL, planDeal } from "./deal";
+import { roundSummary } from "./format";
+import { playResultSound } from "./sound";
 
 /** What the screen shows: the bet form, a hand on the player's turn, or a settled hand. */
 export type BlackjackView =
@@ -38,7 +42,7 @@ const isNetwork = (error: unknown) => error instanceof ApiError && error.code ==
  * this hook only sends the request and shows what came back. While a request is pending, or its
  * cards are still landing, every action is refused, and `pending` always clears afterwards, so the
  * screen never stays stuck. The balance and the history follow once the cards have landed, so
- * neither gives the result away first.
+ * neither gives the result away first; the result's sound plays as the last card lands.
  */
 export function useBlackjack() {
   const api = useApi();
@@ -184,6 +188,21 @@ export function useBlackjack() {
     await afterHandEnds();
   }
 
+  /**
+   * Shows the hand the server answered once its cards have landed, then the balance. A settled
+   * hand sounds its result and reloads the history and the next nonce.
+   */
+  async function land(res: BlackjackStartResponse | BlackjackActionResponse) {
+    await sleep(setView(viewOf(res.hand)));
+    applyBalance(res.balance);
+    if (res.hand.status === "settled") {
+      playResultSound(roundSummary(res.hand).tone);
+      await afterHandEnds();
+    } else {
+      void refreshBalance();
+    }
+  }
+
   function start(stake: string) {
     return run(() =>
       guarded(async () => {
@@ -194,11 +213,8 @@ export function useBlackjack() {
         try {
           const res = await api.startBlackjackHand({ stake }, key);
           pendingKey.current = null;
-          await sleep(setView(viewOf(res.hand)));
-          applyBalance(res.balance);
           // A natural settles at once.
-          if (res.hand.status === "settled") await afterHandEnds();
-          else void refreshBalance();
+          await land(res);
         } catch (caught) {
           if (!isNetwork(caught)) pendingKey.current = null;
           throw caught;
@@ -214,22 +230,41 @@ export function useBlackjack() {
       guarded(
         async () => {
           // A retry after a network failure sends the same index, which the server replays.
-          const res = await api.playBlackjackAction({ handId, action, index: actionCount });
-          await sleep(setView(viewOf(res.hand)));
-          applyBalance(res.balance);
-          if (res.hand.status === "settled") await afterHandEnds();
-          else void refreshBalance();
+          await land(await api.playBlackjackAction({ handId, action, index: actionCount }));
         },
         () => resyncHand(handId),
       ),
     );
   }
 
-  function playAgain() {
+  /** Back to the bet form, to change the stake. */
+  function changeBet() {
     if (busy.current) return;
     setMessage(null);
     setView({ kind: "bet" });
   }
 
-  return { view, deal, history, seedPair, loading, pending, message, start, act, playAgain };
+  /**
+   * "Repetir apuesta": clears the felt and deals the next hand at once with `stake`. If the start
+   * fails, the bet form stays with the reason.
+   */
+  function repeat(stake: string) {
+    if (busy.current) return Promise.resolve();
+    setView({ kind: "bet" });
+    return start(stake);
+  }
+
+  return {
+    view,
+    deal,
+    history,
+    seedPair,
+    loading,
+    pending,
+    message,
+    start,
+    act,
+    changeBet,
+    repeat,
+  };
 }
