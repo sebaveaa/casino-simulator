@@ -13,6 +13,7 @@ import { parseWith, readIdempotencyKey } from "../../platform/http";
 import type { ModuleRoutes } from "../../platform/routes";
 import { settleAbandonedHand } from "./expiry";
 import { actOnBlackjackHand, startBlackjackHand } from "./game";
+import { getCurrentShoe } from "./shoe";
 import { getCurrentBlackjackHand, listBlackjackHistory } from "./view";
 
 export const blackjackRoutes: ModuleRoutes = async (app, { db, services, requireAuth }) => {
@@ -61,7 +62,10 @@ export const blackjackRoutes: ModuleRoutes = async (app, { db, services, require
     { preHandler: requireAuth() },
     async (request): Promise<BlackjackCurrentResponse> => {
       const userId = await authenticate(request);
-      return { hand: await getCurrentBlackjackHand(db, userId) };
+      return {
+        hand: await getCurrentBlackjackHand(db, userId),
+        shoe: await getCurrentShoe(db, userId),
+      };
     },
   );
 

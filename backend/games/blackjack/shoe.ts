@@ -1,8 +1,9 @@
-import { BLACKJACK_CUT_CARD, roundCardCount } from "@casino/shared";
+import { BLACKJACK_CUT_CARD, type BlackjackShoe, roundCardCount, SHOE_SIZE } from "@casino/shared";
 import type { Selectable } from "kysely";
 import type { Db } from "../../db/database";
 import type { BlackjackShoesTable } from "../../db/schema";
 import type { SeedPairService } from "../../rng/seed-pair-service";
+import { type HandRow, parseActions, replay, selectHands, shoeOf } from "./view";
 
 export type ShoeRow = Selectable<BlackjackShoesTable>;
 
@@ -97,4 +98,56 @@ export async function advanceShoe(
     })
     .where("id", "=", input.shoeId)
     .execute();
+}
+
+function toShoe(
+  shoe: Pick<ShoeRow, "id" | "cut_card" | "status">,
+  cardsDealt: number,
+): BlackjackShoe {
+  return {
+    shoeId: shoe.id,
+    size: SHOE_SIZE,
+    cutCard: shoe.cut_card,
+    cardsDealt,
+    reshuffle: shoe.status === "finished",
+  };
+}
+
+/**
+ * How much of a hand's shoe is dealt, as the API shows it after that hand's start or action. In
+ * progress: the cards before the hand plus every card on the table, the hole card too (a count,
+ * never its value). Settled: where the shoe stands now, and whether the hand finished it. `null`
+ * for a hand from before the continuous shoe.
+ */
+export async function shoeOfHand(db: Db, row: HandRow): Promise<BlackjackShoe | null> {
+  if (row.shoe_id === null || row.card_offset === null) return null;
+  const shoe = await db
+    .selectFrom("blackjack_shoes")
+    .select(["id", "cut_card", "status", "next_card"])
+    .where("id", "=", row.shoe_id)
+    .executeTakeFirstOrThrow();
+  if (row.status !== "in_progress") return toShoe(shoe, shoe.next_card);
+  const state = replay(await shoeOf(row), parseActions(row.actions));
+  return { ...toShoe(shoe, row.card_offset + roundCardCount(state)), reshuffle: false };
+}
+
+/**
+ * The shoe the player's next cards come from: the hand in progress's, or the active shoe while
+ * its seed pair is not revealed. `null` when the next hand opens a new shoe.
+ */
+export async function getCurrentShoe(db: Db, userId: string): Promise<BlackjackShoe | null> {
+  const hand = await selectHands(db)
+    .where("b.user_id", "=", userId)
+    .where("b.status", "=", "in_progress")
+    .executeTakeFirst();
+  if (hand) return shoeOfHand(db, hand);
+  const shoe = await db
+    .selectFrom("blackjack_shoes as sh")
+    .innerJoin("seed_pairs as s", "s.id", "sh.seed_pair_id")
+    .select(["sh.id", "sh.cut_card", "sh.status", "sh.next_card"])
+    .where("sh.user_id", "=", userId)
+    .where("sh.status", "=", "active")
+    .where("s.revealed_at", "is", null)
+    .executeTakeFirst();
+  return shoe ? toShoe(shoe, shoe.next_card) : null;
 }

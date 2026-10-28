@@ -55,8 +55,10 @@ describe("mock API client: Blackjack", () => {
       nonce: pair.nextNonce,
     });
     expect(res.balance).toBe("99000");
+    expect(res.shoe).toMatchObject({ size: 312, cutCard: 234, cardsDealt: 4, reshuffle: false });
     expect(blackjackCurrentResponseSchema.parse(await api.getCurrentBlackjackHand())).toEqual({
       hand: res.hand,
+      shoe: res.shoe,
     });
   });
 
@@ -201,14 +203,35 @@ describe("mock API client: Blackjack", () => {
     ).rejects.toMatchObject({ code: "conflict" });
   });
 
-  it("deals from the seed once the fixed shoes run out", async () => {
+  it("deals the next hand from the same shoe, right after the cards of the one before", async () => {
     const api = createMockApiClient();
     const first = blackjackStartResponseSchema.parse(await start(api));
-    if (first.hand.status === "player_turn") {
-      await api.playBlackjackAction({ handId: first.hand.handId, action: "stand", index: 0 });
-    }
+    const settled =
+      first.hand.status === "player_turn"
+        ? await api.playBlackjackAction({ handId: first.hand.handId, action: "stand", index: 0 })
+        : first;
     const second = await start(api);
-    expect(second.hand.fairness.nonce).toBe(first.hand.fairness.nonce + 1);
+    // One shoe, one nonce; the second hand starts where the first one stopped.
+    expect(second.hand.fairness.nonce).toBe(first.hand.fairness.nonce);
+    expect(second.hand.fairness.shoeId).toBe(first.hand.fairness.shoeId);
+    expect(second.hand.fairness.cardOffset).toBe(settled.shoe?.cardsDealt);
+  });
+
+  it("finishes the shoe at the cut card and opens a new one for the next hand", async () => {
+    const api = createMockApiClient({ blackjackShoeDealt: 233 });
+    const first = await start(api);
+    expect(first.hand.fairness.cardOffset).toBe(233);
+    const settled =
+      first.hand.status === "player_turn"
+        ? await api.playBlackjackAction({ handId: first.hand.handId, action: "stand", index: 0 })
+        : first;
+    expect(settled.shoe).toMatchObject({ reshuffle: true });
+    expect((await api.getCurrentBlackjackHand()).shoe).toBeNull();
+
+    const next = await start(api);
+    expect(next.hand.fairness.shoeId).not.toBe(first.hand.fairness.shoeId);
+    expect(next.hand.fairness.cardOffset).toBe(0);
+    expect(next.hand.fairness.nonce).toBe(first.hand.fairness.nonce + 1);
   });
 
   it("lists settled hands newest first, up to the limit", async () => {

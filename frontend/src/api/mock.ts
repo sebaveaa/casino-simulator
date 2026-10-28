@@ -1,10 +1,13 @@
 import {
   type AuthResponse,
   type BalanceResponse,
+  BLACKJACK_CUT_CARD,
   BLACKJACK_HISTORY_DEFAULT_LIMIT,
   BLACKJACK_HISTORY_MAX_LIMIT,
   type BlackjackAction,
+  type BlackjackFairness,
   type BlackjackHand,
+  type BlackjackShoe,
   blackjackActionRequestSchema,
   blackjackHandPayout,
   blackjackPayout,
@@ -43,6 +46,8 @@ import {
   racePayout,
   resolveRace,
   roulette,
+  roundCardCount,
+  SHOE_SIZE,
   selectionKey,
   shuffleShoe,
   spinPayouts,
@@ -186,7 +191,8 @@ type MockBlackjackHand = {
   key: string;
   /** The initial stake; a double charges it again. */
   stake: bigint;
-  fairness: Fairness;
+  fairness: BlackjackFairness;
+  /** The hand's cards, from its first one: its shoe from `fairness.cardOffset` on. */
   shoe: number[];
   actions: BlackjackAction[];
   payout: bigint | null;
@@ -256,6 +262,11 @@ function blackjackView(hand: MockBlackjackHand): BlackjackHand {
  * once, a natural settled at the start, and a single payout over the hands. It has no abandonment timer. `blackjackShoes` lets
  * tests and screens fix the deal: the stacked shoe of each next hand (player, dealer, player,
  * dealer, then the draws), in order.
+ *
+ * Like the backend (#66), one shoe lasts across hands until the cut card: it takes one nonce,
+ * each hand starts where the one before stopped, and the hand that passes the cut finishes it.
+ * Stacked shoes still deal the next hands; their cards count as dealt from the shoe.
+ * `blackjackShoeDealt` starts the first shoe with that many cards dealt, to reach the cut quickly.
  */
 export function createMockApiClient(
   options: {
@@ -263,6 +274,7 @@ export function createMockApiClient(
     startingBalance?: bigint;
     chickenRoads?: (number | null)[];
     blackjackShoes?: number[][];
+    blackjackShoeDealt?: number;
     race?: MockRaceOptions;
   } = {},
 ): ApiClient {
@@ -307,6 +319,47 @@ export function createMockApiClient(
 
   // Blackjack hands in the order they started, drawn from the same seed pair.
   const blackjackHands: MockBlackjackHand[] = [];
+  // The player's shoe: its cards stay in the mock, like the backend's never leave the server.
+  let blackjackShoe: {
+    id: string;
+    nonce: number;
+    cards: number[];
+    next: number;
+    finished: boolean;
+  } | null = null;
+  let firstShoeDealt = options.blackjackShoeDealt ?? 0;
+
+  /** The active shoe, or a new one from the next nonce once there is none or it is finished. */
+  async function takeShoe() {
+    if (blackjackShoe && !blackjackShoe.finished) return blackjackShoe;
+    const nonce = seedPair.nextNonce++;
+    const seed = { serverSeed: seedPair.serverSeed, clientSeed: MOCK_CLIENT_SEED, nonce };
+    blackjackShoe = {
+      id: crypto.randomUUID(),
+      nonce,
+      cards: shuffleShoe(createRng(await computeOutcome(seed))),
+      next: firstShoeDealt,
+      finished: false,
+    };
+    firstShoeDealt = 0;
+    return blackjackShoe;
+  }
+
+  /** How much of the hand's shoe is dealt, as the backend answers it (`shoeOfHand`). */
+  function shoeOfHand(hand: MockBlackjackHand): BlackjackShoe | null {
+    const shoe = blackjackShoe;
+    if (!shoe || shoe.id !== hand.fairness.shoeId) return null;
+    const state = playHand(hand.shoe, hand.actions);
+    const progress = { shoeId: shoe.id, size: SHOE_SIZE, cutCard: BLACKJACK_CUT_CARD } as const;
+    if (!state.finished) {
+      return {
+        ...progress,
+        cardsDealt: hand.fairness.cardOffset + roundCardCount(state),
+        reshuffle: false,
+      };
+    }
+    return { ...progress, cardsDealt: shoe.next, reshuffle: shoe.finished };
+  }
 
   function findBlackjackHand(handId: string): MockBlackjackHand {
     const hand = blackjackHands.find((h) => h.handId === handId);
@@ -323,6 +376,11 @@ export function createMockApiClient(
       outcome: h.outcome ?? "lose",
     }));
     hand.payout = blackjackPayout(hand.stake, { playerHands });
+    // The shoe moves past the round; passing the cut card finishes it.
+    if (blackjackShoe && blackjackShoe.id === hand.fairness.shoeId) {
+      blackjackShoe.next = hand.fairness.cardOffset + roundCardCount(state);
+      if (blackjackShoe.next >= BLACKJACK_CUT_CARD) blackjackShoe.finished = true;
+    }
     if (hand.payout > 0n) {
       balance += hand.payout;
       record("payout", hand.payout, hand.handId);
@@ -332,6 +390,7 @@ export function createMockApiClient(
   const blackjackResponse = (hand: MockBlackjackHand) => ({
     hand: blackjackView(hand),
     balance: toAmount(balance),
+    shoe: shoeOfHand(hand),
   });
 
   const session = (id: string, email: string): AuthResponse => ({
@@ -783,8 +842,7 @@ export function createMockApiClient(
       }
       if (stake > balance) throw new ApiError("insufficient_funds", "Insufficient funds", 422);
 
-      const nonce = seedPair.nextNonce++;
-      const seed = { serverSeed: seedPair.serverSeed, clientSeed: MOCK_CLIENT_SEED, nonce };
+      const shoe = await takeShoe();
       const hand: MockBlackjackHand = {
         handId: crypto.randomUUID(),
         key: idempotencyKey,
@@ -793,9 +851,11 @@ export function createMockApiClient(
           seedPairId: seedPair.id,
           serverSeedHash: await hashServerSeed(seedPair.serverSeed),
           clientSeed: MOCK_CLIENT_SEED,
-          nonce,
+          nonce: shoe.nonce,
+          shoeId: shoe.id,
+          cardOffset: shoe.next,
         },
-        shoe: fixedShoes.shift() ?? shuffleShoe(createRng(await computeOutcome(seed))),
+        shoe: fixedShoes.shift() ?? shoe.cards.slice(shoe.next),
         actions: [],
         payout: null,
       };
@@ -840,7 +900,17 @@ export function createMockApiClient(
       await sleep(delayMs);
       const hand = blackjackHands.find((h) => h.payout === null);
       const view = hand ? blackjackView(hand) : null;
-      return { hand: view?.status === "player_turn" ? view : null };
+      const active = blackjackShoe && !blackjackShoe.finished ? blackjackShoe : null;
+      const shoe: BlackjackShoe | null = hand
+        ? shoeOfHand(hand)
+        : active && {
+            shoeId: active.id,
+            size: SHOE_SIZE,
+            cutCard: BLACKJACK_CUT_CARD,
+            cardsDealt: active.next,
+            reshuffle: false,
+          };
+      return { hand: view?.status === "player_turn" ? view : null, shoe };
     },
     async listBlackjackHistory(query = {}) {
       await sleep(delayMs);
