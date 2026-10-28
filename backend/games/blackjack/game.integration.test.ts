@@ -251,7 +251,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       expect(hand.outcome).toBe(state.outcome);
       const payout = blackjackPayout(STAKE, { doubled: false, outcome: hand.outcome });
       expect(hand).toMatchObject({ totalStake: "1000", payout: payout.toString() });
-      expect(balance).toBe((FUNDS - STAKE + payout).toString());
+      // Hands played out while looking for the shoe moved the balance, so count from the start.
+      expect(balance).toBe((BigInt(res.balance) + payout).toString());
       await expectLedgerMatches(userId);
     });
 
@@ -306,7 +307,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       const payout = blackjackPayout(STAKE, { doubled: true, outcome: hand.outcome });
       expect(hand.outcome).toBe(state.outcome);
       expect(hand.payout).toBe(payout.toString());
-      expect(balance).toBe((FUNDS - 2n * STAKE + payout).toString());
+      expect(balance).toBe((BigInt(res.balance) - STAKE + payout).toString());
 
       expect(await act(userId, res.hand.handId, "double", 0)).toEqual({ hand, balance });
       await expectLedgerMatches(userId);

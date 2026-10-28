@@ -5,7 +5,7 @@ Branches (stacked):
 - PR A: `feat/64-blackjack-client`, from `feat/63-blackjack-routes`
 - PR B: `feat/64-blackjack-page`, from A
 
-Status: PR A implemented and pushed; PR B pending. PRs open together at the end (Juan Sebastián).
+Status: PR A and PR B implemented and pushed. PRs open together at the end (Juan Sebastián).
 
 ## Objective
 
@@ -31,6 +31,11 @@ Design source: issue #64, the Arcade identity of the lobby (#21), and the Chicke
   - Unlike the backend, it has no abandonment timer.
 - **`blackjackShoes` fixes the deal** in the mock, as `chickenRoads` fixes the road: the stacked shoe of each next hand. Once it runs out, the seed decides again. Page tests and manual checks of each state use it.
 - **The UI never decides the result.** It sends the action, waits for the server, and animates the cards that came back. Buttons are disabled while a request is pending.
+- **The panel reuses the Cruza la Calle classes** (`cr-panel`, `cr-field`, `cr-quick`, `cr-paytable`, `cr-result-sticker`, `cr-history`) and its `FairnessBlock`, so both stepped games read the same; only the felt and the cards are new (`bj-*`). A shared rename of those classes is left for later, as it touches Chicken Road.
+- **Doblar** needs the server's `canDouble` (first two cards) and a header balance that covers the stake again; while the balance loads the button trusts the server, which refuses a double it cannot cover (422, the hand stays as it was).
+- **409s resync from the server**, as Chicken Road does: an action 409 shows the hand in progress as it really is, or its settled result from the history (limit 20); a start 409 restores the hand in progress with "Ya tienes una mano en curso." or returns to the form with "Esa mano ya terminó."
+- **Playtest feedback (Juan Sebastián).** The result pops up over the felt instead of under it: what the hand left the player with in small light type above, the outcome large. The deal is slower and in table order (player, dealer, player, dealer; later the player's card, then the hole card turns and the dealer draws), planned by the pure `planDeal`; the hook waits for it before the balance, the history and the pop-up, so none gives the result away early. The hole card turns over in 3D in place. Each card snaps with a sound synthesized in Web Audio (no audio file), with a "Sonido" toggle kept in `localStorage`. The table rules sit in two arcs in a green close to the felt, and the felt has a diamond weave and a racetrack line. Lost hands show what they cost in the history. Reduced motion lands every card at once and drops the flip and the pop animation.
+- **Card names for screen readers** in Spanish ("As de picas"); the hole card is "Carta oculta". Totals show "7 / 17" while an ace still counts 11.
 
 ## Tasks
 
@@ -41,9 +46,9 @@ PR A:
 
 PR B:
 
-- [ ] T3 Route `/games/blackjack`, page logic (`useBlackjack`), states: bet form, player turn, settled hand, recovery; errors (409 resync, 422).
-- [ ] T4 Table and cards (hole card face down until the end), action bar (Pedir, Plantarse, Doblar), result panel, fairness block, history; lobby card live.
-- [ ] T5 PR B close-out: lint, typecheck, tests.
+- [x] T3 Route `/games/blackjack`, page logic (`useBlackjack`), states: bet form, player turn, settled hand, recovery; errors (409 resync, 422).
+- [x] T4 Table and cards (hole card face down until the end), action bar (Pedir, Plantarse, Doblar), result panel, fairness block, history; lobby card live.
+- [x] T5 PR B close-out: lint, typecheck, tests.
 
 ## Acceptance criteria
 
@@ -70,6 +75,13 @@ From the issue:
 - T1 done: four methods on `ApiClient`, parsed with the shared schemas in `http.ts`; the mock (`MockBlackjackHand`, `blackjackView`, settlement once, `blackjackShoes`). HTTP tests (5): start with the key, action by id and index without a key, current and history paths, a leaked hole card is an `invalid_response`, 422 mapped. Mock tests (11): start and up card only, natural pays 3:2 once, replayed start, one hand and stake bounds, stand and dealer to 17, hit and index replay with 409s, double charged once and replayed, double without funds, 404 and 409 after settlement, seed deal after the fixed shoes, history order and limits.
 - T2 done. Final checks: `npm run lint` clean (248 files); `npm run typecheck` clean in every workspace; `npm test` green: shared 239, backend 323 passed and 4 skipped (with the database), frontend 347.
 
+- Branch `feat/64-blackjack-page` created from PR A.
+- T3 done: route `/games/blackjack`; `useBlackjack` (load and restore, start with a kept key after a network failure, actions by `index`, 409 resync for start and actions, play again).
+- T4 done: `BlackjackPage`, `Table`, `PlayingCard`, `BetPanel`, `PlayingPanel`, `ResultPanel`, `HandHistory`, `format.ts`; felt and card styles with a staggered deal, off under reduced motion; the lobby card links to `/games/blackjack`. Checked in the browser with the mock: deal, hit, stand, result, history, lobby link, no console errors.
+- T5 done. Tests: page (13): layout and bet form, stake bounds, deal with the hole card hidden and the stake charged, stand and win with the dealer revealed, hit then no double, double paid on the doubled total, bust without dealer draws, natural and push, recovery after a reload, no double without balance, 422 keeps the hand, action 409 shows the real result, start 409 restores the hand; format (5); lobby and app tests now expect Blackjack live. A flaky balance assertion in `game.integration.test.ts` (#63) is fixed: hands played out while searching a shoe moved the balance, so the stand and double tests now count from the hand's start; passed 5 runs in a row. Final checks: `npm run lint` clean (259 files); `npm run typecheck` clean; with the database, `npm test` green: shared 239, backend 323 passed and 4 skipped, frontend 365.
+
+- Playtest round: `deal.ts` (+5 tests), `cardSound.ts`, `SoundToggle`, `ResultDialog`; `PlayingCard` with face and back; `Table` with the arc legend and the deal delays; `ResultPanel` reduced to "Jugar otra vez"; history pills with the loss; styles. Page tests (16) now read the result from the pop-up and add: Ver la mesa, the result and balance waiting for the deal, a loss in the history; the dealer's natural reads "21", not "11 / 21". Checked in the browser with the mock: deal order, flip, pop-up, legend, felt, no console errors. Checks: lint clean (264 files), typecheck clean, `npm test` green with the database: shared 239, backend 323 passed and 4 skipped, frontend 373.
+
 ## Next step
 
-PR B on `feat/64-blackjack-page`: the screen, built on these methods.
+Rebase the five branches on the latest `main`, run the checks again, and open the stacked PRs in order (#62 → #63 A → #63 B → #64 A → #64 B).

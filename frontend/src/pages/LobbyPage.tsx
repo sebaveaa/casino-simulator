@@ -46,6 +46,7 @@ export const games: GameEntry[] = [
     title: "Blackjack",
     description: "Vence a la banca sin pasarte de 21.",
     tone: "ink",
+    path: "/games/blackjack",
   },
 ];
 
