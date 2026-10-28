@@ -45,6 +45,7 @@ From the issue: chips of 10, 50, 100 and 500 build the bet, piled as placed, nex
 - Playtest round 7 (Juan Sebastián): the score keeps its black-on-white look during the hand, in the left column of the wide panel. In "Tus últimas manos" a plain loss shows only "−10" on tomato, a dealer natural "Blackjack −10" and a bust "Te pasaste −10"; screen readers still hear "Perdiste −10" and "Blackjack de la banca −10". Checks: lint clean, typecheck clean, frontend 393 tests pass.
 - Playtest round 8 (Juan Sebastián): back at the bet form, chips the balance no longer covers (it ran out, or fell below the last bet) are cleared, before paint, so the old bet never shows; a balance that still covers them keeps them. Checks: lint clean, typecheck clean, frontend 396 tests pass.
 - Playtest round 9 (Juan Sebastián): "La banca espera" and "Pon tus fichas y reparte" sit under the card places, smaller and paler. While the bet holds no chip, its felt patch reads "TOCA UNA FICHA / PARA APOSTAR" in two arcs, lettered like the table's "BLACKJACK PAGA 3 A 2" (`FeltArc`, shared by both). Checks: lint clean, typecheck clean, frontend 396 tests pass; checked in the browser.
+- README: §1 lists Blackjack as an extra game (no longer "Opcional"), and §2.2, §6 and the Redis failure row no longer mention a Redis copy of the hand, which never existed: the hand lives in PostgreSQL.
 
 ## Next step
 
