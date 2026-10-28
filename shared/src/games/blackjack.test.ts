@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { computeOutcome, createRng, type Rng } from "../rng";
 import {
+  BLACKJACK_CUT_CARD,
   BLACKJACK_MAX_ACTIONS,
+  BLACKJACK_MAX_ROUND_CARDS,
   BLACKJACK_MAX_STAKE,
   BLACKJACK_MIN_STAKE,
   BLACKJACK_RANKS,
@@ -18,6 +20,7 @@ import {
   isNatural,
   legalActions,
   playHand,
+  roundCardCount,
   SHOE_SIZE,
   shuffleShoe,
 } from "./blackjack";
@@ -354,3 +357,60 @@ describe("blackjack.resolve", () => {
     expect(blackjack.payout(bet(["hit"]), result)).toBe(2000n);
   });
 });
+
+describe("the continuous shoe", () => {
+  it("cuts at 75 % of the shoe, and a round started before the cut always fits", () => {
+    expect(BLACKJACK_CUT_CARD).toBe(234);
+    expect(BLACKJACK_CUT_CARD / SHOE_SIZE).toBe(0.75);
+    expect(BLACKJACK_MAX_ROUND_CARDS).toBe(59);
+    expect(BLACKJACK_CUT_CARD - 1 + BLACKJACK_MAX_ROUND_CARDS).toBeLessThanOrEqual(SHOE_SIZE);
+  });
+
+  it("counts the cards a round took: exactly the first ones of its shoe", async () => {
+    const rounds: [number, BlackjackAction[]][] = [
+      [0, ["stand"]],
+      [2, ["hit", "stand"]],
+      [5, ["double"]],
+    ];
+    for (const [nonce, actions] of rounds) {
+      const dealt = shuffleShoe(await seededRng(nonce));
+      const result = blackjack.resolve(bet(actions), await seededRng(nonce));
+      const count = roundCardCount(result);
+      const onTable = [...result.playerHands.flatMap((hand) => hand.cards), ...result.dealerCards];
+      expect([...onTable].sort()).toEqual(dealt.slice(0, count).sort());
+    }
+    // A split moves a card to the second hand; it takes nothing more from the shoe.
+    const split = playHand(shoe("8", "9", "8", "7", "3", "K", "2"), ["split", "stand", "stand"]);
+    expect(roundCardCount(split)).toBe(7);
+  });
+
+  it("deals a round from its offset: offset 0 is today's shoe, offset k skips k cards", async () => {
+    const atZero = blackjack.resolve({ ...bet(["stand"]), cardOffset: 0 }, await seededRng(0));
+    expect(atZero).toEqual(blackjack.resolve(bet(["stand"]), await seededRng(0)));
+
+    const dealt = shuffleShoe(await seededRng(0));
+    const later = blackjack.resolve({ ...bet(["stand"]), cardOffset: 7 }, await seededRng(0));
+    expect(later).toEqual(playHandResult(dealt.slice(7), ["stand"]));
+  });
+
+  it("accepts an offset below the cut card only", () => {
+    expect(blackjack.validateBet({ ...bet(), cardOffset: 0 })).toBe(true);
+    expect(blackjack.validateBet({ ...bet(), cardOffset: BLACKJACK_CUT_CARD - 1 })).toBe(true);
+    for (const cardOffset of [-1, BLACKJACK_CUT_CARD, 1.5, Number.NaN]) {
+      expect(blackjack.validateBet({ ...bet(), cardOffset })).toBe(false);
+    }
+  });
+});
+
+/** A finished round from a stacked shoe, in `resolve`'s shape. */
+function playHandResult(cards: number[], actions: BlackjackAction[]) {
+  const state = playHand(cards, actions);
+  return {
+    playerHands: state.playerHands.map(({ cards, doubled, outcome }) => ({
+      cards,
+      doubled,
+      outcome,
+    })),
+    dealerCards: state.dealerCards,
+  };
+}
