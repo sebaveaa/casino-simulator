@@ -25,6 +25,10 @@ describe("migrations", () => {
     expect(Object.keys(migrations)).toContain("0008_blackjack");
   });
 
+  it("registers the blackjack shoes migration", () => {
+    expect(Object.keys(migrations)).toContain("0009_blackjack_shoes");
+  });
+
   it("gives every migration an up and a down", () => {
     for (const migration of Object.values(migrations)) {
       expect(migration.up).toBeTypeOf("function");

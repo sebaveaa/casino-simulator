@@ -16,6 +16,7 @@ import { AppError } from "../../platform/errors";
 import type { SeedPairService } from "../../rng/seed-pair-service";
 import { InsufficientFundsError, scopedKey, type WalletService } from "../../wallet/wallet-service";
 import { databaseNow } from "../chicken-road/view";
+import { advanceShoe, takeShoe } from "./shoe";
 import {
   type BlackjackActions,
   findHandForUpdate,
@@ -32,11 +33,12 @@ import {
 export type BlackjackDeps = { wallet: WalletService; seedPairs: SeedPairService };
 
 // Every operation runs inside its caller's transaction and locks the player's wallet first, then
-// the bet: one player's operations run one at a time, in the order wallets -> bets (and
-// wallets -> users -> seed_pairs when a hand starts), as in Chicken Road.
+// the bet: one player's operations run one at a time, in the order wallets -> bets ->
+// blackjack_shoes -> users -> seed_pairs, as in Chicken Road plus the shoe (#66).
 
 /**
- * Starts a hand and charges the stake (README §3.2, §3.3). A natural on either side settles it
+ * Starts a hand and charges the stake (README §3.2, §3.3), dealt from the player's shoe at its
+ * next card: the active shoe, or a new one from the seed pair. A natural on either side settles it
  * in the same transaction. A retry with the same key returns the hand as it is now.
  */
 export async function startBlackjackHand(
@@ -58,17 +60,20 @@ export async function startBlackjackHand(
   if (await lockHandInProgress(trx, userId)) {
     throw new AppError("conflict", "A Blackjack hand is already in progress");
   }
-  // Checked before `draw`, so a refused start burns no nonce.
+  // Checked before the shoe, so a refused start opens none and burns no nonce.
   if (balance < stake) throw new InsufficientFundsError();
 
-  const draw = await seedPairs.draw(trx, userId);
+  const shoe = await takeShoe(trx, seedPairs, userId, await databaseNow(trx));
   const { id: handId } = await trx
     .insertInto("bets")
     .values({
       user_id: userId,
       game: blackjack.id,
-      seed_pair_id: draw.seedPairId,
-      nonce: draw.nonce,
+      // The hand shares its shoe's seed pair and nonce (`bets_shoe_fkey` keeps them equal).
+      seed_pair_id: shoe.seed_pair_id,
+      nonce: shoe.nonce,
+      shoe_id: shoe.id,
+      card_offset: shoe.next_card,
       stake,
       // Serialized by hand, as in roulette: jsonb values go in as JSON text.
       selection: JSON.stringify({}),
@@ -183,9 +188,10 @@ export async function actOnBlackjackHand(
 }
 
 /**
- * Settles a locked round: stores the cards for the verifier and pays once, the sum over the
- * player's hands. Every payout of a round (natural, last action, abandonment) uses the same key, so a second one is impossible: the caller
- * sees `status = 'settled'` first, and `transactions.idempotency_key` is unique anyway.
+ * Settles a locked round: stores the cards for the verifier, pays once (the sum over the player's
+ * hands) and moves the shoe past the round. Every payout of a round (natural, last action,
+ * abandonment) goes through here with the same key, so a second one is impossible: the caller sees
+ * `status = 'settled'` first, and `transactions.idempotency_key` is unique anyway.
  */
 export async function settleHand(
   trx: Db,
@@ -219,6 +225,14 @@ export async function settleHand(
     })
     .where("id", "=", row.id)
     .execute();
+  if (row.shoe_id !== null && row.card_offset !== null) {
+    await advanceShoe(trx, {
+      shoeId: row.shoe_id,
+      cardOffset: row.card_offset,
+      round: { playerHands, dealerCards: state.dealerCards },
+      now,
+    });
+  }
   // A lost hand pays nothing, and the ledger rejects zero-amount transactions.
   if (payout > 0n) {
     await wallet.transfer(trx, {

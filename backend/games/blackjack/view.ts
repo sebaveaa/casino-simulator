@@ -42,6 +42,8 @@ export function selectHands(db: Db) {
         "b.payout",
         "b.status",
         "b.created_at",
+        "b.shoe_id",
+        "b.card_offset",
         "s.id as seedPairId",
         "s.server_seed",
         "s.server_seed_hash",
@@ -103,9 +105,10 @@ export function initialStake(row: HandRow): Money {
 }
 
 /**
- * The shoe of a hand, recomputed from its seed (README §4.4: it is never stored). The seed pair
- * id, nonce, server seed and client seed are written once and never updated, so the shoe stays
- * the same for the whole hand.
+ * The cards of a hand, from its first one on: its shoe recomputed from the seed (README §4.4: it
+ * is never stored), from the hand's offset in it. The seed pair, nonce and offset are written once
+ * and never updated, so the cards stay the same for the whole hand. A hand from before the
+ * continuous shoe has no offset: its own shoe, from the top.
  */
 export async function shoeOf(row: HandRow): Promise<number[]> {
   const outcome = await computeOutcome({
@@ -113,7 +116,7 @@ export async function shoeOf(row: HandRow): Promise<number[]> {
     clientSeed: row.client_seed,
     nonce: row.nonce,
   });
-  return shuffleShoe(createRng(outcome));
+  return shuffleShoe(createRng(outcome)).slice(row.card_offset ?? 0);
 }
 
 /** The hand replayed from its shoe and the actions taken so far. */

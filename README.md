@@ -198,6 +198,9 @@ erDiagram
     SEED_PAIRS ||--o{ BETS : "genera resultado de"
     GAME_ROUNDS ||--o{ BETS : incluye
     BETS ||--o{ TRANSACTIONS : "genera"
+    USERS ||--o{ BLACKJACK_SHOES : juega
+    SEED_PAIRS ||--o{ BLACKJACK_SHOES : "baraja"
+    BLACKJACK_SHOES ||--o{ BETS : "reparte"
 
     USERS { uuid id PK
             string email
@@ -240,10 +243,20 @@ erDiagram
            bigint stake "total apostado"
            jsonb selection "ruleta: lista de {selection, stake}"
            jsonb actions "decisiones de blackjack"
+           uuid shoe_id FK "blackjack: su zapato"
+           int card_offset "blackjack: su primera carta en el zapato"
            jsonb result "resultado, para reintentos y verificador"
            bigint payout "total pagado"
            string status
            timestamp created_at }
+    BLACKJACK_SHOES { uuid id PK
+                      uuid user_id FK
+                      uuid seed_pair_id FK
+                      int nonce "uno por zapato"
+                      int cut_card "carta de corte: 234"
+                      int next_card "primera carta de la mano siguiente"
+                      string status "activo o terminado"
+                      string end_reason "corte o rotación de semillas" }
 ```
 
 Un `amount` positivo aumenta el saldo del wallet y uno negativo lo reduce; por eso la cuenta de emisión queda en negativo por diseño. La base de datos se encarga de hacer cumplir las reglas del ledger: rechaza cualquier `UPDATE` o `DELETE` sobre `ledger_entries` y `transactions`, y rechaza al hacer `COMMIT` toda transacción cuyos asientos no sumen cero o que tenga menos de dos. Una apuesta puede generar varias transacciones (la del cobro y la del premio; las carreras pagan al liquidarse), por eso la relación `BETS` a `TRANSACTIONS` es de uno a muchos. En la ruleta, una fila de `BETS` representa una **tirada**: `selection` guarda la lista de selecciones con su monto, y `stake` y `payout` son los totales de la tirada.
@@ -323,11 +336,12 @@ Este es el punto de mayor carga del sistema: un pico de apuestas justo antes del
 La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que no necesita Redis:
 
 - **Empezar** (`POST /games/blackjack/hands`, con `Idempotency-Key`): se descuenta la apuesta y se crea la fila en `BETS` con estado `en_curso`, su `seed_pair_id` y su `nonce`. Un jugador tiene como máximo **una mano en curso** (índice único parcial). Si hay blackjack natural de cualquiera de los dos, la mano se liquida en la misma transacción.
-- **El zapato está determinado por la semilla** (sección 5): se baraja con Fisher-Yates a partir del par de semillas y el `nonce` en cada operación, así que no se guarda. Zapato + decisiones = estado completo de la mano. La respuesta de una mano en curso solo muestra la carta visible de la banca, nunca la oculta.
+- **El zapato está determinado por la semilla** (sección 5): se baraja con Fisher-Yates a partir del par de semillas y el `nonce` en cada operación, así que su orden no se guarda. Zapato + posición + decisiones = estado completo de la mano. La respuesta de una mano en curso solo muestra la carta visible de la banca, nunca la oculta.
+- **Zapato continuo**: un zapato dura varias manos del mismo jugador, como en una mesa real. Al abrirse toma **un** `nonce` del par de semillas y se guarda en `BLACKJACK_SHOES` solo su posición (`next_card`). Cada mano guarda su zapato y su **desplazamiento** (`card_offset`, la posición de su primera carta) y comparte el `seed_pair_id` y el `nonce` del zapato. Al liquidarse, la mano mueve el zapato hasta su última carta; cuando pasa la **carta de corte** (la 234 de 312, el 75 %), el zapato termina y la mano siguiente abre uno nuevo, que la pantalla anuncia con la animación de barajar. Una ronda usa como máximo 59 cartas y siempre empieza antes del corte, así que nunca se queda sin cartas. Abrir el zapato, crear la mano y cobrar ocurren en la misma transacción, y un inicio rechazado no abre zapato ni gasta `nonce`. Con el zapato a la vista se pueden contar cartas, como en un casino; los créditos son ficticios.
 - **Decidir** (`POST /games/blackjack/hands/current/actions`, `{ handId, action, index }`): cada decisión es una transacción con la billetera y la mano bloqueadas (`SELECT … FOR UPDATE`) y se añade a `BETS.actions`. `index` es la posición de la decisión: repetirla devuelve el mismo estado, sin jugar dos veces. **Separar** y **doblar** cobran la apuesta inicial otra vez: la separación una sola vez por partida y el doble una vez por cada mano, cada uno con su propia clave de idempotencia. `BETS.stake` guarda el total apostado.
 - **Pago**: el premio (la suma de lo que paga cada mano) se paga con la clave `payout:<usuario>:<mano>`, la misma para el blackjack natural, la última decisión y el abandono, así que una mano **no puede pagarse dos veces**. Al liquidar se guardan las cartas en `BETS.result` para el historial (`GET /games/blackjack/hands`) y el verificador.
 - **Abandono**: tras 10 minutos sin actividad, la mano **no se da por perdida**: en la siguiente petición del jugador a Blackjack el sistema aplica *plantarse* automáticamente en cada mano pendiente y la resuelve con las reglas normales. Un fallo de infraestructura o una desconexión nunca le quita dinero al jugador.
-- **Semillas**: mientras haya una mano en curso no se puede rotar el par ni cambiar el `client_seed`, porque revelar el `server_seed` mostraría las cartas que vienen.
+- **Semillas**: mientras haya una mano en curso no se puede rotar el par ni cambiar el `client_seed`, porque revelar el `server_seed` mostraría las cartas que vienen. Rotar **retira el zapato activo**: sus cartas sin repartir quedan públicas, pero ya no se reparten, y la mano siguiente sale de un zapato nuevo del par nuevo.
 
 ### 4.5 Cruza la Calle (partida por pasos)
 
@@ -357,6 +371,8 @@ Cada jugador tiene un **par de semillas** activo:
 5. El jugador puede comprobar que el hash coincide y recalcular cada apuesta hecha con ese par.
 
 El `client_seed` impide que el servidor elija de antemano una semilla favorable para un jugador concreto, y el `nonce` hace que cada apuesta sea distinta sin cambiar de semilla.
+
+En blackjack el `nonce` cuenta **zapatos**, no manos (4.4): todas las manos de un zapato comparten su `nonce`, y cada una dice en qué carta empieza (`card_offset`). Para verificar una mano se recalcula su zapato y se reparte desde ese desplazamiento. Para verificar que el servidor no se saltó cartas, las manos de un zapato, ordenadas por desplazamiento, empiezan en 0 y cada una empieza donde terminó la anterior, sin huecos; la carta de corte es fija y pública, así que el servidor tampoco elige cuándo barajar.
 
 ### 5.2 Carreras de animalitos (resultado compartido)
 

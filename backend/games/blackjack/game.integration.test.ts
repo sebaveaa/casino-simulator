@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  BLACKJACK_CUT_CARD,
   type BlackjackAction,
   type BlackjackHandState,
   blackjackActionResponseSchema,
@@ -11,6 +12,7 @@ import {
   describeCard,
   legalActions,
   playHand,
+  roundCardCount,
   shuffleShoe,
 } from "@casino/shared";
 import { sql } from "kysely";
@@ -78,12 +80,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
   const settleAbandoned = (userId: string) =>
     db.transaction().execute((trx) => settleAbandonedHand(trx, { wallet }, userId));
 
-  /** The shoe computed apart from the code under test, from the stored seed. */
+  /**
+   * The hand's cards computed apart from the code under test: the shoe from the stored seed, from
+   * the hand's offset in it.
+   */
   async function shoeOf(handId: string): Promise<number[]> {
     const row = await db
       .selectFrom("bets as b")
       .innerJoin("seed_pairs as s", "s.id", "b.seed_pair_id")
-      .select(["b.nonce", "s.server_seed", "s.client_seed"])
+      .select(["b.nonce", "b.card_offset", "s.server_seed", "s.client_seed"])
       .where("b.id", "=", handId)
       .executeTakeFirstOrThrow();
     const outcome = await computeOutcome({
@@ -91,7 +96,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       clientSeed: row.client_seed,
       nonce: row.nonce ?? -1,
     });
-    return shuffleShoe(createRng(outcome));
+    return shuffleShoe(createRng(outcome)).slice(row.card_offset ?? 0);
   }
 
   /** Stands until the hand is settled, so the next start is allowed. */
@@ -550,6 +555,167 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       const hands = await listBlackjackHistory(db, userId, 2);
       expect(hands.map((h) => h.handId)).toEqual(ids.slice(1).reverse());
       expect(hands.every((h) => h.status === "settled")).toBe(true);
+    });
+  });
+
+  describe("continuous shoe", () => {
+    const handRow = (handId: string) =>
+      db
+        .selectFrom("bets")
+        .select(["shoe_id", "card_offset", "seed_pair_id", "nonce", "result", "status"])
+        .where("id", "=", handId)
+        .executeTakeFirstOrThrow();
+    const shoesOf = (userId: string) =>
+      db
+        .selectFrom("blackjack_shoes")
+        .selectAll()
+        .where("user_id", "=", userId)
+        .orderBy("created_at")
+        .orderBy("nonce")
+        .execute();
+    const nextNonce = async (userId: string) =>
+      (
+        await db
+          .selectFrom("seed_pairs")
+          .select("next_nonce")
+          .where("user_id", "=", userId)
+          .where("revealed_at", "is", null)
+          .executeTakeFirstOrThrow()
+      ).next_nonce;
+    /** Starts a hand and stands on it if it waits for the player. */
+    async function playHandOut(userId: string): Promise<string> {
+      const res = await start(userId);
+      if (res.hand.status === "player_turn") await playOut(userId, res.hand.handId);
+      return res.hand.handId;
+    }
+    /** Cards a settled hand took from its shoe. */
+    async function cardsTaken(handId: string): Promise<number> {
+      const row = await handRow(handId);
+      return roundCardCount(
+        row.result as { playerHands: { cards: number[] }[]; dealerCards: number[] },
+      );
+    }
+
+    it("deals the next hand from the same shoe, right after the last card of the one before", async () => {
+      const userId = await createPlayer();
+      const first = await playHandOut(userId);
+      const second = await playHandOut(userId);
+      const [a, b] = [await handRow(first), await handRow(second)];
+
+      expect(a.shoe_id).not.toBeNull();
+      expect(b.shoe_id).toBe(a.shoe_id);
+      // One shoe, one nonce: both hands share it, and the seed pair moved on only once.
+      expect([b.seed_pair_id, b.nonce]).toEqual([a.seed_pair_id, a.nonce]);
+      expect(await nextNonce(userId)).toBe(1);
+      expect(a.card_offset).toBe(0);
+      expect(b.card_offset).toBe(await cardsTaken(first));
+      const [shoe] = await shoesOf(userId);
+      expect(shoe?.next_card).toBe((b.card_offset ?? 0) + (await cardsTaken(second)));
+      expect(shoe?.status).toBe("active");
+      await expectLedgerMatches(userId);
+    });
+
+    it("finishes the shoe once a hand passes the cut card, and opens a new one", async () => {
+      const userId = await createPlayer();
+      await playHandOut(userId);
+      // Many hands later: the next one starts on the last card before the cut.
+      await db
+        .updateTable("blackjack_shoes")
+        .set({ next_card: BLACKJACK_CUT_CARD - 1 })
+        .where("user_id", "=", userId)
+        .execute();
+      const last = await playHandOut(userId);
+      expect((await handRow(last)).card_offset).toBe(BLACKJACK_CUT_CARD - 1);
+
+      const [old] = await shoesOf(userId);
+      expect(old).toMatchObject({ status: "finished", end_reason: "cut_card" });
+      expect(old?.next_card).toBeGreaterThanOrEqual(BLACKJACK_CUT_CARD);
+
+      const next = await handRow(await playHandOut(userId));
+      expect(next.shoe_id).not.toBe(old?.id);
+      expect(next.card_offset).toBe(0);
+      expect(next.nonce).toBe((old?.nonce ?? -1) + 1);
+      expect((await shoesOf(userId)).filter((shoe) => shoe.status === "active")).toHaveLength(1);
+    });
+
+    it("retires the shoe when the player rotates the seeds", async () => {
+      const userId = await createPlayer();
+      const before = await handRow(await playHandOut(userId));
+      await db.transaction().execute((trx) => seedPairs.rotate(trx, userId));
+
+      const after = await handRow(await playHandOut(userId));
+      expect(after.seed_pair_id).not.toBe(before.seed_pair_id);
+      expect(after.card_offset).toBe(0);
+      const [retired, fresh] = await shoesOf(userId);
+      expect(retired).toMatchObject({ id: before.shoe_id, status: "finished" });
+      expect(retired?.end_reason).toBe("seed_rotated");
+      expect(fresh).toMatchObject({ id: after.shoe_id, status: "active" });
+    });
+
+    it("opens no shoe and burns no nonce for a refused start", async () => {
+      const userId = await createPlayer(0n);
+      await expect(start(userId)).rejects.toBeInstanceOf(InsufficientFundsError);
+      expect(await shoesOf(userId)).toHaveLength(0);
+    });
+
+    it("advances once: a retried start or action leaves the shoe where it is", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(userId, opensWith(["stand"]));
+      expect(await start(userId, res.key)).toEqual(await start(userId, res.key));
+      await act(userId, res.hand.handId, "stand", 0);
+      const [once] = await shoesOf(userId);
+      await act(userId, res.hand.handId, "stand", 0);
+      const [twice] = await shoesOf(userId);
+      expect(twice?.next_card).toBe(once?.next_card);
+      const hand = await handRow(res.hand.handId);
+      expect(once?.next_card).toBe((hand.card_offset ?? 0) + (await cardsTaken(res.hand.handId)));
+    });
+
+    it("advances the shoe when an abandoned hand settles", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(userId, opensWith(["stand"]));
+      await age(res.hand.handId, BLACKJACK_ABANDON_MS);
+      expect(await settleAbandoned(userId)).toBe(true);
+      const hand = await handRow(res.hand.handId);
+      const [shoe] = (await shoesOf(userId)).filter((s) => s.id === hand.shoe_id);
+      expect(shoe?.next_card).toBe((hand.card_offset ?? 0) + (await cardsTaken(res.hand.handId)));
+    });
+
+    it("keeps every shoe gapless while starts and rotations race", async () => {
+      const userId = await createPlayer();
+      const conflictOnly = (error: unknown) => {
+        if (!(error instanceof AppError) || error.code !== "conflict") throw error;
+      };
+      // Players starting and standing while the same player rotates the seeds: every outcome is
+      // a hand, a 409 or a rotation, never a deadlock or a hand dealt twice from one card.
+      await Promise.all(
+        Array.from({ length: 12 }, (_, i) =>
+          i % 3 === 0
+            ? db
+                .transaction()
+                .execute((trx) => seedPairs.rotate(trx, userId))
+                .catch(conflictOnly)
+            : playHandOut(userId).catch(conflictOnly),
+        ),
+      );
+
+      const hands = await db
+        .selectFrom("bets")
+        .select(["id", "shoe_id", "card_offset", "status"])
+        .where("user_id", "=", userId)
+        .where("game", "=", "blackjack")
+        .orderBy("card_offset")
+        .execute();
+      expect(hands.length).toBeGreaterThan(0);
+      for (const shoe of await shoesOf(userId)) {
+        // The hands of a shoe start at 0 and each starts where the one before stopped.
+        let expected = 0;
+        for (const hand of hands.filter((h) => h.shoe_id === shoe.id)) {
+          expect(hand.card_offset).toBe(expected);
+          if (hand.status === "settled") expected += await cardsTaken(hand.id);
+        }
+      }
+      await expectLedgerMatches(userId);
     });
   });
 

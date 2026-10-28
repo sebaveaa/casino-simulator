@@ -75,7 +75,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("advanceRaces", () => {
 
   beforeEach(async () => {
     // TRUNCATE skips the append-only row triggers, which is fine for a throwaway schema.
-    await sql`truncate ledger_entries, transactions, bets, game_rounds, seed_pairs, wallets, users`.execute(
+    await sql`truncate ledger_entries, transactions, bets, blackjack_shoes, game_rounds, seed_pairs, wallets, users`.execute(
       db,
     );
     await sql`insert into wallets (kind, balance) values ('issuance', 0), ('house', 0)`.execute(db);

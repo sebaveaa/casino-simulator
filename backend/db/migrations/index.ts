@@ -6,6 +6,7 @@ import * as raceRounds from "./0005_race_rounds";
 import * as raceCurrentIndex from "./0006_race_current_index";
 import * as racePartialIndexes from "./0007_race_round_partial_indexes";
 import * as blackjack from "./0008_blackjack";
+import * as blackjackShoes from "./0009_blackjack_shoes";
 
 /**
  * Static registry, so esbuild bundles the migrations (no filesystem provider at runtime).
@@ -20,4 +21,5 @@ export const migrations: Record<string, Migration> = {
   "0006_race_current_index": raceCurrentIndex,
   "0007_race_round_partial_indexes": racePartialIndexes,
   "0008_blackjack": blackjack,
+  "0009_blackjack_shoes": blackjackShoes,
 };
