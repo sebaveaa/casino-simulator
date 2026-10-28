@@ -5,6 +5,7 @@ import {
   canCashOut,
   crashPayout,
   crashResultFromOutcome,
+  crashResultSchema,
   impactAtMs,
   isValidCrashStake,
   MAX_MULTIPLIER_HUNDREDTHS,
@@ -55,18 +56,48 @@ describe("resolveCrash", () => {
     expect(crashResultFromOutcome(OUTCOME)).toEqual(crashResultFromOutcome(OUTCOME));
   });
 
-  it("reaches 2x in about 49.5% of the range and caps in about 4.95% (1% house edge)", () => {
+  it("reaches 2x in about 49.5% of the range, caps in about 4.95% and ends about 1.98% at 1.00x", () => {
     const total = 20_000;
     let reachedTwo = 0;
     let capped = 0;
+    let immediate = 0;
     for (let i = 0; i < total; i++) {
       const r = Math.floor((i / total) * CRASH_DRAW_RANGE);
       const { crashHundredths } = resolveCrash(fixedDraw(r));
       if (crashHundredths >= 200) reachedTwo++;
       if (crashHundredths >= MAX_MULTIPLIER_HUNDREDTHS) capped++;
+      if (crashHundredths === MIN_MULTIPLIER_HUNDREDTHS) immediate++;
     }
     expect(reachedTwo / total).toBeCloseTo(0.495, 2);
     expect(capped / total).toBeCloseTo(0.0495, 2);
+    expect(immediate / total).toBeCloseTo(0.0198, 3);
+  });
+});
+
+describe("crashResultSchema", () => {
+  it("accepts a result whose outcome matches its impact point", () => {
+    expect(crashResultSchema.safeParse({ crashHundredths: 245, outcome: "impact" }).success).toBe(
+      true,
+    );
+    expect(crashResultSchema.safeParse({ crashHundredths: 2000, outcome: "cap" }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a cap below 20.00x and an impact at 20.00x", () => {
+    expect(crashResultSchema.safeParse({ crashHundredths: 500, outcome: "cap" }).success).toBe(
+      false,
+    );
+    expect(crashResultSchema.safeParse({ crashHundredths: 2000, outcome: "impact" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts every result resolveCrash produces", () => {
+    for (let i = 0; i <= 1000; i++) {
+      const r = Math.min(Math.floor((i / 1000) * CRASH_DRAW_RANGE), CRASH_DRAW_RANGE - 1);
+      expect(crashResultSchema.safeParse(resolveCrash(fixedDraw(r))).success).toBe(true);
+    }
   });
 });
 
@@ -78,7 +109,7 @@ describe("multiplierAtHundredths and impactAtMs", () => {
   });
 
   it("are coherent inverses: the impact instant is the first ms that reaches the multiplier", () => {
-    for (const h of [150, 200, 345, 1000, 1999, 2000]) {
+    for (let h = MIN_MULTIPLIER_HUNDREDTHS + 1; h <= MAX_MULTIPLIER_HUNDREDTHS; h++) {
       const t = impactAtMs(h);
       expect(multiplierAtHundredths(t)).toBeGreaterThanOrEqual(h);
       expect(multiplierAtHundredths(t - 1)).toBeLessThan(h);

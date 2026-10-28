@@ -49,6 +49,14 @@ describe("crashRoundSchema", () => {
     expect(crashRoundSchema.safeParse(resolvedRound).success).toBe(true);
     expect(crashRoundSchema.safeParse({ ...openRound, status: "resolved" }).success).toBe(false);
   });
+
+  it("requires the seed and result once settled", () => {
+    expect(crashRoundSchema.safeParse({ ...resolvedRound, status: "settled" }).success).toBe(true);
+    expect(crashRoundSchema.safeParse({ ...openRound, status: "settled" }).success).toBe(false);
+    expect(
+      crashRoundSchema.safeParse({ ...openRound, status: "settled", serverSeed: SEED }).success,
+    ).toBe(false);
+  });
 });
 
 describe("crashBetRequestSchema", () => {
@@ -134,7 +142,15 @@ describe("crashEventSchema", () => {
 
   it("only lets the impact event carry the server seed", () => {
     expect(
-      crashEventSchema.safeParse({ type: "takeoff", roundId: ID, serverSeed: SEED }).success,
+      crashEventSchema.safeParse({
+        type: "takeoff",
+        roundId: ID,
+        startedAt: "2026-10-25T00:00:05.000Z",
+        serverSeed: SEED,
+      }).success,
+    ).toBe(false);
+    expect(
+      crashEventSchema.safeParse({ type: "settled", roundId: ID, serverSeed: SEED }).success,
     ).toBe(false);
   });
 });
