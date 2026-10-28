@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BLACKJACK_MAX_ACTIONS, describeCard } from "../games/blackjack";
+import { BLACKJACK_CUT_CARD, BLACKJACK_MAX_ACTIONS, describeCard } from "../games/blackjack";
 import {
   BLACKJACK_HISTORY_DEFAULT_LIMIT,
   BLACKJACK_HISTORY_MAX_LIMIT,
@@ -10,6 +10,7 @@ import {
   blackjackHandSchema,
   blackjackHistoryQuerySchema,
   blackjackHistoryResponseSchema,
+  blackjackShoeSchema,
   blackjackStartRequestSchema,
   blackjackStartResponseSchema,
 } from "./blackjack";
@@ -23,8 +24,17 @@ const nine = { rank: "9", suit: "clubs" };
 const base = {
   handId: uuid,
   stake: "1000",
-  fairness: { seedPairId: uuid, serverSeedHash: "a".repeat(64), clientSeed: "c", nonce: 3 },
+  fairness: {
+    seedPairId: uuid,
+    serverSeedHash: "a".repeat(64),
+    clientSeed: "c",
+    nonce: 3,
+    shoeId: uuid,
+    cardOffset: 12,
+  },
 };
+
+const shoe = { shoeId: uuid, size: 312, cutCard: 234, cardsDealt: 16, reshuffle: false };
 
 const inProgress = {
   ...base,
@@ -150,7 +160,7 @@ describe("blackjackStartRequestSchema", () => {
       payout: "2500",
     };
     for (const hand of [inProgress, natural]) {
-      const body = { hand, balance: "9000" };
+      const body = { hand, balance: "9000", shoe };
       expect(blackjackStartResponseSchema.parse(body)).toEqual(body);
     }
   });
@@ -181,18 +191,39 @@ describe("blackjackActionRequestSchema", () => {
 
   it("answers with the hand in either state", () => {
     for (const hand of [inProgress, settled]) {
-      expect(blackjackActionResponseSchema.safeParse({ hand, balance: "9000" }).success).toBe(true);
+      const body = { hand, balance: "9000", shoe };
+      expect(blackjackActionResponseSchema.safeParse(body).success).toBe(true);
     }
   });
 });
 
 describe("blackjackCurrentResponseSchema", () => {
-  it("is a hand in progress or null", () => {
-    expect(blackjackCurrentResponseSchema.parse({ hand: inProgress })).toEqual({
+  it("is a hand in progress or null, with the shoe or null", () => {
+    expect(blackjackCurrentResponseSchema.parse({ hand: inProgress, shoe })).toEqual({
       hand: inProgress,
+      shoe,
     });
-    expect(blackjackCurrentResponseSchema.parse({ hand: null })).toEqual({ hand: null });
-    expect(blackjackCurrentResponseSchema.safeParse({ hand: settled }).success).toBe(false);
+    const empty = { hand: null, shoe: null };
+    expect(blackjackCurrentResponseSchema.parse(empty)).toEqual(empty);
+    expect(blackjackCurrentResponseSchema.safeParse({ hand: settled, shoe }).success).toBe(false);
+  });
+});
+
+describe("blackjackShoeSchema", () => {
+  it("shows how much of the shoe is dealt, never which cards are left", () => {
+    expect(blackjackShoeSchema.parse(shoe)).toEqual(shoe);
+    expect(blackjackShoeSchema.safeParse({ ...shoe, cards: [1, 2] }).success).toBe(false);
+    for (const bad of [{ cardsDealt: -1 }, { cardsDealt: 313 }, { size: 52 }, { cutCard: 0 }]) {
+      expect(blackjackShoeSchema.safeParse({ ...shoe, ...bad }).success).toBe(false);
+    }
+  });
+
+  it("puts a hand's first card before the cut, and allows a hand from before the shoe", () => {
+    const fairness = (extra: object) =>
+      blackjackHandSchema.safeParse({ ...inProgress, fairness: { ...base.fairness, ...extra } });
+    expect(fairness({ shoeId: null, cardOffset: 0 }).success).toBe(true);
+    expect(fairness({ cardOffset: BLACKJACK_CUT_CARD - 1 }).success).toBe(true);
+    expect(fairness({ cardOffset: BLACKJACK_CUT_CARD }).success).toBe(false);
   });
 });
 

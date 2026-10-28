@@ -136,6 +136,8 @@ function fieldsOf(row: HandRow) {
       serverSeedHash: row.server_seed_hash,
       clientSeed: row.client_seed,
       nonce: row.nonce,
+      shoeId: row.shoe_id,
+      cardOffset: row.card_offset ?? 0,
     },
   };
 }

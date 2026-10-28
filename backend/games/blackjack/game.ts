@@ -16,7 +16,7 @@ import { AppError } from "../../platform/errors";
 import type { SeedPairService } from "../../rng/seed-pair-service";
 import { InsufficientFundsError, scopedKey, type WalletService } from "../../wallet/wallet-service";
 import { databaseNow } from "../chicken-road/view";
-import { advanceShoe, takeShoe } from "./shoe";
+import { advanceShoe, shoeOfHand, takeShoe } from "./shoe";
 import {
   type BlackjackActions,
   findHandForUpdate,
@@ -115,7 +115,11 @@ async function replayStart(
   if (initialStake(row) !== stake) {
     throw new AppError("conflict", "Idempotency-Key was already used for a different stake");
   }
-  return { hand: await toHand(row), balance: toAmount(await wallet.getBalance(trx, userId)) };
+  return {
+    hand: await toHand(row),
+    balance: toAmount(await wallet.getBalance(trx, userId)),
+    shoe: await shoeOfHand(trx, row),
+  };
 }
 
 /**
@@ -250,6 +254,10 @@ const wagerCountOf = (actions: BlackjackActions) =>
   blackjackWagerCount(actions.map((entry) => entry.action));
 
 async function respond(trx: Db, wallet: WalletService, userId: string, handId: string) {
-  const hand = await toHand(await lockHand(trx, userId, handId));
-  return { hand, balance: toAmount(await wallet.getBalance(trx, userId)) };
+  const row = await lockHand(trx, userId, handId);
+  return {
+    hand: await toHand(row),
+    balance: toAmount(await wallet.getBalance(trx, userId)),
+    shoe: await shoeOfHand(trx, row),
+  };
 }

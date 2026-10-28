@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  BLACKJACK_CUT_CARD,
   BLACKJACK_MAX_ACTIONS,
   BLACKJACK_MAX_HAND_CARDS,
   BLACKJACK_MAX_HANDS,
@@ -8,6 +9,7 @@ import {
   blackjackActionSchema,
   blackjackOutcomeSchema,
   isValidBlackjackStake,
+  SHOE_SIZE,
 } from "../games/blackjack";
 import { amountSchema, positiveAmountSchema } from "../money";
 import { fairnessSchema } from "./roulette";
@@ -59,11 +61,40 @@ const stakeSchema = positiveAmountSchema.refine(
   "Stake must be between 10 and 500 credits",
 );
 
+/**
+ * What the verifier needs for a round (README §5.1): the seed pair and the nonce of its shoe, the
+ * shoe's id, and `cardOffset`, the place of the round's first card in it. `shoeId` is `null` for a
+ * round from before the continuous shoe, which had its own shoe from card 0.
+ */
+export const blackjackFairnessSchema = fairnessSchema.extend({
+  shoeId: z.uuid().nullable(),
+  cardOffset: z
+    .number()
+    .int()
+    .min(0)
+    .max(BLACKJACK_CUT_CARD - 1),
+});
+export type BlackjackFairness = z.infer<typeof blackjackFairnessSchema>;
+
+/**
+ * How much of the player's shoe is dealt (#66), for the pile on the felt: never which cards are
+ * left. `cardsDealt` counts every card on the table, the dealer's hole card too (not its value).
+ * `reshuffle`: the cut card is out, so the next hand is dealt from a new shoe.
+ */
+export const blackjackShoeSchema = z.strictObject({
+  shoeId: z.uuid(),
+  size: z.literal(SHOE_SIZE),
+  cutCard: z.number().int().min(1).max(SHOE_SIZE),
+  cardsDealt: z.number().int().min(0).max(SHOE_SIZE),
+  reshuffle: z.boolean(),
+});
+export type BlackjackShoe = z.infer<typeof blackjackShoeSchema>;
+
 /** Fields every round carries. `handId` is the id of its bet; `stake` is the initial stake. */
 const handFields = {
   handId: z.uuid(),
   stake: amountSchema,
-  fairness: fairnessSchema,
+  fairness: blackjackFairnessSchema,
 };
 
 /**
@@ -120,10 +151,14 @@ export type BlackjackHand = z.infer<typeof blackjackHandSchema>;
 export const blackjackStartRequestSchema = z.object({ stake: stakeSchema });
 export type BlackjackStartRequest = z.infer<typeof blackjackStartRequestSchema>;
 
-/** A natural on either side settles the hand at once, so the start can answer a settled hand. */
+/**
+ * A natural on either side settles the hand at once, so the start can answer a settled hand.
+ * `shoe` is the shoe the hand came from, `null` only for a hand from before the continuous shoe.
+ */
 export const blackjackStartResponseSchema = z.object({
   hand: blackjackHandSchema,
   balance: amountSchema,
+  shoe: blackjackShoeSchema.nullable(),
 });
 export type BlackjackStartResponse = z.infer<typeof blackjackStartResponseSchema>;
 
@@ -143,16 +178,22 @@ export const blackjackActionRequestSchema = z.object({
 });
 export type BlackjackActionRequest = z.infer<typeof blackjackActionRequestSchema>;
 
-/** The hand after the action: still on the player's turn, or settled. */
+/** The hand after the action: still on the player's turn, or settled; `shoe` as in the start. */
 export const blackjackActionResponseSchema = z.object({
   hand: blackjackHandSchema,
   balance: amountSchema,
+  shoe: blackjackShoeSchema.nullable(),
 });
 export type BlackjackActionResponse = z.infer<typeof blackjackActionResponseSchema>;
 
-/** The hand in progress, to restore it after a reload; `null` shows the bet form. */
+/**
+ * The hand in progress, to restore it after a reload; `null` shows the bet form. `shoe` is the
+ * shoe the next cards come from, so the pile shows on the bet form too; `null` when the next hand
+ * opens a new shoe (none yet, the last one is finished, or the seeds were rotated).
+ */
 export const blackjackCurrentResponseSchema = z.object({
   hand: blackjackInProgressHandSchema.nullable(),
+  shoe: blackjackShoeSchema.nullable(),
 });
 export type BlackjackCurrentResponse = z.infer<typeof blackjackCurrentResponseSchema>;
 

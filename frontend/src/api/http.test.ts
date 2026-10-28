@@ -558,6 +558,15 @@ describe("HTTP API client: Blackjack", () => {
     serverSeedHash: "a".repeat(64),
     clientSeed: "client",
     nonce: 0,
+    shoeId: crypto.randomUUID(),
+    cardOffset: 0,
+  };
+  const shoe = {
+    shoeId: fairness.shoeId,
+    size: 312,
+    cutCard: 234,
+    cardsDealt: 4,
+    reshuffle: false,
   };
   const cards = [
     { rank: "K", suit: "spades" },
@@ -597,7 +606,7 @@ describe("HTTP API client: Blackjack", () => {
   }
 
   it("starts a hand with the stake and the Idempotency-Key", async () => {
-    const { client, fetchMock } = setup(json({ hand: inProgress, balance: "9000" }, 201));
+    const { client, fetchMock } = setup(json({ hand: inProgress, balance: "9000", shoe }, 201));
     const res = await client.startBlackjackHand({ stake: "1000" }, "key-00000001");
     expect(res.hand.status).toBe("player_turn");
     const { url, init, headers } = call(fetchMock);
@@ -609,11 +618,12 @@ describe("HTTP API client: Blackjack", () => {
   });
 
   it("plays an action by hand id and index, without an Idempotency-Key", async () => {
-    const { client, fetchMock } = setup(json({ hand: settled, balance: "9000" }));
+    const { client, fetchMock } = setup(json({ hand: settled, balance: "9000", shoe }));
     const body = { handId, action: "stand", index: 0 } as const;
     await expect(client.playBlackjackAction(body)).resolves.toEqual({
       hand: settled,
       balance: "9000",
+      shoe,
     });
     const { url, init, headers } = call(fetchMock);
     expect(url).toBe("http://api.test/games/blackjack/hands/current/actions");
@@ -623,8 +633,8 @@ describe("HTTP API client: Blackjack", () => {
   });
 
   it("reads the current hand and the history", async () => {
-    const current = setup(json({ hand: null }));
-    await expect(current.client.getCurrentBlackjackHand()).resolves.toEqual({ hand: null });
+    const current = setup(json({ hand: null, shoe }));
+    await expect(current.client.getCurrentBlackjackHand()).resolves.toEqual({ hand: null, shoe });
     expect(call(current.fetchMock).url).toBe("http://api.test/games/blackjack/hands/current");
     expect(call(current.fetchMock).init?.method).toBe("GET");
 

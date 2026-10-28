@@ -20,6 +20,7 @@ import { stubServices } from "../../platform/services";
 import { InsufficientFundsError } from "../../wallet/wallet-service";
 import { settleAbandonedHand } from "./expiry";
 import { actOnBlackjackHand, startBlackjackHand } from "./game";
+import { getCurrentShoe } from "./shoe";
 import { getCurrentBlackjackHand, listBlackjackHistory } from "./view";
 
 // The hand flow runs against PostgreSQL (game.integration.test.ts); here the routes only have to
@@ -27,6 +28,7 @@ import { getCurrentBlackjackHand, listBlackjackHistory } from "./view";
 vi.mock("./game", () => ({ startBlackjackHand: vi.fn(), actOnBlackjackHand: vi.fn() }));
 vi.mock("./expiry", () => ({ settleAbandonedHand: vi.fn() }));
 vi.mock("./view", () => ({ getCurrentBlackjackHand: vi.fn(), listBlackjackHistory: vi.fn() }));
+vi.mock("./shoe", () => ({ getCurrentShoe: vi.fn() }));
 
 const config = {
   appEnv: "production" as const,
@@ -56,7 +58,16 @@ const fairness = {
   serverSeedHash: "a".repeat(64),
   clientSeed: "client",
   nonce: 3,
+  shoeId: randomUUID(),
+  cardOffset: 12,
 };
+const shoe = {
+  shoeId: fairness.shoeId,
+  size: 312,
+  cutCard: 234,
+  cardsDealt: 16,
+  reshuffle: false,
+} as const;
 const fields = { handId, stake: "1000", fairness };
 const cards: BlackjackCard[] = [
   { rank: "K", suit: "spades" },
@@ -166,7 +177,7 @@ describe("Blackjack routes", () => {
     });
 
     it("settles an abandoned hand, then starts one and answers 201", async () => {
-      vi.mocked(startBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "9000" });
+      vi.mocked(startBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "9000", shoe });
       const app = await build();
       const key = randomUUID();
       const res = await post(
@@ -179,6 +190,7 @@ describe("Blackjack routes", () => {
       expect(blackjackStartResponseSchema.parse(res.json())).toEqual({
         hand: inProgress,
         balance: "9000",
+        shoe,
       });
       expect(settleAbandonedHand).toHaveBeenCalledWith(
         expect.anything(),
@@ -198,7 +210,7 @@ describe("Blackjack routes", () => {
         playerHands: [{ cards, total, doubled: false, outcome: "blackjack", payout: "2500" }],
         payout: "2500",
       };
-      vi.mocked(startBlackjackHand).mockResolvedValue({ hand: natural, balance: "10500" });
+      vi.mocked(startBlackjackHand).mockResolvedValue({ hand: natural, balance: "10500", shoe });
       const app = await build();
       const res = await post(
         app,
@@ -244,7 +256,7 @@ describe("Blackjack routes", () => {
     });
 
     it("hands the action over and answers 200 without the hole card", async () => {
-      vi.mocked(actOnBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "9000" });
+      vi.mocked(actOnBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "9000", shoe });
       const app = await build();
       const res = await post(app, apiPaths.blackjackActions, { handId, action: "hit", index: 0 });
       expect(res.statusCode).toBe(200);
@@ -260,7 +272,7 @@ describe("Blackjack routes", () => {
     });
 
     it("hands a split over like any other action", async () => {
-      vi.mocked(actOnBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "8000" });
+      vi.mocked(actOnBlackjackHand).mockResolvedValue({ hand: inProgress, balance: "8000", shoe });
       const app = await build();
       const res = await post(app, apiPaths.blackjackActions, { handId, action: "split", index: 0 });
       expect(res.statusCode).toBe(200);
@@ -295,15 +307,21 @@ describe("Blackjack routes", () => {
   });
 
   describe("current and history", () => {
-    it("returns the hand in progress, or null", async () => {
+    it("returns the hand in progress, or null, with the shoe its cards come from", async () => {
       const app = await build();
       vi.mocked(getCurrentBlackjackHand).mockResolvedValueOnce(inProgress);
+      vi.mocked(getCurrentShoe).mockResolvedValueOnce(shoe);
       const one = await get(app, apiPaths.blackjackCurrent);
       expect(one.statusCode).toBe(200);
-      expect(blackjackCurrentResponseSchema.parse(one.json())).toEqual({ hand: inProgress });
+      expect(blackjackCurrentResponseSchema.parse(one.json())).toEqual({ hand: inProgress, shoe });
 
+      // No hand and no usable shoe: the next hand opens a new one.
       vi.mocked(getCurrentBlackjackHand).mockResolvedValueOnce(null);
-      expect((await get(app, apiPaths.blackjackCurrent)).json()).toEqual({ hand: null });
+      vi.mocked(getCurrentShoe).mockResolvedValueOnce(null);
+      expect((await get(app, apiPaths.blackjackCurrent)).json()).toEqual({
+        hand: null,
+        shoe: null,
+      });
       // Settled first, so an abandoned hand is never shown as in progress.
       expect(settleAbandonedHand).toHaveBeenCalledTimes(2);
     });
