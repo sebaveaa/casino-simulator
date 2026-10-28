@@ -550,3 +550,115 @@ describe("HTTP API client: Chicken Road and seed pair", () => {
     });
   });
 });
+
+describe("HTTP API client: Blackjack", () => {
+  const handId = crypto.randomUUID();
+  const fairness = {
+    seedPairId: crypto.randomUUID(),
+    serverSeedHash: "a".repeat(64),
+    clientSeed: "client",
+    nonce: 0,
+    shoeId: crypto.randomUUID(),
+    cardOffset: 0,
+  };
+  const shoe = {
+    shoeId: fairness.shoeId,
+    size: 312,
+    cutCard: 234,
+    cardsDealt: 4,
+    reshuffle: false,
+  };
+  const cards = [
+    { rank: "K", suit: "spades" },
+    { rank: "7", suit: "hearts" },
+  ];
+  const total = { total: 17, soft: false };
+  const inProgress = {
+    status: "player_turn",
+    handId,
+    stake: "1000",
+    fairness,
+    playerHands: [{ cards, total, doubled: false }],
+    activeHand: 0,
+    dealerUpCard: { rank: "9", suit: "clubs" },
+    actionCount: 0,
+    canDouble: true,
+    canSplit: false,
+  };
+  const settled = {
+    status: "settled",
+    handId,
+    stake: "1000",
+    fairness,
+    playerHands: [{ cards, total, doubled: false, outcome: "lose", payout: "0" }],
+    dealerCards: [
+      { rank: "9", suit: "clubs" },
+      { rank: "K", suit: "hearts" },
+    ],
+    dealerTotal: { total: 19, soft: false },
+    totalStake: "1000",
+    payout: "0",
+  };
+
+  function call(fetchMock: ReturnType<typeof setup>["fetchMock"]) {
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    return { url, init, headers: init?.headers as Record<string, string> };
+  }
+
+  it("starts a hand with the stake and the Idempotency-Key", async () => {
+    const { client, fetchMock } = setup(json({ hand: inProgress, balance: "9000", shoe }, 201));
+    const res = await client.startBlackjackHand({ stake: "1000" }, "key-00000001");
+    expect(res.hand.status).toBe("player_turn");
+    const { url, init, headers } = call(fetchMock);
+    expect(url).toBe("http://api.test/games/blackjack/hands");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(JSON.stringify({ stake: "1000" }));
+    expect(headers["idempotency-key"]).toBe("key-00000001");
+    expect(headers.authorization).toBe("Bearer tok");
+  });
+
+  it("plays an action by hand id and index, without an Idempotency-Key", async () => {
+    const { client, fetchMock } = setup(json({ hand: settled, balance: "9000", shoe }));
+    const body = { handId, action: "stand", index: 0 } as const;
+    await expect(client.playBlackjackAction(body)).resolves.toEqual({
+      hand: settled,
+      balance: "9000",
+      shoe,
+    });
+    const { url, init, headers } = call(fetchMock);
+    expect(url).toBe("http://api.test/games/blackjack/hands/current/actions");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(JSON.stringify(body));
+    expect(headers["idempotency-key"]).toBeUndefined();
+  });
+
+  it("reads the current hand and the history", async () => {
+    const current = setup(json({ hand: null, shoe }));
+    await expect(current.client.getCurrentBlackjackHand()).resolves.toEqual({ hand: null, shoe });
+    expect(call(current.fetchMock).url).toBe("http://api.test/games/blackjack/hands/current");
+    expect(call(current.fetchMock).init?.method).toBe("GET");
+
+    const history = setup(json({ hands: [settled] }));
+    await history.client.listBlackjackHistory({ limit: 20 });
+    expect(call(history.fetchMock).url).toBe("http://api.test/games/blackjack/hands?limit=20");
+    const defaults = setup(json({ hands: [] }));
+    await defaults.client.listBlackjackHistory();
+    expect(call(defaults.fetchMock).url).toBe("http://api.test/games/blackjack/hands");
+  });
+
+  it("rejects a hand in progress that leaks the hole card", async () => {
+    const { client } = setup(json({ hand: { ...inProgress, dealerCards: settled.dealerCards } }));
+    await expect(client.getCurrentBlackjackHand()).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  });
+
+  it("maps a 422 to an insufficient funds ApiError", async () => {
+    const { client } = setup(
+      json({ error: { code: "insufficient_funds", message: "Insufficient funds" } }, 422),
+    );
+    await expect(
+      client.playBlackjackAction({ handId, action: "double", index: 0 }),
+    ).rejects.toMatchObject({ code: "insufficient_funds", status: 422 });
+  });
+});

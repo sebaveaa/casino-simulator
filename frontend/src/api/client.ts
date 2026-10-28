@@ -1,6 +1,12 @@
 import type {
   AuthResponse,
   BalanceResponse,
+  BlackjackActionRequest,
+  BlackjackActionResponse,
+  BlackjackCurrentResponse,
+  BlackjackHistoryResponse,
+  BlackjackStartRequest,
+  BlackjackStartResponse,
   ChickenRoadCashoutRequest,
   ChickenRoadCashoutResponse,
   ChickenRoadCurrentResponse,
@@ -9,6 +15,13 @@ import type {
   ChickenRoadStartResponse,
   ChickenRoadStepRequest,
   ChickenRoadStepResponse,
+  CrashBetRequest,
+  CrashBetResponse,
+  CrashCashoutResponse,
+  CrashCurrentResponse,
+  CrashEvent,
+  CrashGame,
+  CrashHistoryResponse,
   CurrentRaceResponse,
   DepositRequest,
   DepositResponse,
@@ -72,4 +85,35 @@ export interface ApiClient {
   getCurrentChickenRoadGame(): Promise<ChickenRoadCurrentResponse>;
   /** Latest finished games, newest first; the server defaults `limit` to 5 (max 20). */
   listChickenRoadHistory(query?: { limit?: number }): Promise<ChickenRoadHistoryResponse>;
+  /** Starts a hand; a natural on either side answers it already settled. */
+  startBlackjackHand(
+    body: BlackjackStartRequest,
+    idempotencyKey: string,
+  ): Promise<BlackjackStartResponse>;
+  /** Plays one action at its `index`; repeating an index replays it. */
+  playBlackjackAction(body: BlackjackActionRequest): Promise<BlackjackActionResponse>;
+  getCurrentBlackjackHand(): Promise<BlackjackCurrentResponse>;
+  /** Latest settled hands, newest first; the server defaults `limit` to 5 (max 20). */
+  listBlackjackHistory(query?: { limit?: number }): Promise<BlackjackHistoryResponse>;
+  /** The current round of a Crash game, the caller's bet in it and the server clock. */
+  getCurrentCrash(game: CrashGame): Promise<CrashCurrentResponse>;
+  placeCrashBet(
+    game: CrashGame,
+    body: CrashBetRequest,
+    idempotencyKey: string,
+  ): Promise<CrashBetResponse>;
+  /** Cashes a bet out; the server decides the multiplier with its own clock. */
+  cashOutCrash(game: CrashGame, betId: string): Promise<CrashCashoutResponse>;
+  /**
+   * Subscribes to a Crash game's live events. `onStatus("connected")` fires on every (re)connection,
+   * and the caller should re-fetch `getCurrentCrash(game)` on each one after the first. Returns the
+   * function that closes the stream; it is safe to call more than once.
+   */
+  watchCrash(
+    game: CrashGame,
+    onEvent: (event: CrashEvent) => void,
+    onStatus?: (status: "connected" | "reconnecting") => void,
+  ): () => void;
+  /** Latest finished rounds of a Crash game, newest first; the server defaults `limit` to 20 (max 50). */
+  listCrashHistory(game: CrashGame, query?: { limit?: number }): Promise<CrashHistoryResponse>;
 }

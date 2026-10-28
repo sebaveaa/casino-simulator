@@ -1,15 +1,21 @@
+import { CRASH_GAMES } from "@casino/shared";
 import { createDatabase } from "../db/database";
 import type { Config } from "../platform/config";
 import { createPostgresPool } from "../platform/postgres";
 import { createRedisClient, pingRedis } from "../platform/redis";
 import type { Stoppable } from "../platform/run";
+import { createRedisCrashEventBus } from "../realtime/redis-crash-events";
 import { createRedisRaceEventBus } from "../realtime/redis-race-events";
 import { postgresWalletService } from "../wallet/postgres-wallet-service";
+import { advanceCrash } from "./crash-cycle";
 import { startLoop } from "./loop";
 import { advanceRaces } from "./race-cycle";
 
 /** Pause between the end of one race tick and the start of the next. */
 export const RACE_TICK_INTERVAL_MS = 1000;
+
+/** Pause between crash ticks; each crash game runs its own loop. */
+export const CRASH_TICK_INTERVAL_MS = 1000;
 
 /** The worker process: drives the race lifecycle and settlement (README §4.3, §12). */
 export async function startWorker(config: Config): Promise<Stoppable> {
@@ -34,11 +40,33 @@ export async function startWorker(config: Config): Promise<Stoppable> {
       onError: (error) => console.error("race tick failed:", error),
     },
   );
+
+  // One crash loop per game (dino-crash, aviator); they share the worker and the Redis publisher.
+  const crashEvents = createRedisCrashEventBus(redis, {
+    onError: (error) => console.error("crash event bus error:", error),
+  });
+  const crashLoops = CRASH_GAMES.map((game) =>
+    startLoop(
+      () =>
+        advanceCrash(db, game, {
+          wallet: postgresWalletService,
+          events: crashEvents,
+          // Same guard as races: without Redis no new round opens, bets already placed still settle.
+          canOpenRound: () => pingRedis(redis),
+        }),
+      {
+        intervalMs: CRASH_TICK_INTERVAL_MS,
+        onError: (error) => console.error(`crash tick failed (${game}):`, error),
+      },
+    ),
+  );
+
   console.log(`worker started (APP_ENV=${config.appEnv})`);
   return {
     stop: async () => {
-      await loop.stop();
+      await Promise.all([loop.stop(), ...crashLoops.map((crashLoop) => crashLoop.stop())]);
       await events.close();
+      await crashEvents.close();
       redis.disconnect();
       // Kysely ends the pool; ending it again throws "Called end on pool more than once".
       await db.destroy();

@@ -92,7 +92,8 @@ export class InsufficientFundsError extends AppError {
 /**
  * `transactions.idempotency_key` is globally unique, so the client's key is scoped by purpose
  * and user before it is stored. Purposes: `deposit`, `roulette-bet`, `roulette-payout`,
- * `chicken-road-bet`, and `payout` (keyed by bet id: the single payout of a stepped game).
+ * `chicken-road-bet`, `blackjack-bet`, `blackjack-double` (keyed by hand id: a hand doubles at
+ * most once), and `payout` (keyed by bet id: the single payout of a stepped game).
  */
 export function scopedKey(purpose: string, userId: string, key: string): string {
   return `${purpose}:${userId}:${key}`;

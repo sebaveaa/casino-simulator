@@ -1,24 +1,62 @@
 import {
   type AuthResponse,
   type BalanceResponse,
+  BLACKJACK_CUT_CARD,
+  BLACKJACK_HISTORY_DEFAULT_LIMIT,
+  BLACKJACK_HISTORY_MAX_LIMIT,
+  type BlackjackAction,
+  type BlackjackFairness,
+  type BlackjackHand,
+  type BlackjackShoe,
+  blackjackActionRequestSchema,
+  blackjackHandPayout,
+  blackjackPayout,
+  blackjackStartRequestSchema,
+  blackjackWagerCount,
   CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT,
   CHICKEN_ROAD_HISTORY_MAX_LIMIT,
   type ChickenRoadGame,
+  CRASH_BETTING_WINDOW_MS,
+  CRASH_HISTORY_DEFAULT_LIMIT,
+  CRASH_HISTORY_MAX_LIMIT,
+  CRASH_INTERMISSION_MS,
+  CRASH_MAX_STAKE,
+  CRASH_MIN_STAKE,
+  type CrashBetRequest,
+  type CrashBetResponse,
+  type CrashCashoutResponse,
+  type CrashCurrentResponse,
+  type CrashEvent,
+  type CrashGame,
+  type CrashHistoryResponse,
+  type CrashPlayerBet,
+  type CrashResult,
+  type CrashRound,
   type CurrentRaceResponse,
+  canCashOut,
   chickenRoad,
   chickenRoadPayout,
   chickenRoadStartRequestSchema,
   chickenRoadStepRequestSchema,
   computeOutcome,
   computeRoundOutcome,
+  crashPayout,
+  crashResultFromOutcome,
   createRng,
   type DepositRequest,
   type DepositResponse,
+  describeCard,
   type Fairness,
+  handValue,
   hashServerSeed,
+  impactAtMs,
   LANE_COUNT,
   type LoginRequest,
+  legalActions,
+  MAX_MULTIPLIER_HUNDREDTHS,
+  multiplierAtHundredths,
   parseAmount,
+  playHand,
   type RaceBetRequest,
   type RaceBetResponse,
   type RaceEvent,
@@ -30,7 +68,10 @@ import {
   racePayout,
   resolveRace,
   roulette,
+  roundCardCount,
+  SHOE_SIZE,
   selectionKey,
+  shuffleShoe,
   spinPayouts,
   type Transaction,
   type TransactionHistoryQueryInput,
@@ -41,6 +82,7 @@ import {
 } from "@casino/shared";
 import { createUnsignedJwt } from "../session/jwt";
 import { type ApiClient, ApiError } from "./client";
+import { newUuid } from "./uuid";
 
 const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
@@ -166,6 +208,65 @@ function chickenView(game: MockChickenGame): ChickenRoadGame {
   return { status: "cashed_out", ...base, lanesCrossed: game.lanes, payout: toAmount(game.payout) };
 }
 
+/** A Blackjack hand as the mock stores it; the shoe stays inside the mock. */
+type MockBlackjackHand = {
+  handId: string;
+  key: string;
+  /** The initial stake; a double charges it again. */
+  stake: bigint;
+  fairness: BlackjackFairness;
+  /** The hand's cards, from its first one: its shoe from `fairness.cardOffset` on. */
+  shoe: number[];
+  actions: BlackjackAction[];
+  payout: bigint | null;
+};
+
+/**
+ * The hand as the backend shows it (`backend/games/blackjack/view.ts`): in progress it carries
+ * only the dealer's up card, never the hole card or the shoe.
+ */
+function blackjackView(hand: MockBlackjackHand): BlackjackHand {
+  const state = playHand(hand.shoe, hand.actions);
+  const base = { handId: hand.handId, stake: toAmount(hand.stake), fairness: hand.fairness };
+  const cardsAndTotal = (cards: number[]) => ({
+    cards: cards.map(describeCard),
+    total: handValue(cards),
+  });
+  if (!state.finished) {
+    const legal = legalActions(state);
+    return {
+      status: "player_turn",
+      ...base,
+      playerHands: state.playerHands.map((h) => ({
+        ...cardsAndTotal(h.cards),
+        doubled: h.doubled,
+      })),
+      activeHand: state.active,
+      dealerUpCard: describeCard(state.dealerCards[0] as number),
+      actionCount: hand.actions.length,
+      canDouble: legal.includes("double"),
+      canSplit: legal.includes("split"),
+    };
+  }
+  return {
+    status: "settled",
+    ...base,
+    playerHands: state.playerHands.map((h) => {
+      const outcome = h.outcome ?? "lose";
+      return {
+        ...cardsAndTotal(h.cards),
+        doubled: h.doubled,
+        outcome,
+        payout: toAmount(blackjackHandPayout(hand.stake, { doubled: h.doubled, outcome })),
+      };
+    }),
+    dealerCards: state.dealerCards.map(describeCard),
+    dealerTotal: handValue(state.dealerCards),
+    totalStake: toAmount(hand.stake * blackjackWagerCount(hand.actions)),
+    payout: toAmount(hand.payout ?? 0n),
+  };
+}
+
 /**
  * In-memory `ApiClient` for developing screens without a backend. Roulette spins run the shared
  * rules (`validateSpin`, `roulette.resolve`, `spinPayouts`) over a fixed mock seed pair, so payouts match
@@ -178,12 +279,25 @@ function chickenView(game: MockChickenGame): ChickenRoadGame {
  *
  * `chickenRoads` lets tests fix the road: the hit lane (or `null` for none) of each next game, in
  * order. Once it runs out, the seed decides again.
+ *
+ * Blackjack mirrors the backend (#63, #65): one round in progress, the shoe from `shuffleShoe` over
+ * the same mock seed pair, replayed starts and actions by `index`, a split and each double charged
+ * once, a natural settled at the start, and a single payout over the hands. It has no abandonment timer. `blackjackShoes` lets
+ * tests and screens fix the deal: the stacked shoe of each next hand (player, dealer, player,
+ * dealer, then the draws), in order.
+ *
+ * Like the backend (#66), one shoe lasts across hands until the cut card: it takes one nonce,
+ * each hand starts where the one before stopped, and the hand that passes the cut finishes it.
+ * Stacked shoes still deal the next hands; their cards count as dealt from the shoe.
+ * `blackjackShoeDealt` starts the first shoe with that many cards dealt, to reach the cut quickly.
  */
 export function createMockApiClient(
   options: {
     delayMs?: number;
     startingBalance?: bigint;
     chickenRoads?: (number | null)[];
+    blackjackShoes?: number[][];
+    blackjackShoeDealt?: number;
     race?: MockRaceOptions;
   } = {},
 ): ApiClient {
@@ -194,6 +308,7 @@ export function createMockApiClient(
   const startDelayMs = options.race?.startDelayMs ?? 0;
   let balance = options.startingBalance ?? STARTING_BALANCE;
   const fixedRoads = [...(options.chickenRoads ?? [])];
+  const fixedShoes = [...(options.blackjackShoes ?? [])];
   const transactions: Transaction[] = [];
   const deposits = new Map<string, DepositResponse>();
   const bets = new Map<string, { request: RouletteBetRequest; response: RouletteBetResponse }>();
@@ -202,7 +317,7 @@ export function createMockApiClient(
   const users = new Map<string, { id: string; password: string }>();
 
   // The one Chicken Road seed pair, and the games in the order they started.
-  const seedPair = { id: crypto.randomUUID(), serverSeed: crypto.randomUUID(), nextNonce: 0 };
+  const seedPair = { id: newUuid(), serverSeed: newUuid(), nextNonce: 0 };
   const chickenGames: MockChickenGame[] = [];
 
   function findChickenGame(gameId: string): MockChickenGame {
@@ -225,6 +340,83 @@ export function createMockApiClient(
     balance: toAmount(balance),
   });
 
+  // Blackjack hands in the order they started, drawn from the same seed pair.
+  const blackjackHands: MockBlackjackHand[] = [];
+  // The player's shoe: its cards stay in the mock, like the backend's never leave the server.
+  let blackjackShoe: {
+    id: string;
+    nonce: number;
+    cards: number[];
+    next: number;
+    finished: boolean;
+  } | null = null;
+  let firstShoeDealt = options.blackjackShoeDealt ?? 0;
+
+  /** The active shoe, or a new one from the next nonce once there is none or it is finished. */
+  async function takeShoe() {
+    if (blackjackShoe && !blackjackShoe.finished) return blackjackShoe;
+    const nonce = seedPair.nextNonce++;
+    const seed = { serverSeed: seedPair.serverSeed, clientSeed: MOCK_CLIENT_SEED, nonce };
+    blackjackShoe = {
+      id: newUuid(),
+      nonce,
+      cards: shuffleShoe(createRng(await computeOutcome(seed))),
+      // Below the cut: a hand always starts before it.
+      next: Math.min(firstShoeDealt, BLACKJACK_CUT_CARD - 1),
+      finished: false,
+    };
+    firstShoeDealt = 0;
+    return blackjackShoe;
+  }
+
+  /** How much of the hand's shoe is dealt, as the backend answers it (`shoeOfHand`). */
+  function shoeOfHand(hand: MockBlackjackHand): BlackjackShoe | null {
+    const shoe = blackjackShoe;
+    if (!shoe || shoe.id !== hand.fairness.shoeId) return null;
+    const state = playHand(hand.shoe, hand.actions);
+    const progress = { shoeId: shoe.id, size: SHOE_SIZE, cutCard: BLACKJACK_CUT_CARD } as const;
+    if (!state.finished) {
+      return {
+        ...progress,
+        cardsDealt: hand.fairness.cardOffset + roundCardCount(state),
+        reshuffle: false,
+      };
+    }
+    return { ...progress, cardsDealt: shoe.next, reshuffle: shoe.finished };
+  }
+
+  function findBlackjackHand(handId: string): MockBlackjackHand {
+    const hand = blackjackHands.find((h) => h.handId === handId);
+    if (!hand) throw new ApiError("not_found", "Blackjack hand not found", 404);
+    return hand;
+  }
+
+  /** Settles a finished hand once; a positive payout goes to the balance as one `payout`. */
+  function settleBlackjackIfOver(hand: MockBlackjackHand): void {
+    const state = playHand(hand.shoe, hand.actions);
+    if (!state.finished || hand.payout !== null) return;
+    const playerHands = state.playerHands.map((h) => ({
+      doubled: h.doubled,
+      outcome: h.outcome ?? "lose",
+    }));
+    hand.payout = blackjackPayout(hand.stake, { playerHands });
+    // The shoe moves past the round; passing the cut card finishes it.
+    if (blackjackShoe && blackjackShoe.id === hand.fairness.shoeId) {
+      blackjackShoe.next = hand.fairness.cardOffset + roundCardCount(state);
+      if (blackjackShoe.next >= BLACKJACK_CUT_CARD) blackjackShoe.finished = true;
+    }
+    if (hand.payout > 0n) {
+      balance += hand.payout;
+      record("payout", hand.payout, hand.handId);
+    }
+  }
+
+  const blackjackResponse = (hand: MockBlackjackHand) => ({
+    hand: blackjackView(hand),
+    balance: toAmount(balance),
+    shoe: shoeOfHand(hand),
+  });
+
   const session = (id: string, email: string): AuthResponse => ({
     token: createUnsignedJwt({
       sub: id,
@@ -235,7 +427,7 @@ export function createMockApiClient(
   });
 
   function record(type: Transaction["type"], amount: bigint, betId: string | null): string {
-    const id = crypto.randomUUID();
+    const id = newUuid();
     transactions.push({
       id,
       type,
@@ -289,7 +481,7 @@ export function createMockApiClient(
     const now = Date.now();
     const serverSeed = randomHex(32);
     const next: MockRound = {
-      id: crypto.randomUUID(),
+      id: newUuid(),
       status: "open",
       opensAt: now,
       closesAt: now + windowMs,
@@ -344,6 +536,165 @@ export function createMockApiClient(
     else raceReady = openRound();
   }
 
+  // Crash: one round state machine per game (dino-crash, aviator), driven by timers, each with the
+  // real derivation and rules of `shared`, so the screen works with no backend. Nothing runs until
+  // the game's first crash call.
+  interface MockCrashRound {
+    id: string;
+    status: CrashRound["status"];
+    opensAt: number;
+    closesAt: number;
+    serverSeed: string;
+    serverSeedHash: string;
+    /** Set at takeoff; exposed to the view only once the round is resolved. */
+    result: CrashResult | null;
+  }
+  interface MockCrashBet {
+    betId: string;
+    stake: bigint;
+    status: "pending" | "settled";
+    cashoutHundredths: number | null;
+    payout: bigint | null;
+  }
+  interface MockCrashGameState {
+    started: boolean;
+    round: MockCrashRound | null;
+    myBet: MockCrashBet | null;
+    history: MockCrashRound[];
+    listeners: Set<(event: CrashEvent) => void>;
+    ready: Promise<void>;
+    betKeys: Map<string, CrashBetResponse>;
+  }
+
+  const crashStates = new Map<CrashGame, MockCrashGameState>();
+  const crashState = (game: CrashGame): MockCrashGameState => {
+    let state = crashStates.get(game);
+    if (!state) {
+      state = {
+        started: false,
+        round: null,
+        myBet: null,
+        history: [],
+        listeners: new Set(),
+        ready: Promise.resolve(),
+        betKeys: new Map(),
+      };
+      crashStates.set(game, state);
+    }
+    return state;
+  };
+
+  const crashEmit = (game: CrashGame, event: CrashEvent) => {
+    for (const listener of [...crashState(game).listeners]) listener(event);
+  };
+  const crashSchedule = (game: CrashGame, fn: () => Promise<void> | void, ms: number) =>
+    setTimeout(() => {
+      crashState(game).ready = Promise.resolve(fn());
+    }, ms);
+
+  function crashViewOf(r: MockCrashRound): CrashRound {
+    const base = {
+      id: r.id,
+      opensAt: new Date(r.opensAt).toISOString(),
+      closesAt: new Date(r.closesAt).toISOString(),
+      serverSeedHash: r.serverSeedHash,
+    };
+    if ((r.status === "resolved" || r.status === "settled") && r.result) {
+      return { ...base, status: r.status, result: r.result, serverSeed: r.serverSeed };
+    }
+    return { ...base, status: r.status };
+  }
+
+  const crashBetView = (b: MockCrashBet): CrashPlayerBet => ({
+    betId: b.betId,
+    stake: toAmount(b.stake),
+    status: b.status,
+    cashoutHundredths: b.cashoutHundredths,
+    payout: b.payout === null ? null : toAmount(b.payout),
+  });
+
+  async function openCrashRound(game: CrashGame) {
+    const state = crashState(game);
+    const now = Date.now();
+    const serverSeed = randomHex(32);
+    const next: MockCrashRound = {
+      id: newUuid(),
+      status: "open",
+      opensAt: now,
+      closesAt: now + CRASH_BETTING_WINDOW_MS,
+      serverSeed,
+      serverSeedHash: await hashServerSeed(serverSeed),
+      result: null,
+    };
+    state.round = next;
+    state.myBet = null;
+    crashEmit(game, { type: "opened", round: crashViewOf(next) });
+    crashSchedule(game, () => takeoffCrash(game), CRASH_BETTING_WINDOW_MS);
+  }
+
+  async function takeoffCrash(game: CrashGame) {
+    const state = crashState(game);
+    const current = state.round;
+    if (!current) return;
+    current.status = "closed";
+    // The impact point is fixed at takeoff from the seed, kept secret until it is reached.
+    current.result = crashResultFromOutcome(
+      await computeRoundOutcome(current.serverSeed, current.id),
+    );
+    crashEmit(game, {
+      type: "takeoff",
+      roundId: current.id,
+      startedAt: new Date(current.closesAt).toISOString(),
+    });
+    crashSchedule(game, () => resolveCrashRound(game), impactAtMs(current.result.crashHundredths));
+  }
+
+  function resolveCrashRound(game: CrashGame) {
+    const state = crashState(game);
+    const current = state.round;
+    if (!current?.result) return;
+    current.status = "resolved";
+    crashEmit(game, {
+      type: "impact",
+      roundId: current.id,
+      result: current.result,
+      serverSeed: current.serverSeed,
+    });
+    crashSchedule(game, () => settleCrashRound(game), 0);
+  }
+
+  function settleCrashRound(game: CrashGame) {
+    const state = crashState(game);
+    const current = state.round;
+    if (!current?.result) return;
+    const bet = state.myBet;
+    // A bet that did not cash out loses on an impact, or is paid 20.00x when the round capped.
+    if (bet && bet.status === "pending") {
+      if (current.result.outcome === "cap") {
+        const payout = crashPayout(bet.stake, MAX_MULTIPLIER_HUNDREDTHS);
+        bet.status = "settled";
+        bet.cashoutHundredths = MAX_MULTIPLIER_HUNDREDTHS;
+        bet.payout = payout;
+        balance += payout;
+        record("payout", payout, bet.betId);
+      } else {
+        bet.status = "settled";
+        bet.payout = 0n;
+      }
+    }
+    current.status = "settled";
+    state.history.push(current);
+    crashEmit(game, { type: "settled", roundId: current.id });
+    crashSchedule(game, () => openCrashRound(game), CRASH_INTERMISSION_MS);
+  }
+
+  function ensureCrash(game: CrashGame) {
+    const state = crashState(game);
+    if (state.started) return;
+    state.started = true;
+    state.ready = openCrashRound(game);
+  }
+
   return {
     async register(body: RegisterRequest) {
       await sleep(delayMs);
@@ -351,7 +702,7 @@ export function createMockApiClient(
       if (users.has(email)) {
         throw new ApiError("conflict", "An account with this email already exists", 409);
       }
-      const id = crypto.randomUUID();
+      const id = newUuid();
       users.set(email, { id, password: body.password });
       return session(id, email);
     },
@@ -422,13 +773,13 @@ export function createMockApiClient(
         throw new ApiError("insufficient_funds", "Insufficient funds", 422);
       }
       const seed = {
-        serverSeed: crypto.randomUUID(),
+        serverSeed: newUuid(),
         clientSeed: MOCK_CLIENT_SEED,
         nonce: bets.size,
       };
       const result = roulette.resolve(spin[0] ?? never(), createRng(await computeOutcome(seed)));
       const { payouts, total: payout } = spinPayouts(spin, result);
-      const betId = crypto.randomUUID();
+      const betId = newUuid();
       balance -= stake;
       record("bet", -stake, betId);
       if (payout > 0n) {
@@ -443,7 +794,7 @@ export function createMockApiClient(
         payout: toAmount(payout),
         balance: toAmount(balance),
         fairness: {
-          seedPairId: crypto.randomUUID(),
+          seedPairId: newUuid(),
           serverSeedHash: await hashServerSeed(seed.serverSeed),
           clientSeed: seed.clientSeed,
           nonce: seed.nonce,
@@ -514,7 +865,7 @@ export function createMockApiClient(
       if (stake > balance) {
         throw new ApiError("insufficient_funds", "Insufficient funds", 422);
       }
-      const betId = crypto.randomUUID();
+      const betId = newUuid();
       balance -= stake;
       record("bet", -stake, betId);
       myBet = { betId, animal: body.animal, stake, payout: null };
@@ -576,7 +927,7 @@ export function createMockApiClient(
         createRng(await computeOutcome(seed)),
       );
       const game: MockChickenGame = {
-        gameId: crypto.randomUUID(),
+        gameId: newUuid(),
         key: idempotencyKey,
         stake,
         fairness: {
@@ -652,6 +1003,221 @@ export function createMockApiClient(
         .map(chickenView)
         .flatMap((game) => (game.status === "in_progress" ? [] : [game]));
       return { games };
+    },
+    async startBlackjackHand(body, idempotencyKey) {
+      await sleep(delayMs);
+      const parsed = blackjackStartRequestSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new ApiError("invalid_request", "Stake must be between 10 and 500 credits", 400);
+      }
+      const stake = parseAmount(parsed.data.stake);
+
+      // A retry returns the hand as it is now, in either state, like the backend.
+      const previous = blackjackHands.find((h) => h.key === idempotencyKey);
+      if (previous) {
+        if (previous.stake !== stake) {
+          throw conflict("Idempotency-Key was already used for a different stake");
+        }
+        return blackjackResponse(previous);
+      }
+      if (blackjackHands.some((h) => h.payout === null)) {
+        throw conflict("A Blackjack hand is already in progress");
+      }
+      if (stake > balance) throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+
+      const shoe = await takeShoe();
+      const hand: MockBlackjackHand = {
+        handId: newUuid(),
+        key: idempotencyKey,
+        stake,
+        fairness: {
+          seedPairId: seedPair.id,
+          serverSeedHash: await hashServerSeed(seedPair.serverSeed),
+          clientSeed: MOCK_CLIENT_SEED,
+          nonce: shoe.nonce,
+          shoeId: shoe.id,
+          cardOffset: shoe.next,
+        },
+        shoe: fixedShoes.shift() ?? shoe.cards.slice(shoe.next),
+        actions: [],
+        payout: null,
+      };
+      blackjackHands.push(hand);
+      balance -= stake;
+      record("bet", -stake, hand.handId);
+      settleBlackjackIfOver(hand);
+      return blackjackResponse(hand);
+    },
+    async playBlackjackAction(body) {
+      await sleep(delayMs);
+      const parsed = blackjackActionRequestSchema.safeParse(body);
+      if (!parsed.success) throw new ApiError("invalid_request", "Invalid action", 400);
+      const { handId, action, index } = parsed.data;
+      const hand = findBlackjackHand(handId);
+
+      // An index already played replays the hand, if it names the same action.
+      const played = hand.actions[index];
+      if (played) {
+        if (played !== action) throw conflict(`Action ${index} was already played as "${played}"`);
+        return blackjackResponse(hand);
+      }
+      if (hand.payout !== null) throw conflict("This Blackjack hand already finished");
+      if (index !== hand.actions.length) {
+        throw conflict(`The next action is number ${hand.actions.length}`);
+      }
+      if (!legalActions(playHand(hand.shoe, hand.actions)).includes(action)) {
+        throw conflict(`"${action}" is not allowed in this hand now`);
+      }
+      // A split and each double put the initial stake on the table again.
+      if (action === "split" || action === "double") {
+        if (hand.stake > balance)
+          throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+        balance -= hand.stake;
+        record("bet", -hand.stake, hand.handId);
+      }
+      hand.actions.push(action);
+      settleBlackjackIfOver(hand);
+      return blackjackResponse(hand);
+    },
+    async getCurrentBlackjackHand() {
+      await sleep(delayMs);
+      const hand = blackjackHands.find((h) => h.payout === null);
+      const view = hand ? blackjackView(hand) : null;
+      const active = blackjackShoe && !blackjackShoe.finished ? blackjackShoe : null;
+      const shoe: BlackjackShoe | null = hand
+        ? shoeOfHand(hand)
+        : active && {
+            shoeId: active.id,
+            size: SHOE_SIZE,
+            cutCard: BLACKJACK_CUT_CARD,
+            cardsDealt: active.next,
+            reshuffle: false,
+          };
+      return { hand: view?.status === "player_turn" ? view : null, shoe };
+    },
+    async listBlackjackHistory(query = {}) {
+      await sleep(delayMs);
+      const limit = query.limit ?? BLACKJACK_HISTORY_DEFAULT_LIMIT;
+      if (!Number.isInteger(limit) || limit < 1 || limit > BLACKJACK_HISTORY_MAX_LIMIT) {
+        throw new ApiError("invalid_request", "Invalid history limit", 400);
+      }
+      const hands = [...blackjackHands]
+        .reverse()
+        .filter((h) => h.payout !== null)
+        .slice(0, limit)
+        .map(blackjackView)
+        .flatMap((hand) => (hand.status === "settled" ? [hand] : []));
+      return { hands };
+    },
+    async getCurrentCrash(game: CrashGame): Promise<CrashCurrentResponse> {
+      ensureCrash(game);
+      const state = crashState(game);
+      await state.ready;
+      await sleep(delayMs);
+      return {
+        round: state.round ? crashViewOf(state.round) : null,
+        myBet: state.myBet ? crashBetView(state.myBet) : null,
+        now: new Date().toISOString(),
+        limits: { minStake: toAmount(CRASH_MIN_STAKE), maxStake: toAmount(CRASH_MAX_STAKE) },
+      };
+    },
+    async placeCrashBet(
+      game: CrashGame,
+      body: CrashBetRequest,
+      idempotencyKey: string,
+    ): Promise<CrashBetResponse> {
+      ensureCrash(game);
+      const state = crashState(game);
+      await state.ready;
+      await sleep(delayMs);
+      const previous = state.betKeys.get(idempotencyKey);
+      if (previous) {
+        if (previous.roundId !== body.roundId || previous.stake !== body.stake) {
+          throw conflict("Idempotency-Key was already used for a different bet");
+        }
+        return { ...previous, balance: toAmount(balance) };
+      }
+      const stake = stakeAmount(body.stake);
+      if (stake === null || stake < CRASH_MIN_STAKE || stake > CRASH_MAX_STAKE) {
+        throw new ApiError("invalid_request", "Invalid crash bet", 400);
+      }
+      const round = state.round;
+      if (
+        !round ||
+        round.id !== body.roundId ||
+        round.status !== "open" ||
+        Date.now() >= round.closesAt
+      ) {
+        throw new ApiError("invalid_request", "The round is not open for bets", 400);
+      }
+      if (state.myBet) throw conflict("You already placed a bet in this round");
+      if (stake > balance) throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+
+      const betId = newUuid();
+      balance -= stake;
+      record("bet", -stake, betId);
+      state.myBet = { betId, stake, status: "pending", cashoutHundredths: null, payout: null };
+      const response: CrashBetResponse = {
+        betId,
+        roundId: round.id,
+        stake: toAmount(stake),
+        balance: toAmount(balance),
+      };
+      state.betKeys.set(idempotencyKey, response);
+      return response;
+    },
+    async cashOutCrash(game: CrashGame, betId: string): Promise<CrashCashoutResponse> {
+      ensureCrash(game);
+      const state = crashState(game);
+      await state.ready;
+      await sleep(delayMs);
+      const bet = state.myBet;
+      if (!bet || bet.betId !== betId) throw new ApiError("not_found", "Bet not found", 404);
+      if (bet.status === "settled") {
+        if (bet.cashoutHundredths !== null && bet.payout !== null && bet.payout > 0n) {
+          return {
+            betId,
+            cashoutHundredths: bet.cashoutHundredths,
+            payout: toAmount(bet.payout),
+            balance: toAmount(balance),
+          };
+        }
+        throw new ApiError("invalid_request", "The round already crashed", 400);
+      }
+      const round = state.round;
+      if (!round?.result || round.status === "open") {
+        throw new ApiError("invalid_request", "The round has not taken off yet", 400);
+      }
+      const elapsedMs = Date.now() - round.closesAt;
+      if (!canCashOut(elapsedMs, round.result.crashHundredths)) {
+        throw new ApiError("invalid_request", "The round already crashed", 400);
+      }
+      const cashoutHundredths = multiplierAtHundredths(elapsedMs);
+      const payout = crashPayout(bet.stake, cashoutHundredths);
+      bet.status = "settled";
+      bet.cashoutHundredths = cashoutHundredths;
+      bet.payout = payout;
+      balance += payout;
+      record("payout", payout, betId);
+      return { betId, cashoutHundredths, payout: toAmount(payout), balance: toAmount(balance) };
+    },
+    watchCrash(game: CrashGame, onEvent, onStatus) {
+      const state = crashState(game);
+      state.listeners.add(onEvent);
+      ensureCrash(game);
+      onStatus?.("connected");
+      return () => {
+        state.listeners.delete(onEvent);
+      };
+    },
+    async listCrashHistory(game: CrashGame, query = {}): Promise<CrashHistoryResponse> {
+      await sleep(delayMs);
+      const limit = query.limit ?? CRASH_HISTORY_DEFAULT_LIMIT;
+      if (!Number.isInteger(limit) || limit < 1 || limit > CRASH_HISTORY_MAX_LIMIT) {
+        throw new ApiError("invalid_request", "Invalid history limit", 400);
+      }
+      const rounds = [...crashState(game).history].reverse().slice(0, limit).map(crashViewOf);
+      return { rounds };
     },
   };
 }

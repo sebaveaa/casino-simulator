@@ -1,0 +1,388 @@
+/* Crash games (Dino Crash, Despegue). Only the existing tokens from styles.css are used. */
+
+.crash {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+
+.crash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 20px;
+}
+.crash-head h1 {
+  margin: 0;
+  font-family: var(--font-ui);
+}
+.crash-pill-live {
+  font-weight: 700;
+  padding: 4px 12px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+}
+.crash-sticker {
+  font-weight: 700;
+  padding: 4px 12px;
+  border: var(--outline);
+  border-radius: var(--radius-pill);
+  background: var(--sun);
+  box-shadow: var(--shadow-sm);
+}
+.crash-balance {
+  margin: 0;
+  flex-basis: 100%;
+}
+.crash-connection {
+  margin: 0;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+.crash-main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+@media (min-width: 720px) {
+  .crash-main {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
+  }
+}
+
+.crash-stage {
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  background: var(--chalk);
+  padding: 16px;
+}
+.crash-status {
+  min-height: 3.2em;
+}
+.crash-phase {
+  margin: 0;
+  font-weight: 700;
+}
+.crash-outcome {
+  margin: 4px 0 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.crash-takeoff {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.crash-multiplier {
+  font-family: var(--font-amount);
+  font-size: clamp(2.6rem, 12vw, 4.5rem);
+  font-weight: 700;
+  margin: 8px 0;
+  text-align: center;
+  color: var(--ink);
+}
+.crash-multiplier[data-tone="impact"] {
+  color: var(--tomato);
+}
+.crash-multiplier[data-tone="cap"] {
+  color: var(--sun);
+  -webkit-text-stroke: 1px var(--ink);
+}
+
+/* Scene */
+.crash-scene {
+  border: var(--outline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--tomato);
+}
+.crash-scene-dino[data-phase="cap"] {
+  background: var(--sun);
+}
+.crash-scene-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.crash-ground {
+  fill: var(--sun);
+}
+.crash-scene-dino[data-phase="cap"] .crash-ground {
+  fill: var(--chalk);
+}
+.crash-dino {
+  fill: var(--chalk);
+}
+.crash-dino-eye {
+  fill: var(--ink);
+}
+.crash-meteor line {
+  stroke: var(--chalk);
+}
+.crash-meteor circle {
+  fill: var(--ink);
+}
+/* Running legs: the two hind legs lift out of phase while the round is flying. */
+.crash-dino-leg {
+  transform-box: fill-box;
+  transform-origin: top;
+}
+.crash-scene-dino[data-phase="flying"] .crash-dino-leg-a {
+  animation: crash-step 0.28s steps(2) infinite;
+}
+.crash-scene-dino[data-phase="flying"] .crash-dino-leg-b {
+  animation: crash-step 0.28s steps(2) infinite reverse;
+}
+.crash-scene-dino[data-phase="flying"] .crash-dino {
+  animation: crash-bob 0.56s ease-in-out infinite;
+}
+@keyframes crash-step {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-5px);
+  }
+}
+@keyframes crash-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* History */
+.crash-history {
+  margin-top: 16px;
+}
+.crash-history-title {
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+.crash-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.crash-pill {
+  font-family: var(--font-amount);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
+}
+.crash-pill[data-tone="sun"] {
+  background: var(--sun);
+}
+.crash-pill[data-tone="tomato"] {
+  background: var(--tomato);
+  color: var(--chalk);
+}
+
+/* Side panel */
+.crash-side {
+  border: var(--outline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  background: var(--chalk);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.crash-bet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.crash-bet-label {
+  font-weight: 700;
+}
+.crash-bet-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crash-stake {
+  flex: 1;
+  font-size: 1.2rem;
+  padding: 8px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+}
+.crash-bet-unit {
+  color: var(--muted);
+}
+.crash-quick {
+  display: flex;
+  gap: 8px;
+}
+.crash-quick-button {
+  flex: 1;
+  padding: 6px 0;
+}
+.crash-bet-submit {
+  width: 100%;
+}
+.crash-cashout {
+  width: 100%;
+  background: var(--sun);
+  font-size: 1.15rem;
+}
+.crash-cashout-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+.crash-cashout-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.crash-howto {
+  margin: 0;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--lilac);
+  font-size: 0.85rem;
+}
+.crash-panel-msg {
+  margin: 0;
+  font-weight: 700;
+}
+/* The focus ring is always visible on the interactive controls. */
+.crash-cashout:focus-visible,
+.crash-bet-submit:focus-visible,
+.crash-quick-button:focus-visible,
+.crash-stake:focus-visible {
+  outline: var(--outline);
+  outline-offset: 2px;
+}
+.crash-field-error,
+.crash-error {
+  color: var(--tomato);
+  font-weight: 700;
+  margin: 0;
+}
+.crash-wait-box {
+  border: 3px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+}
+.crash-bet-summary {
+  margin: 0;
+  font-weight: 700;
+}
+.crash-result {
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.crash-result p {
+  margin: 8px 0 0;
+}
+.crash-result-win {
+  background: var(--sun);
+}
+.crash-result-loss {
+  background: var(--tomato);
+  color: var(--chalk);
+}
+.crash-sticker-win,
+.crash-sticker-loss {
+  font-weight: 800;
+}
+
+/* Fairness */
+.crash-fairness {
+  border-top: 2px solid var(--outline);
+  padding-top: 8px;
+}
+.crash-fairness summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.crash-fairness-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.crash-fairness dd {
+  font-size: 0.75rem;
+  word-break: break-all;
+  margin: 0 0 8px;
+}
+.crash-fairness-link {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Despegue scene: ink sky, tomato curve, sun plane. */
+.crash-scene-plane {
+  background: var(--ink);
+}
+.crash-curve {
+  stroke: var(--tomato);
+  stroke-linecap: round;
+}
+.crash-plane {
+  fill: var(--sun);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(8px, 84px) rotate(-12deg);
+}
+.crash-plane-tail {
+  fill: var(--sun);
+}
+.crash-plane-wing {
+  fill: var(--chalk);
+}
+.crash-plane-window {
+  fill: var(--ink);
+}
+.crash-cloud {
+  fill: var(--chalk);
+}
+.crash-scene-plane[data-phase="flying"] .crash-plane {
+  animation: crash-climb 1.4s var(--ease-spring) forwards;
+}
+@keyframes crash-climb {
+  from {
+    transform: translate(8px, 84px) rotate(-8deg);
+  }
+  to {
+    transform: translate(140px, 14px) rotate(-22deg);
+  }
+}
+.crash-scene-plane[data-phase="impact"] .crash-plane,
+.crash-scene-plane[data-phase="cap"] .crash-plane {
+  transform: translate(160px, 10px) rotate(-22deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crash-scene-dino[data-phase="flying"] .crash-dino,
+  .crash-scene-dino[data-phase="flying"] .crash-dino-leg-a,
+  .crash-scene-dino[data-phase="flying"] .crash-dino-leg-b {
+    animation: none;
+  }
+  .crash-scene-plane[data-phase="flying"] .crash-plane {
+    animation: none;
+    transform: translate(80px, 52px) rotate(-16deg);
+  }
+}

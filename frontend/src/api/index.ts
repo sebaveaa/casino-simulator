@@ -20,5 +20,9 @@ export function createApiClient(session: SessionStore): ApiClient {
       onUnauthorized: () => session.clear(),
     });
   }
-  return createMockApiClient({ delayMs: 150 });
+  const shoeDealt = Number(import.meta.env.VITE_MOCK_BLACKJACK_SHOE_DEALT ?? 0);
+  return createMockApiClient({
+    delayMs: 150,
+    blackjackShoeDealt: Number.isInteger(shoeDealt) && shoeDealt > 0 ? shoeDealt : 0,
+  });
 }

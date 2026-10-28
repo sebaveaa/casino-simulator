@@ -8,6 +8,7 @@ import {
 } from "@casino/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, useApi } from "../../api";
+import { newUuid } from "../../api/uuid";
 import { useApplyBalance, useRefreshBalance } from "../../app/useBalance";
 import { betErrorMessage } from "../betErrorMessage";
 import { prefersReducedMotion } from "../roulette/motion";
@@ -177,7 +178,7 @@ export function useChickenRoad() {
     return run(() =>
       guarded(async () => {
         if (pendingKey.current?.stake !== stake) {
-          pendingKey.current = { stake, key: crypto.randomUUID() };
+          pendingKey.current = { stake, key: newUuid() };
         }
         const { key } = pendingKey.current;
         try {

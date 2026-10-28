@@ -87,6 +87,10 @@ export interface BetsTable {
   selection: Json;
   /** Blackjack decisions; Chicken Road lanes attempted. */
   actions: Json | null;
+  /** Blackjack: the shoe the hand is dealt from (null for hands from before #66). */
+  shoe_id: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Blackjack: the place of the hand's first card in its shoe; set with `shoe_id`. */
+  card_offset: ColumnType<number | null, number | null | undefined, number | null>;
   result: Json | null;
   payout: ColumnType<bigint | null, bigint | null | undefined, bigint | null>;
   status: BetStatus;
@@ -112,12 +116,34 @@ export interface LedgerEntriesTable {
   created_at: CreatedAt;
 }
 
+export type BlackjackShoeStatus = "active" | "finished";
+export type BlackjackShoeEndReason = "cut_card" | "seed_rotated";
+
+/**
+ * A player's Blackjack shoe (#66): one nonce of a seed pair, dealt across hands until the cut
+ * card. Its order is recomputed from the seeds; only its position is stored.
+ */
+export interface BlackjackShoesTable {
+  id: Generated<string>;
+  user_id: string;
+  seed_pair_id: string;
+  nonce: number;
+  cut_card: number;
+  /** Offset of the next hand's first card; advanced when a hand settles. */
+  next_card: Generated<number>;
+  status: ColumnType<BlackjackShoeStatus, BlackjackShoeStatus | undefined, BlackjackShoeStatus>;
+  end_reason: BlackjackShoeEndReason | null;
+  created_at: CreatedAt;
+  finished_at: Date | null;
+}
+
 export interface Database {
   users: UsersTable;
   wallets: WalletsTable;
   seed_pairs: SeedPairsTable;
   game_rounds: GameRoundsTable;
   bets: BetsTable;
+  blackjack_shoes: BlackjackShoesTable;
   transactions: TransactionsTable;
   ledger_entries: LedgerEntriesTable;
 }
