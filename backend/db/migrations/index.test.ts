@@ -21,6 +21,10 @@ describe("migrations", () => {
     expect(Object.keys(migrations)).toContain("0007_race_round_partial_indexes");
   });
 
+  it("registers the blackjack migration", () => {
+    expect(Object.keys(migrations)).toContain("0008_blackjack");
+  });
+
   it("gives every migration an up and a down", () => {
     for (const migration of Object.values(migrations)) {
       expect(migration.up).toBeTypeOf("function");
