@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { ApiError, useApi } from "../api";
+import { newUuid } from "../api/uuid";
 import { BALANCE_LOADING, useApplyBalance, useBalance, useRefreshBalance } from "../app/useBalance";
 import { animalName } from "./races/animals";
 import { BetPanel } from "./races/BetPanel";
@@ -186,7 +187,7 @@ export function RacesPage() {
     const request = { roundId: round.id, animal: selected, stake };
     const signature = JSON.stringify(request);
     if (pendingKey.current?.signature !== signature) {
-      pendingKey.current = { signature, key: crypto.randomUUID() };
+      pendingKey.current = { signature, key: newUuid() };
     }
     const { key } = pendingKey.current;
 

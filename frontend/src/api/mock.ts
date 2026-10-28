@@ -41,6 +41,7 @@ import {
 } from "@casino/shared";
 import { createUnsignedJwt } from "../session/jwt";
 import { type ApiClient, ApiError } from "./client";
+import { newUuid } from "./uuid";
 
 const STARTING_BALANCE = 100000n;
 const TOKEN_LIFETIME_SECONDS = 3600;
@@ -235,7 +236,7 @@ export function createMockApiClient(
   });
 
   function record(type: Transaction["type"], amount: bigint, betId: string | null): string {
-    const id = crypto.randomUUID();
+    const id = newUuid();
     transactions.push({
       id,
       type,
@@ -289,7 +290,7 @@ export function createMockApiClient(
     const now = Date.now();
     const serverSeed = randomHex(32);
     const next: MockRound = {
-      id: crypto.randomUUID(),
+      id: newUuid(),
       status: "open",
       opensAt: now,
       closesAt: now + windowMs,
@@ -351,7 +352,7 @@ export function createMockApiClient(
       if (users.has(email)) {
         throw new ApiError("conflict", "An account with this email already exists", 409);
       }
-      const id = crypto.randomUUID();
+      const id = newUuid();
       users.set(email, { id, password: body.password });
       return session(id, email);
     },
@@ -422,13 +423,13 @@ export function createMockApiClient(
         throw new ApiError("insufficient_funds", "Insufficient funds", 422);
       }
       const seed = {
-        serverSeed: crypto.randomUUID(),
+        serverSeed: newUuid(),
         clientSeed: MOCK_CLIENT_SEED,
         nonce: bets.size,
       };
       const result = roulette.resolve(spin[0] ?? never(), createRng(await computeOutcome(seed)));
       const { payouts, total: payout } = spinPayouts(spin, result);
-      const betId = crypto.randomUUID();
+      const betId = newUuid();
       balance -= stake;
       record("bet", -stake, betId);
       if (payout > 0n) {
@@ -443,7 +444,7 @@ export function createMockApiClient(
         payout: toAmount(payout),
         balance: toAmount(balance),
         fairness: {
-          seedPairId: crypto.randomUUID(),
+          seedPairId: newUuid(),
           serverSeedHash: await hashServerSeed(seed.serverSeed),
           clientSeed: seed.clientSeed,
           nonce: seed.nonce,
@@ -514,7 +515,7 @@ export function createMockApiClient(
       if (stake > balance) {
         throw new ApiError("insufficient_funds", "Insufficient funds", 422);
       }
-      const betId = crypto.randomUUID();
+      const betId = newUuid();
       balance -= stake;
       record("bet", -stake, betId);
       myBet = { betId, animal: body.animal, stake, payout: null };
