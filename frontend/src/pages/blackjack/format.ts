@@ -3,6 +3,7 @@ import {
   BLACKJACK_MIN_STAKE,
   type BlackjackCard,
   type BlackjackOutcome,
+  type BlackjackSettledHand,
   MINOR_UNITS_PER_CREDIT,
   type Money,
   parseAmount,
@@ -89,4 +90,26 @@ export const OUTCOME_TITLES: Record<BlackjackOutcome, string> = {
 /** Whether the outcome paid more than it took. */
 export function isWin(outcome: BlackjackOutcome): boolean {
   return outcome === "blackjack" || outcome === "win";
+}
+
+/** The tone a round's result is shown in: sun for a gain, plain for even, tomato for a loss. */
+export type RoundTone = "won" | "even" | "lost";
+
+/**
+ * How a settled round reads at a glance. One hand: its outcome ("Te pasaste"). Two hands after a
+ * split: the net over both ("¡Ganaste!", "Empate", "Perdiste"). `net` is the payout minus every
+ * stake on the table.
+ */
+export function roundSummary(hand: BlackjackSettledHand): {
+  title: string;
+  net: Money;
+  tone: RoundTone;
+} {
+  const net = gainOf(hand.payout, hand.totalStake);
+  const tone: RoundTone = net > 0n ? "won" : net === 0n ? "even" : "lost";
+  const [only] = hand.playerHands;
+  if (hand.playerHands.length === 1 && only)
+    return { title: OUTCOME_TITLES[only.outcome], net, tone };
+  const title = tone === "won" ? "¡Ganaste!" : tone === "even" ? "Empate" : "Perdiste";
+  return { title, net, tone };
 }

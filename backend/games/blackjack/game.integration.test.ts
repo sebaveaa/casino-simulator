@@ -3,6 +3,7 @@ import {
   type BlackjackAction,
   type BlackjackHandState,
   blackjackActionResponseSchema,
+  blackjackHandPayout,
   blackjackPayout,
   blackjackStartResponseSchema,
   computeOutcome,
@@ -23,7 +24,7 @@ import { postgresWalletService as wallet } from "../../wallet/postgres-wallet-se
 import { InsufficientFundsError, scopedKey } from "../../wallet/wallet-service";
 import { BLACKJACK_ABANDON_MS, settleAbandonedHand } from "./expiry";
 import { actOnBlackjackHand, startBlackjackHand } from "./game";
-import { getCurrentBlackjackHand, listBlackjackHistory } from "./view";
+import { getCurrentBlackjackHand, listBlackjackHistory, selectHands, toSettledHand } from "./view";
 
 // Runs against a migrated database: `TEST_DATABASE_URL=... npm test` (see AGENTS.md). The
 // ledger is append-only, so every test creates its own user instead of cleaning up.
@@ -104,21 +105,22 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
    * instead of hard-coding a seed. Hands that do not fit are played out.
    */
   async function startWithShoe(userId: string, fits: (shoe: number[]) => boolean) {
-    for (let attempt = 0; attempt < 100; attempt++) {
+    // A pair to split (two cards of the same value) comes about once in seven deals.
+    for (let attempt = 0; attempt < 250; attempt++) {
       const key = randomUUID();
       const res = await start(userId, key);
       const shoe = await shoeOf(res.hand.handId);
       if (fits(shoe)) return { ...res, key, shoe };
       if (res.hand.status === "player_turn") await playOut(userId, res.hand.handId);
     }
-    throw new Error("no shoe fit in 100 hands");
+    throw new Error("no shoe fit in 250 hands");
   }
 
   /** A shoe whose hand waits for the player and lets `actions` play out. */
   const opensWith =
     (actions: BlackjackAction[], fits: (state: BlackjackHandState) => boolean = () => true) =>
     (shoe: number[]) => {
-      if (playHand(shoe, []).outcome !== null) return false;
+      if (playHand(shoe, []).finished) return false;
       try {
         return fits(playHand(shoe, actions));
       } catch {
@@ -145,6 +147,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       .where("w.user_id", "=", userId)
       .executeTakeFirstOrThrow();
     expect(BigInt(sum)).toBe(await wallet.getBalance(db, userId));
+  }
+
+  /**
+   * A settled round by id. Aging a round moves it behind the rounds played out while looking for
+   * its shoe, which can be more than the history's limit.
+   */
+  async function settledRound(handId: string) {
+    return toSettledHand(
+      await selectHands(db).where("b.id", "=", handId).executeTakeFirstOrThrow(),
+    );
   }
 
   /** Moves the hand's start and every action timestamp `ms` into the past. */
@@ -175,8 +187,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
         canDouble: true,
       });
       const state = playHand(res.shoe, []);
-      expect(res.hand.playerCards).toEqual(state.playerCards.map(describeCard));
       if (res.hand.status !== "player_turn") throw new Error("expected a hand in progress");
+      expect(res.hand.playerHands[0]?.cards).toEqual(state.playerHands[0]?.cards.map(describeCard));
       expect(res.hand.dealerUpCard).toEqual(describeCard(state.dealerCards[0] as number));
 
       const stored = await db
@@ -192,11 +204,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
 
     it("settles a natural at once and pays it once", async () => {
       const userId = await createPlayer();
-      const res = await startWithShoe(userId, (shoe) => playHand(shoe, []).outcome !== null);
+      const res = await startWithShoe(userId, (shoe) => playHand(shoe, []).finished);
       if (res.hand.status !== "settled") throw new Error("expected a settled hand");
       const state = playHand(res.shoe, []);
-      expect(res.hand.outcome).toBe(state.outcome);
-      const payout = blackjackPayout(STAKE, { doubled: false, outcome: res.hand.outcome });
+      const outcome = state.playerHands[0]?.outcome;
+      expect(res.hand.playerHands[0]?.outcome).toBe(outcome);
+      const payout = blackjackHandPayout(STAKE, { doubled: false, outcome: outcome ?? "lose" });
       expect(res.hand.payout).toBe(payout.toString());
       expect(await payoutCount(res.hand.handId)).toBe(payout > 0n ? 1 : 0);
       await expectLedgerMatches(userId);
@@ -206,7 +219,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       const userId = await createPlayer();
       const res = await startWithShoe(
         userId,
-        opensWith(["hit"], (s) => s.outcome === null),
+        opensWith(["hit"], (s) => !s.finished),
       );
       await act(userId, res.hand.handId, "hit", 0);
 
@@ -248,8 +261,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
 
       const state = playHand(res.shoe, ["stand"]);
       expect(hand.dealerCards).toEqual(state.dealerCards.map(describeCard));
-      expect(hand.outcome).toBe(state.outcome);
-      const payout = blackjackPayout(STAKE, { doubled: false, outcome: hand.outcome });
+      const [played] = hand.playerHands;
+      expect(played?.outcome).toBe(state.playerHands[0]?.outcome);
+      const payout = blackjackHandPayout(STAKE, {
+        doubled: false,
+        outcome: played?.outcome ?? "lose",
+      });
       expect(hand).toMatchObject({ totalStake: "1000", payout: payout.toString() });
       // Hands played out while looking for the shoe moved the balance, so count from the start.
       expect(balance).toBe((BigInt(res.balance) + payout).toString());
@@ -260,11 +277,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       const userId = await createPlayer();
       const res = await startWithShoe(
         userId,
-        opensWith(["hit"], (s) => s.outcome === null),
+        opensWith(["hit"], (s) => !s.finished),
       );
       const { hand } = await act(userId, res.hand.handId, "hit", 0);
       expect(hand).toMatchObject({ status: "player_turn", actionCount: 1, canDouble: false });
-      expect(hand.playerCards).toHaveLength(3);
+      expect(hand.playerHands[0]?.cards).toHaveLength(3);
       await expect(act(userId, res.hand.handId, "double", 1)).rejects.toMatchObject({
         code: "conflict",
       });
@@ -274,7 +291,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       const userId = await createPlayer();
       const res = await startWithShoe(
         userId,
-        opensWith(["hit"], (s) => s.outcome === null),
+        opensWith(["hit"], (s) => !s.finished),
       );
       const first = await act(userId, res.hand.handId, "hit", 0);
       expect(await act(userId, res.hand.handId, "hit", 0)).toEqual(first);
@@ -302,10 +319,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       if (hand.status !== "settled") throw new Error("expected a settled hand");
 
       const state = playHand(res.shoe, ["double"]);
-      expect(hand).toMatchObject({ doubled: true, stake: "1000", totalStake: "2000" });
-      expect(hand.playerCards).toEqual(state.playerCards.map(describeCard));
-      const payout = blackjackPayout(STAKE, { doubled: true, outcome: hand.outcome });
-      expect(hand.outcome).toBe(state.outcome);
+      const [played] = hand.playerHands;
+      expect(hand).toMatchObject({ stake: "1000", totalStake: "2000" });
+      expect(played?.doubled).toBe(true);
+      expect(played?.cards).toEqual(state.playerHands[0]?.cards.map(describeCard));
+      expect(played?.outcome).toBe(state.playerHands[0]?.outcome);
+      const payout = blackjackHandPayout(STAKE, {
+        doubled: true,
+        outcome: played?.outcome ?? "lose",
+      });
       expect(hand.payout).toBe(payout.toString());
       expect(balance).toBe((BigInt(res.balance) - STAKE + payout).toString());
 
@@ -340,7 +362,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       const userId = await createPlayer();
       const res = await startWithShoe(
         userId,
-        opensWith(["stand"], (s) => s.outcome !== "lose"),
+        opensWith(["stand"], (s) => s.playerHands[0]?.outcome !== "lose"),
       );
       const [a, b] = await Promise.all([
         act(userId, res.hand.handId, "stand", 0),
@@ -361,12 +383,136 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
     });
   });
 
+  describe("split", () => {
+    /** A shoe whose first two cards pair up, so the round can split, and plays out with `actions`. */
+    const splitsWith = (actions: BlackjackAction[]) =>
+      opensWith(["split", ...actions], (s) => s.finished);
+
+    it("charges the stake again once, plays both hands and pays their sum", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(userId, splitsWith(["stand", "stand"]));
+      expect(res.hand).toMatchObject({ canSplit: true });
+
+      const split = await act(userId, res.hand.handId, "split", 0);
+      // Replaying the split charges nothing more.
+      expect(await act(userId, res.hand.handId, "split", 0)).toEqual(split);
+      expect(split.balance).toBe((BigInt(res.balance) - STAKE).toString());
+
+      // Split aces stand by themselves, so the round may already be over.
+      let last = split;
+      for (let index = 1; last.hand.status === "player_turn"; index++) {
+        last = await act(userId, res.hand.handId, "stand", index);
+      }
+      const { hand, balance } = last;
+      if (hand.status !== "settled") throw new Error("expected a settled round");
+
+      const state = playHand(res.shoe, ["split", "stand", "stand"]);
+      expect(hand.playerHands.map((h) => h.cards)).toEqual(
+        state.playerHands.map((h) => h.cards.map(describeCard)),
+      );
+      const result = {
+        playerHands: state.playerHands.map((h) => ({
+          doubled: h.doubled,
+          outcome: h.outcome ?? "lose",
+        })),
+      };
+      const payout = blackjackPayout(STAKE, result);
+      expect(hand).toMatchObject({ stake: "1000", totalStake: "2000", payout: payout.toString() });
+      expect(hand.playerHands.map((h) => h.payout)).toEqual(
+        result.playerHands.map((h) => blackjackHandPayout(STAKE, h).toString()),
+      );
+      expect(balance).toBe((BigInt(res.balance) - STAKE + payout).toString());
+      expect(await payoutCount(res.hand.handId)).toBe(payout > 0n ? 1 : 0);
+      await expectLedgerMatches(userId);
+    });
+
+    it("shows the left hand in play and the right one waiting with one card", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(
+        userId,
+        opensWith(["split"], (s) => !s.finished && s.active === 0),
+      );
+      const { hand } = await act(userId, res.hand.handId, "split", 0);
+      if (hand.status !== "player_turn") throw new Error("expected a round in progress");
+      expect(hand).toMatchObject({ activeHand: 0, actionCount: 1, canSplit: false });
+      expect(hand.playerHands.map((h) => h.cards.length)).toEqual([2, 1]);
+
+      const stored = await db
+        .selectFrom("bets")
+        .select("stake")
+        .where("id", "=", res.hand.handId)
+        .executeTakeFirstOrThrow();
+      expect(stored.stake).toBe(2n * STAKE);
+      expect(await getCurrentBlackjackHand(db, userId)).toEqual(hand);
+    });
+
+    it("doubles each hand after a split with its own charge", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(
+        userId,
+        opensWith(["split", "double", "double"], (s) => s.finished),
+      );
+      await act(userId, res.hand.handId, "split", 0);
+      await act(userId, res.hand.handId, "double", 1);
+      const { hand, balance } = await act(userId, res.hand.handId, "double", 2);
+      if (hand.status !== "settled") throw new Error("expected a settled round");
+      expect(hand.playerHands.map((h) => h.doubled)).toEqual([true, true]);
+      expect(hand.totalStake).toBe((4n * STAKE).toString());
+      expect(balance).toBe((BigInt(res.balance) - 3n * STAKE + BigInt(hand.payout)).toString());
+      await expectLedgerMatches(userId);
+    });
+
+    it("refuses to split without the funds", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(userId, opensWith(["split"]));
+      const drain = (await wallet.getBalance(db, userId)) - STAKE / 2n;
+      await db.transaction().execute((trx) =>
+        wallet.transfer(trx, {
+          from: { userId },
+          to: "issuance",
+          amount: drain,
+          type: "withdrawal",
+          idempotencyKey: scopedKey("withdrawal", userId, randomUUID()),
+        }),
+      );
+      await expect(act(userId, res.hand.handId, "split", 0)).rejects.toBeInstanceOf(
+        InsufficientFundsError,
+      );
+      expect(await getCurrentBlackjackHand(db, userId)).toEqual(res.hand);
+    });
+
+    it("stands on both hands of an abandoned split", async () => {
+      const userId = await createPlayer();
+      const res = await startWithShoe(
+        userId,
+        opensWith(["split"], (s) => !s.finished && s.active === 0),
+      );
+      await act(userId, res.hand.handId, "split", 0);
+      await age(res.hand.handId, BLACKJACK_ABANDON_MS);
+      expect(await settleAbandoned(userId)).toBe(true);
+
+      const hand = await settledRound(res.hand.handId);
+      // The right hand may stand by itself on 21, so stand only while the round is open.
+      const stood: BlackjackAction[] = ["split"];
+      let state = playHand(res.shoe, stood);
+      while (!state.finished) {
+        stood.push("stand");
+        state = playHand(res.shoe, stood);
+      }
+      expect(hand.playerHands.map((h) => h.outcome)).toEqual(
+        state.playerHands.map((h) => h.outcome),
+      );
+      expect(hand.totalStake).toBe((2n * STAKE).toString());
+      await expectLedgerMatches(userId);
+    });
+  });
+
   describe("abandonment", () => {
     it("stands for the player after 10 minutes and pays with the normal rules", async () => {
       const userId = await createPlayer();
       const res = await startWithShoe(
         userId,
-        opensWith(["hit"], (s) => s.outcome === null),
+        opensWith(["hit"], (s) => !s.finished),
       );
       await act(userId, res.hand.handId, "hit", 0);
 
@@ -377,11 +523,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Blackjack hands", () => {
       expect(await settleAbandoned(userId)).toBe(true);
       expect(await getCurrentBlackjackHand(db, userId)).toBeNull();
 
-      // Looked up by id: aging the hand moved it behind the hands played out to find its shoe.
-      const history = await listBlackjackHistory(db, userId, 20);
-      const hand = history.find((h) => h.handId === res.hand.handId);
+      const hand = await settledRound(res.hand.handId);
       const state = playHand(res.shoe, ["hit", "stand"]);
-      expect(hand).toMatchObject({ handId: res.hand.handId, outcome: state.outcome });
+      expect(hand.playerHands[0]?.outcome).toBe(state.playerHands[0]?.outcome);
       expect(legalActions(state)).toEqual([]);
       await expectLedgerMatches(userId);
     });

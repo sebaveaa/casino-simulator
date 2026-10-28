@@ -9,8 +9,10 @@ import {
   type BlackjackBet,
   type BlackjackRank,
   blackjack,
+  blackjackHandPayout,
   blackjackPayout,
   blackjackResultSchema,
+  blackjackWagerCount,
   describeCard,
   handValue,
   isNatural,
@@ -19,6 +21,10 @@ import {
   SHOE_SIZE,
   shuffleShoe,
 } from "./blackjack";
+
+/** The player's hands of a state, as `[cards, outcome]` pairs. */
+const hands = (state: ReturnType<typeof playHand>) =>
+  state.playerHands.map((hand) => [hand.cards, hand.outcome]);
 
 /** The spades card of a rank: `c("A")` is 0, `c("K")` is 12. */
 const c = (rank: BlackjackRank): number => BLACKJACK_RANKS.indexOf(rank);
@@ -109,67 +115,66 @@ describe("playHand", () => {
   it("deals player, dealer, player, dealer and waits for the player", () => {
     const state = playHand(shoe("K", "9", "7", "8"), []);
     expect(state).toEqual({
-      playerCards: cards("K", "7"),
+      playerHands: [{ cards: cards("K", "7"), doubled: false, outcome: null }],
+      active: 0,
       dealerCards: cards("9", "8"),
-      doubled: false,
-      outcome: null,
+      finished: false,
     });
     expect(legalActions(state)).toEqual(["hit", "stand", "double"]);
   });
 
-  it("ends the hand at once on a natural", () => {
-    expect(playHand(shoe("A", "9", "K", "8"), []).outcome).toBe("blackjack");
-    expect(playHand(shoe("9", "A", "8", "K"), []).outcome).toBe("dealer_blackjack");
-    expect(playHand(shoe("A", "A", "K", "K"), []).outcome).toBe("push");
+  it("ends the round at once on a natural", () => {
+    expect(hands(playHand(shoe("A", "9", "K", "8"), []))).toEqual([[cards("A", "K"), "blackjack"]]);
+    expect(playHand(shoe("9", "A", "8", "K"), []).playerHands[0]?.outcome).toBe("dealer_blackjack");
+    expect(playHand(shoe("A", "A", "K", "K"), []).playerHands[0]?.outcome).toBe("push");
+    expect(playHand(shoe("A", "9", "K", "8"), []).finished).toBe(true);
     expect(() => playHand(shoe("A", "9", "K", "8"), ["stand"])).toThrow(/not allowed/);
   });
 
   it("lets the dealer draw to 17 after a stand", () => {
     const state = playHand(shoe("K", "6", "9", "5", "3", "4"), ["stand"]);
     expect(state.dealerCards).toEqual(cards("6", "5", "3", "4"));
-    expect(state.outcome).toBe("win");
+    expect(state.playerHands[0]?.outcome).toBe("win");
+    expect(state.finished).toBe(true);
     expect(legalActions(state)).toEqual([]);
   });
 
   it("stands the dealer on soft 17", () => {
     const state = playHand(shoe("K", "A", "8", "6", "5"), ["stand"]);
     expect(state.dealerCards).toEqual(cards("A", "6"));
-    expect(state.outcome).toBe("win");
+    expect(state.playerHands[0]?.outcome).toBe("win");
   });
 
   it("compares the totals", () => {
-    expect(playHand(shoe("K", "K", "7", "8", "5"), ["stand"]).outcome).toBe("lose");
-    expect(playHand(shoe("K", "K", "8", "8"), ["stand"]).outcome).toBe("push");
-    expect(playHand(shoe("K", "K", "7", "6", "K"), ["stand"]).outcome).toBe("win");
+    const outcome = (s: number[]) => playHand(s, ["stand"]).playerHands[0]?.outcome;
+    expect(outcome(shoe("K", "K", "7", "8", "5"))).toBe("lose");
+    expect(outcome(shoe("K", "K", "8", "8"))).toBe("push");
+    expect(outcome(shoe("K", "K", "7", "6", "K"))).toBe("win");
   });
 
   it("busts the player without the dealer drawing", () => {
     const state = playHand(shoe("K", "9", "6", "5", "K", "K"), ["hit"]);
-    expect(state.playerCards).toEqual(cards("K", "6", "K"));
+    expect(hands(state)).toEqual([[cards("K", "6", "K"), "bust"]]);
     expect(state.dealerCards).toEqual(cards("9", "5"));
-    expect(state.outcome).toBe("bust");
   });
 
   it("keeps the turn open after a hit under 21, and stands by itself on 21", () => {
     const open = playHand(shoe("5", "9", "6", "8", "2"), ["hit"]);
-    expect(open.outcome).toBeNull();
+    expect(open.finished).toBe(false);
     expect(legalActions(open)).toEqual(["hit", "stand"]);
 
     const hand = shoe("5", "9", "6", "8", "K");
-    expect(playHand(hand, ["hit"]).outcome).toBe("win");
+    expect(playHand(hand, ["hit"]).playerHands[0]?.outcome).toBe("win");
     expect(() => playHand(hand, ["hit", "stand"])).toThrow(/not allowed/);
   });
 
   it("doubles with one card and then stands", () => {
     const state = playHand(shoe("5", "9", "6", "8", "K"), ["double"]);
-    expect(state).toMatchObject({
-      playerCards: cards("5", "6", "K"),
-      doubled: true,
-      outcome: "win",
-    });
-
+    expect(state.playerHands).toEqual([
+      { cards: cards("5", "6", "K"), doubled: true, outcome: "win" },
+    ]);
     const bust = playHand(shoe("K", "9", "6", "8", "K"), ["double"]);
-    expect(bust).toMatchObject({ doubled: true, outcome: "bust" });
+    expect(bust.playerHands[0]).toMatchObject({ doubled: true, outcome: "bust" });
   });
 
   it("allows double only on the first two cards", () => {
@@ -183,13 +188,72 @@ describe("playHand", () => {
   });
 });
 
+describe("playHand: split", () => {
+  // Player 8+8 against a dealer 9 up (9+7 = 16).
+  const eights = (...rest: BlackjackRank[]) => shoe("8", "9", "8", "7", ...rest);
+
+  it("offers split on two cards of the same value only", () => {
+    expect(legalActions(playHand(eights(), []))).toEqual(["hit", "stand", "double", "split"]);
+    // Any two ten-value cards are a pair: J and 10, K and Q.
+    expect(legalActions(playHand(shoe("J", "9", "10", "7"), []))).toContain("split");
+    expect(legalActions(playHand(shoe("K", "9", "Q", "7"), []))).toContain("split");
+    expect(legalActions(playHand(shoe("K", "9", "9", "7"), []))).not.toContain("split");
+  });
+
+  it("plays the left hand first; the right one draws its second card when its turn comes", () => {
+    const state = playHand(eights("3", "K"), ["split"]);
+    expect(state.playerHands.map((hand) => hand.cards)).toEqual([cards("8", "3"), cards("8")]);
+    expect(state.active).toBe(0);
+    expect(legalActions(state)).toEqual(["hit", "stand", "double"]);
+
+    const right = playHand(eights("3", "K"), ["split", "stand"]);
+    expect(right.active).toBe(1);
+    expect(right.playerHands[1]?.cards).toEqual(cards("8", "K"));
+  });
+
+  it("settles each hand against the dealer once both are done", () => {
+    // Left 8+3 stands on 11, right 8+K stands on 18; the dealer draws 9+7+2 = 18.
+    const state = playHand(eights("3", "K", "2"), ["split", "stand", "stand"]);
+    expect(state.finished).toBe(true);
+    expect(state.dealerCards).toEqual(cards("9", "7", "2"));
+    expect(hands(state)).toEqual([
+      [cards("8", "3"), "lose"],
+      [cards("8", "K"), "push"],
+    ]);
+  });
+
+  it("allows a double after the split, and no second split", () => {
+    // Left 8+8 again: no resplit. Double draws a 3 (19), then the right hand 8+K stands.
+    const state = playHand(eights("8", "3", "K", "K"), ["split", "double", "stand"]);
+    expect(legalActions(playHand(eights("8"), ["split"]))).not.toContain("split");
+    expect(state.playerHands[0]).toMatchObject({ cards: cards("8", "8", "3"), doubled: true });
+    expect(state.playerHands.map((hand) => hand.outcome)).toEqual(["win", "win"]);
+  });
+
+  it("gives split aces one card each and stands them, and 21 there is no blackjack", () => {
+    const state = playHand(shoe("A", "9", "A", "7", "K", "5", "2"), ["split"]);
+    expect(state.finished).toBe(true);
+    expect(hands(state)).toEqual([
+      [cards("A", "K"), "win"],
+      [cards("A", "5"), "lose"],
+    ]);
+    expect(state.dealerCards).toEqual(cards("9", "7", "2"));
+  });
+
+  it("skips the dealer's draws when both hands bust", () => {
+    const state = playHand(eights("6", "K", "6", "K"), ["split", "hit", "hit"]);
+    expect(state.playerHands.map((hand) => hand.outcome)).toEqual(["bust", "bust"]);
+    expect(state.dealerCards).toEqual(cards("9", "7"));
+  });
+});
+
 describe("blackjackPayout", () => {
-  const paid = (outcome: Parameters<typeof blackjackPayout>[1]["outcome"], doubled = false) =>
-    blackjackPayout(1000n, { outcome, doubled });
+  const paid = (outcome: Parameters<typeof blackjackHandPayout>[1]["outcome"], doubled = false) =>
+    blackjackHandPayout(1000n, { outcome, doubled });
 
   it("pays 3:2 on a natural, rounded down", () => {
     expect(paid("blackjack")).toBe(2500n);
-    expect(blackjackPayout(1001n, { outcome: "blackjack", doubled: false })).toBe(2502n);
+    expect(blackjackHandPayout(1001n, { outcome: "blackjack", doubled: false })).toBe(2502n);
   });
 
   it("pays 2x the wagered amount on a win and returns it on a push", () => {
@@ -205,6 +269,22 @@ describe("blackjackPayout", () => {
       expect(paid(outcome, true)).toBe(0n);
     }
   });
+
+  it("adds up the hands of a split", () => {
+    const result = {
+      playerHands: [
+        { cards: [], doubled: true, outcome: "win" as const },
+        { cards: [], doubled: false, outcome: "push" as const },
+      ],
+    };
+    expect(blackjackPayout(1000n, result)).toBe(4000n + 1000n);
+  });
+
+  it("counts one stake, plus one per split and per double", () => {
+    expect(blackjackWagerCount([])).toBe(1n);
+    expect(blackjackWagerCount(["hit", "stand"])).toBe(1n);
+    expect(blackjackWagerCount(["split", "double", "double"])).toBe(4n);
+  });
 });
 
 describe("blackjack.validateBet", () => {
@@ -217,17 +297,22 @@ describe("blackjack.validateBet", () => {
     expect(blackjack.validateBet(bet([], BLACKJACK_MAX_STAKE + 1n))).toBe(false);
   });
 
-  it("accepts the action lists a hand can have", () => {
-    for (const actions of [[], ["stand"], ["double"], ["hit", "hit", "stand"]] as const) {
+  it("accepts the action lists a round can have", () => {
+    for (const actions of [
+      [],
+      ["stand"],
+      ["double"],
+      ["hit", "hit", "stand"],
+      ["split", "double", "hit", "stand"],
+    ] as const) {
       expect(blackjack.validateBet(bet([...actions]))).toBe(true);
     }
   });
 
-  it("rejects double after a hit, anything after stand or double, and unknown actions", () => {
+  it("rejects a split after the first action, unknown actions and too many", () => {
     const invalid = [
-      ["hit", "double"],
-      ["stand", "hit"],
-      ["double", "stand"],
+      ["hit", "split"],
+      ["split", "split"],
       ["fold"],
       new Array(BLACKJACK_MAX_ACTIONS + 1).fill("hit"),
     ] as BlackjackAction[][];
@@ -236,29 +321,27 @@ describe("blackjack.validateBet", () => {
 });
 
 describe("blackjack.resolve", () => {
-  it("gives known hands for fixed seeds, every time", async () => {
+  it("gives known rounds for fixed seeds, every time", async () => {
     const lost = {
-      playerCards: [28, 13],
+      playerHands: [{ cards: [28, 13], doubled: false, outcome: "lose" }],
       dealerCards: [0, 33],
-      doubled: false,
-      outcome: "lose",
     };
     expect(blackjack.resolve(bet(["stand"]), await seededRng(0))).toEqual(lost);
     expect(blackjack.resolve(bet(["stand"]), await seededRng(0))).toEqual(lost);
     expect(blackjack.resolve(bet(["hit", "stand"]), await seededRng(2))).toEqual({
-      playerCards: [35, 14, 1],
+      playerHands: [{ cards: [35, 14, 1], doubled: false, outcome: "win" }],
       dealerCards: [15, 40, 25, 10],
-      doubled: false,
-      outcome: "win",
     });
   });
 
   it("depends on the actions", async () => {
-    expect(blackjack.resolve(bet(["stand"]), await seededRng(2)).outcome).toBe("lose");
-    expect(blackjack.resolve(bet(["hit"]), await seededRng(2)).outcome).toBe("win");
+    const outcome = async (actions: BlackjackAction[]) =>
+      blackjack.resolve(bet(actions), await seededRng(2)).playerHands[0]?.outcome;
+    expect(await outcome(["stand"])).toBe("lose");
+    expect(await outcome(["hit"])).toBe("win");
   });
 
-  it("stands for the player when the actions leave the turn open", async () => {
+  it("stands for the player on every hand the actions leave open", async () => {
     for (const nonce of [0, 1, 2]) {
       const open = blackjack.resolve(bet([]), await seededRng(nonce));
       expect(open).toEqual(blackjack.resolve(bet(["stand"]), await seededRng(nonce)));

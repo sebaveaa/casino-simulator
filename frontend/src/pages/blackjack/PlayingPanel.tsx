@@ -2,28 +2,35 @@ import type { BlackjackAction, BlackjackInProgressHand } from "@casino/shared";
 import { credits, totalLabel } from "./format";
 
 /**
- * "Tu turno": the player's total and the three actions. Doblar needs the first two cards
- * (`canDouble`, from the server) and a balance that covers the stake again.
+ * "Tu turno": the active hand's total and the actions. Doblar and Separar need what the server
+ * allows on the active hand (`canDouble`, `canSplit`) and a balance that covers the stake again.
  */
 export function PlayingPanel({
   hand,
-  canAffordDouble,
+  canAffordStake,
   onAction,
   disabled,
 }: {
   hand: BlackjackInProgressHand;
-  canAffordDouble: boolean;
+  /** Whether the balance covers one more stake, for a double or a split. */
+  canAffordStake: boolean;
   onAction: (action: BlackjackAction) => void;
   disabled: boolean;
 }) {
-  const doubleReady = hand.canDouble && canAffordDouble;
+  const split = hand.playerHands.length > 1;
+  const active = hand.playerHands[hand.activeHand];
+  const stake = credits(hand.stake);
   return (
     <div className="cr-panel-body">
-      <p className="cr-progress">Tu turno</p>
-      <p className="cr-big-mult amount">{totalLabel(hand.playerTotal)}</p>
+      <p className="cr-progress">
+        {split
+          ? `Tu turno · Mano ${hand.activeHand + 1} de ${hand.playerHands.length}`
+          : "Tu turno"}
+      </p>
+      <p className="cr-big-mult amount">{active ? totalLabel(active.total) : "…"}</p>
       <div className="cr-prize">
-        <span>Apuesta</span>
-        <strong className="amount">{credits(hand.stake)} créditos</strong>
+        <span>{split ? "Apuesta por mano" : "Apuesta"}</span>
+        <strong className="amount">{stake} créditos</strong>
       </div>
       <div className="bj-actions">
         <button
@@ -42,19 +49,30 @@ export function PlayingPanel({
         >
           Plantarse
         </button>
+        <button
+          type="button"
+          className="button button-large bj-double"
+          disabled={disabled || !hand.canDouble || !canAffordStake}
+          onClick={() => onAction("double")}
+        >
+          Doblar · +{stake}
+        </button>
+        <button
+          type="button"
+          className="button button-large bj-double"
+          disabled={disabled || !hand.canSplit || !canAffordStake}
+          onClick={() => onAction("split")}
+        >
+          Separar · +{stake}
+        </button>
       </div>
-      <button
-        type="button"
-        className="button button-large bj-double"
-        disabled={disabled || !doubleReady}
-        onClick={() => onAction("double")}
-      >
-        Doblar · +{credits(hand.stake)} créditos
-      </button>
+      {hand.canSplit && canAffordStake && (
+        <p className="cr-note">Tienes un par: puedes separarlo en dos manos.</p>
+      )}
       {!hand.canDouble ? (
-        <p className="cr-dashed">Solo puedes doblar con tus dos primeras cartas.</p>
+        <p className="cr-dashed">Solo puedes doblar o separar con tus dos primeras cartas.</p>
       ) : (
-        !canAffordDouble && <p className="cr-dashed">No tienes saldo para doblar.</p>
+        !canAffordStake && <p className="cr-dashed">No tienes saldo para doblar ni separar.</p>
       )}
     </div>
   );

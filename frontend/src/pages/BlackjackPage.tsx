@@ -84,8 +84,8 @@ export function BlackjackPage() {
           {view.kind === "playing" && (
             <PlayingPanel
               hand={view.hand}
-              // Unknown while the balance loads: the server still refuses a double it cannot cover.
-              canAffordDouble={balance === null || balance >= parseAmount(view.hand.stake)}
+              // Unknown while the balance loads: the server still refuses a stake it cannot cover.
+              canAffordStake={balance === null || balance >= parseAmount(view.hand.stake)}
               onAction={act}
               disabled={disabled}
             />

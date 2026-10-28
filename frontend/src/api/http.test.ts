@@ -559,33 +559,34 @@ describe("HTTP API client: Blackjack", () => {
     clientSeed: "client",
     nonce: 0,
   };
-  const fields = {
+  const cards = [
+    { rank: "K", suit: "spades" },
+    { rank: "7", suit: "hearts" },
+  ];
+  const total = { total: 17, soft: false };
+  const inProgress = {
+    status: "player_turn",
     handId,
     stake: "1000",
     fairness,
-    playerCards: [
-      { rank: "K", suit: "spades" },
-      { rank: "7", suit: "hearts" },
-    ],
-    playerTotal: { total: 17, soft: false },
-  };
-  const inProgress = {
-    status: "player_turn",
-    ...fields,
+    playerHands: [{ cards, total, doubled: false }],
+    activeHand: 0,
     dealerUpCard: { rank: "9", suit: "clubs" },
     actionCount: 0,
     canDouble: true,
+    canSplit: false,
   };
   const settled = {
     status: "settled",
-    ...fields,
+    handId,
+    stake: "1000",
+    fairness,
+    playerHands: [{ cards, total, doubled: false, outcome: "lose", payout: "0" }],
     dealerCards: [
       { rank: "9", suit: "clubs" },
       { rank: "K", suit: "hearts" },
     ],
     dealerTotal: { total: 19, soft: false },
-    doubled: false,
-    outcome: "lose",
     totalStake: "1000",
     payout: "0",
   };

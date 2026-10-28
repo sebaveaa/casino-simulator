@@ -5,10 +5,15 @@ import type { BlackjackView } from "./useBlackjack";
 export const DEAL_STEP_MS = 420;
 export const DEAL_ANIMATION_MS = 520;
 
-/** The cards on the felt; `null` is the dealer's hole card, face down. */
+type Slot = BlackjackCard | null;
+
+/**
+ * The cards on the felt: the player's hands (two after a split) and the dealer's; `null` is the
+ * dealer's hole card, face down.
+ */
 export type TableCards = {
-  player: (BlackjackCard | null)[];
-  dealer: (BlackjackCard | null)[];
+  player: Slot[][];
+  dealer: Slot[];
 };
 
 /**
@@ -16,7 +21,7 @@ export type TableCards = {
  * when the last one has landed, so the screen waits that long before showing the result.
  */
 export type DealPlan = {
-  player: (number | null)[];
+  player: (number | null)[][];
   dealer: (number | null)[];
   durationMs: number;
 };
@@ -27,22 +32,27 @@ export function cardsOf(view: BlackjackView): TableCards {
   if (view.kind === "bet") return { player: [], dealer: [] };
   const { hand } = view;
   return {
-    player: hand.playerCards,
+    player: hand.playerHands.map((h) => h.cards),
     dealer: hand.status === "player_turn" ? [hand.dealerUpCard, null] : hand.dealerCards,
   };
 }
 
-/** A card is new when its place was empty, or held the hole card that is now face up. */
-function newIndexes(before: TableCards[keyof TableCards], after: TableCards[keyof TableCards]) {
-  return after.flatMap((card, i) =>
-    i >= before.length || (before[i] === null && card) ? [i] : [],
-  );
+const sameSlot = (a: Slot | undefined, b: Slot) =>
+  a !== undefined &&
+  (a === null ? b === null : b !== null && a.rank === b.rank && a.suit === b.suit);
+
+/**
+ * A card is new when its place was empty or held another card: a draw, the hole card turned face
+ * up, or after a split the left hand's second card and the pair's other card moving right.
+ */
+function newIndexes(before: Slot[], after: Slot[]): number[] {
+  return after.flatMap((card, i) => (sameSlot(before[i], card) ? [] : [i]));
 }
 
 /**
  * The order the new cards land in. A fresh deal goes player, dealer, player, dealer, as at a real
- * table; afterwards the player's new card comes first, then the dealer turns the hole card and
- * draws. `stepMs` 0 (reduced motion) lands them all at once.
+ * table; afterwards the player's new cards come first, hand by hand, then the dealer turns the
+ * hole card and draws. `stepMs` 0 (reduced motion) lands them all at once.
  */
 export function planDeal(
   before: TableCards,
@@ -50,26 +60,31 @@ export function planDeal(
   stepMs = DEAL_STEP_MS,
   animationMs = DEAL_ANIMATION_MS,
 ): DealPlan {
-  const player: (number | null)[] = after.player.map(() => null);
-  const dealer: (number | null)[] = after.dealer.map(() => null);
-  const newPlayer = newIndexes(before.player, after.player);
+  const player = after.player.map((cards) => cards.map((): number | null => null));
+  const dealer = after.dealer.map((): number | null => null);
+  const newPlayer = after.player.map((cards, h) => newIndexes(before.player[h] ?? [], cards));
   const newDealer = newIndexes(before.dealer, after.dealer);
 
-  const order: ["player" | "dealer", number][] = [];
+  const order: [number | "dealer", number][] = [];
   if (before.player.length === 0 && before.dealer.length === 0) {
-    // Card by card across both hands: player 1, dealer 1, player 2, dealer 2, then the rest.
-    const rounds = Math.max(after.player.length, after.dealer.length);
+    // Card by card across the table: player 1, dealer 1, player 2, dealer 2, then the rest.
+    const first = after.player[0] ?? [];
+    const rounds = Math.max(first.length, after.dealer.length);
     for (let i = 0; i < rounds; i++) {
-      if (newPlayer.includes(i)) order.push(["player", i]);
+      if (newPlayer[0]?.includes(i)) order.push([0, i]);
       if (newDealer.includes(i)) order.push(["dealer", i]);
     }
   } else {
-    for (const i of newPlayer) order.push(["player", i]);
+    newPlayer.forEach((indexes, h) => {
+      for (const i of indexes) order.push([h, i]);
+    });
     for (const i of newDealer) order.push(["dealer", i]);
   }
 
   order.forEach(([who, i], position) => {
-    (who === "player" ? player : dealer)[i] = position * stepMs;
+    const delay = position * stepMs;
+    if (who === "dealer") dealer[i] = delay;
+    else (player[who] as (number | null)[])[i] = delay;
   });
   const durationMs = order.length === 0 ? 0 : (order.length - 1) * stepMs + animationMs;
   return { player, dealer, durationMs };

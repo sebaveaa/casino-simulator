@@ -32,14 +32,21 @@ describe("mock API client: Blackjack", () => {
     const res = blackjackStartResponseSchema.parse(await start(api));
     expect(res.hand).toMatchObject({
       status: "player_turn",
-      playerCards: [
-        { rank: "K", suit: "spades" },
-        { rank: "7", suit: "spades" },
+      playerHands: [
+        {
+          cards: [
+            { rank: "K", suit: "spades" },
+            { rank: "7", suit: "spades" },
+          ],
+          total: { total: 17, soft: false },
+          doubled: false,
+        },
       ],
-      playerTotal: { total: 17, soft: false },
+      activeHand: 0,
       dealerUpCard: { rank: "9", suit: "spades" },
       actionCount: 0,
       canDouble: true,
+      canSplit: false,
     });
     expect(Object.keys(res.hand)).not.toContain("dealerCards");
     expect(res.hand.fairness).toMatchObject({
@@ -56,7 +63,8 @@ describe("mock API client: Blackjack", () => {
   it("settles a natural at the start and pays 3:2 once", async () => {
     const api = createMockApiClient({ blackjackShoes: [shoe("A", "9", "K", "8")] });
     const res = await start(api);
-    expect(res.hand).toMatchObject({ status: "settled", outcome: "blackjack", payout: "2500" });
+    expect(res.hand).toMatchObject({ status: "settled", payout: "2500" });
+    expect(res.hand.playerHands[0]).toMatchObject({ outcome: "blackjack", payout: "2500" });
     expect(res.balance).toBe("101500");
     expect((await api.getCurrentBlackjackHand()).hand).toBeNull();
   });
@@ -87,9 +95,9 @@ describe("mock API client: Blackjack", () => {
     const res = blackjackActionResponseSchema.parse(
       await api.playBlackjackAction({ handId: hand.handId, action: "stand", index: 0 }),
     );
+    expect(res.hand.playerHands[0]).toMatchObject({ outcome: "win", payout: "2000" });
     expect(res.hand).toMatchObject({
       status: "settled",
-      outcome: "win",
       dealerTotal: { total: 18, soft: false },
       totalStake: "1000",
       payout: "2000",
@@ -120,16 +128,54 @@ describe("mock API client: Blackjack", () => {
     const { hand } = await start(api);
     const body = { handId: hand.handId, action: "double", index: 0 } as const;
     const res = await api.playBlackjackAction(body);
+    expect(res.hand.playerHands[0]).toMatchObject({ doubled: true, outcome: "win" });
     expect(res.hand).toMatchObject({
       status: "settled",
-      doubled: true,
-      outcome: "win",
       totalStake: "2000",
       payout: "4000",
     });
     expect(res.balance).toBe("102000");
     expect(await api.playBlackjackAction(body)).toEqual(res);
     expect(await balanceOf(api)).toBe(102000n);
+  });
+
+  it("splits a pair: charges the stake again, plays both hands and pays their sum", async () => {
+    // 8+8 against 9+7: the left hand draws a 3 (11), the right one a K (18); the dealer draws a
+    // 2 to 18. Left loses, right pushes.
+    const api = createMockApiClient({ blackjackShoes: [shoe("8", "9", "8", "7", "3", "K", "2")] });
+    const { hand } = await start(api);
+    expect(hand).toMatchObject({ canSplit: true });
+
+    const split = await api.playBlackjackAction({ handId: hand.handId, action: "split", index: 0 });
+    expect(split.hand).toMatchObject({ status: "player_turn", activeHand: 0, canSplit: false });
+    expect(split.hand.playerHands.map((h) => h.cards.length)).toEqual([2, 1]);
+    expect(split.balance).toBe("98000");
+    expect(
+      await api.playBlackjackAction({ handId: hand.handId, action: "split", index: 0 }),
+    ).toEqual(split);
+
+    const right = await api.playBlackjackAction({ handId: hand.handId, action: "stand", index: 1 });
+    expect(right.hand).toMatchObject({ activeHand: 1 });
+    const res = await api.playBlackjackAction({ handId: hand.handId, action: "stand", index: 2 });
+    if (res.hand.status !== "settled") throw new Error("expected a settled round");
+    expect(res.hand.playerHands.map((h) => [h.outcome, h.payout])).toEqual([
+      ["lose", "0"],
+      ["push", "1000"],
+    ]);
+    expect(res.hand).toMatchObject({ totalStake: "2000", payout: "1000" });
+    expect(res.balance).toBe("99000");
+  });
+
+  it("refuses to split without the funds", async () => {
+    const api = createMockApiClient({
+      startingBalance: 1500n,
+      blackjackShoes: [shoe("8", "9", "8", "7")],
+    });
+    const { hand } = await start(api);
+    await expect(
+      api.playBlackjackAction({ handId: hand.handId, action: "split", index: 0 }),
+    ).rejects.toMatchObject({ code: "insufficient_funds", status: 422 });
+    expect((await api.getCurrentBlackjackHand()).hand).toEqual(hand);
   });
 
   it("refuses to double without the funds and leaves the hand as it was", async () => {
