@@ -41,10 +41,10 @@ PR A (rules):
 
 PR B (backend):
 
-- [ ] T3 Migration `0009_blackjack_shoes` and schema types; up, down, up on a scratch database.
-- [ ] T4 `takeShoe` and the start at the offset; `shoeOf` from the offset; `settleHand` advances and finishes the shoe.
-- [ ] T5 Integration tests: hands continue the shoe; the cut card finishes it and the next hand opens a new one; rotation retires it; concurrent rotate and start; a retried action or start advances once; abandonment advances; the ledger still balances.
-- [ ] T6 README §3.4 (diagram), §4.4 (continuous shoe, cut card), §5.1 (a nonce per shoe, offset, rotation retires the shoe).
+- [x] T3 Migration `0009_blackjack_shoes` and schema types; up, down, up on a scratch database.
+- [x] T4 `takeShoe` and the start at the offset; `shoeOf` from the offset; `settleHand` advances and finishes the shoe.
+- [x] T5 Integration tests: hands continue the shoe; the cut card finishes it and the next hand opens a new one; rotation retires it; concurrent rotate and start; a retried action or start advances once; abandonment advances; the ledger still balances.
+- [x] T6 README §3.4 (diagram), §4.4 (continuous shoe, cut card), §5.1 (a nonce per shoe, offset, rotation retires the shoe).
 
 PR C (contract and mock):
 
@@ -95,3 +95,4 @@ Still to check when the PRs open: is migration `0009` still free (Crash branches
 - Outline written; issue #66 opened with the decisions above.
 - Visual: the user asked for "a bar with a red line at 75 % for the cut", so the draw pile carries the cut card as a red line.
 - T1, T2 done: `BLACKJACK_CUT_CARD` (234) and `BLACKJACK_MAX_ROUND_CARDS` (59) with the bound test; `roundCardCount` (every card on the table); `cardOffset` in `BlackjackBet`, validated below the cut card and used by `resolve` (the shoe from that card on). Tests: offset 0 equals today's fixed seeds, offset 7 equals the sliced shoe, a round takes exactly the first cards of its shoe, a split takes no extra card. Shared: 251 tests pass.
+- T3-T6 done: migration `0009_blackjack_shoes` (table, one active shoe per player, `bets.shoe_id`/`card_offset` with unique `(shoe_id, card_offset)`, composite FK to the shoe's seed pair and nonce, `bets_seed_pair_nonce_key` now partial `where shoe_id is null`); up, down and up again on a scratch database. `shoe.ts`: `takeShoe` (locks the active shoe, then the user's row, so a rotation is serialized; retires a shoe whose pair was revealed) and `advanceShoe` (sets the position past the round, finishes at the cut). The start deals at the shoe's next card; `settleHand` advances it, so natural, last action and abandonment all move it once. `race-cycle.integration.test.ts` truncates `blackjack_shoes` too, since it now references users and seed pairs. Integration tests (+7): consecutive hands share one shoe and nonce, the cut card finishes it and a new one opens with the next nonce, rotation retires it, a refused start opens none, a retried start or action advances once, abandonment advances, and 12 racing starts and rotations leave every shoe gapless with only 409s (6 runs in a row). README §3.4, §4.4, §5.1. Backend: 337 passed, 4 skipped.
