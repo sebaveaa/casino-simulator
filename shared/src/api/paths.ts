@@ -21,6 +21,10 @@ export const apiPaths = {
   chickenRoadCurrent: "/games/chicken-road/games/current",
   chickenRoadSteps: "/games/chicken-road/games/current/steps",
   chickenRoadCashout: "/games/chicken-road/games/current/cashout",
+  /** POST starts a hand; GET lists the latest settled ones (`?limit=`). */
+  blackjackHands: "/games/blackjack/hands",
+  blackjackCurrent: "/games/blackjack/hands/current",
+  blackjackActions: "/games/blackjack/hands/current/actions",
 } as const;
 
 export type ApiPath = (typeof apiPaths)[keyof typeof apiPaths];

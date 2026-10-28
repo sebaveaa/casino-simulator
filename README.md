@@ -31,7 +31,7 @@ La guía del proyecto establece que la complejidad funcional no es el criterio p
 | **Núcleo** | **Ruleta** | Una apuesta → un resultado inmediato | Sin estado entre apuestas. Es el caso más simple y escala fácil. |
 | **Núcleo** | **Carreras de animalitos** | Evento compartido entre muchos jugadores | Ventana de apuestas, tiempo real, cierre, carrera y liquidación masiva. Es el juego más exigente en concurrencia. |
 | Extra | **Minijuegos**: Cruza la Calle, Dino Crash y Despegue | Cruza la Calle: partida por pasos (con estado). Dino Crash y Despegue: ronda compartida en vivo | Reutilizan los dos patrones del núcleo sin tablas nuevas: Cruza la Calle guarda la partida entre pasos como el blackjack (4.4), y los dos Crash usan rondas, worker y SSE como los animalitos (4.3). Reemplazan a las tragamonedas. |
-| Opcional | **Blackjack** | Partida con estado (mano en curso) | Requiere guardar la sesión de juego entre decisiones del jugador. Solo si el núcleo está terminado. |
+| Extra | **Blackjack** | Partida con estado (mano en curso) | Guarda la mano en PostgreSQL entre las decisiones del jugador y la reconstruye desde el par de semillas (4.4). Incluye separar pares, doblar y fichas de casino en la mesa. |
 
 La arquitectura se diseña y se defiende sobre **ruleta** (patrón sin estado) y **animalitos** (patrón de evento compartido en tiempo real). Los demás juegos reutilizan la misma base.
 
@@ -82,7 +82,7 @@ flowchart LR
 | **Backend / API** | Valida solicitudes, autentica, ejecuta la lógica de juego y de dinero. Toda decisión importante ocurre aquí, nunca en el cliente. |
 | **Tiempo real** | El backend mantiene conexiones SSE con los clientes y les reenvía los eventos de las carreras (ver 2.5). |
 | **Persistencia** | PostgreSQL: usuarios, ledger, apuestas, rondas. Es la única fuente de verdad del dinero. |
-| **Caché / estado efímero** | Redis: ventanas de apuesta, caché de la mano de blackjack, caché de configuración, límites de tasa y canal pub/sub de eventos. |
+| **Caché / estado efímero** | Redis: ventanas de apuesta, caché de configuración, límites de tasa y canal pub/sub de eventos. La mano de blackjack no pasa por Redis: se reconstruye desde PostgreSQL (4.4). |
 | **Worker** | Proceso aparte que abre, cierra, corre y liquida las carreras, y publica cada cambio de estado. |
 | **Servicios externos** | Ninguno obligatorio. El depósito es simulado detrás de un adaptador de pagos (ver 2.4). |
 
@@ -198,6 +198,9 @@ erDiagram
     SEED_PAIRS ||--o{ BETS : "genera resultado de"
     GAME_ROUNDS ||--o{ BETS : incluye
     BETS ||--o{ TRANSACTIONS : "genera"
+    USERS ||--o{ BLACKJACK_SHOES : juega
+    SEED_PAIRS ||--o{ BLACKJACK_SHOES : "baraja"
+    BLACKJACK_SHOES ||--o{ BETS : "reparte"
 
     USERS { uuid id PK
             string email
@@ -240,10 +243,20 @@ erDiagram
            bigint stake "total apostado"
            jsonb selection "ruleta: lista de {selection, stake}"
            jsonb actions "decisiones de blackjack"
+           uuid shoe_id FK "blackjack: su zapato"
+           int card_offset "blackjack: su primera carta en el zapato"
            jsonb result "resultado, para reintentos y verificador"
            bigint payout "total pagado"
            string status
            timestamp created_at }
+    BLACKJACK_SHOES { uuid id PK
+                      uuid user_id FK
+                      uuid seed_pair_id FK
+                      int nonce "uno por zapato"
+                      int cut_card "carta de corte: 234"
+                      int next_card "primera carta de la mano siguiente"
+                      string status "activo o terminado"
+                      string end_reason "corte o rotación de semillas" }
 ```
 
 Un `amount` positivo aumenta el saldo del wallet y uno negativo lo reduce; por eso la cuenta de emisión queda en negativo por diseño. La base de datos se encarga de hacer cumplir las reglas del ledger: rechaza cualquier `UPDATE` o `DELETE` sobre `ledger_entries` y `transactions`, y rechaza al hacer `COMMIT` toda transacción cuyos asientos no sumen cero o que tenga menos de dos. Una apuesta puede generar varias transacciones (la del cobro y la del premio; las carreras pagan al liquidarse), por eso la relación `BETS` a `TRANSACTIONS` es de uno a muchos. En la ruleta, una fila de `BETS` representa una **tirada**: `selection` guarda la lista de selecciones con su monto, y `stake` y `payout` son los totales de la tirada.
@@ -316,15 +329,19 @@ stateDiagram-v2
 
 Este es el punto de mayor carga del sistema: un pico de apuestas justo antes del cierre, la difusión de eventos a todos los conectados y la liquidación masiva simultánea.
 
-### 4.4 Blackjack (partida con estado) — opcional
+### 4.4 Blackjack (partida con estado)
 
-La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que Redis es solo una caché:
+**Reglas:** zapato de 6 barajas; la banca revisa si tiene blackjack al repartir; el blackjack natural paga 3:2; la banca se planta en todo 17; el jugador puede pedir, plantarse, doblar (solo con las dos primeras cartas: recibe una carta y se planta) o **separar** un par (dos primeras cartas del mismo valor, como un 8 y un 8 o una J y un 10, una sola vez: se juegan dos manos, primero la izquierda, con otra apuesta igual; los ases separados reciben una carta cada uno y un 21 tras separar paga 1:1). Se puede doblar después de separar. Al llegar a 21 una mano se planta sola y al pasarse pierde; si todas las manos se pasan, la banca no juega. Apuestas de 10 a 500 créditos. Seguro y rendición quedan fuera de esta versión.
 
-- Al iniciar la mano se descuenta la apuesta y se crea la fila en `BETS` con estado `en_curso`, su `seed_pair_id` y su `nonce`.
-- El mazo completo está determinado por la semilla (sección 5), así que no hace falta guardarlo.
-- Cada decisión del jugador (pedir, plantarse, doblar) se añade a `BETS.actions` en PostgreSQL y actualiza la copia en Redis.
-- Mazo + decisiones = estado completo de la mano. Si Redis se pierde, el backend la reconstruye desde PostgreSQL y el jugador continúa.
-- Si el jugador abandona la mano (sin actividad durante el tiempo límite), la mano **no se da por perdida**: el sistema aplica *plantarse* automáticamente y la resuelve con las reglas normales. Un fallo de infraestructura o una desconexión nunca le quita dinero al jugador.
+La mano en curso se puede **reconstruir siempre desde PostgreSQL**, así que no necesita Redis:
+
+- **Empezar** (`POST /games/blackjack/hands`, con `Idempotency-Key`): se descuenta la apuesta y se crea la fila en `BETS` con estado `en_curso`, su `seed_pair_id` y su `nonce`. Un jugador tiene como máximo **una mano en curso** (índice único parcial). Si hay blackjack natural de cualquiera de los dos, la mano se liquida en la misma transacción.
+- **El zapato está determinado por la semilla** (sección 5): se baraja con Fisher-Yates a partir del par de semillas y el `nonce` en cada operación, así que su orden no se guarda. Zapato + posición + decisiones = estado completo de la mano. La respuesta de una mano en curso solo muestra la carta visible de la banca, nunca la oculta.
+- **Zapato continuo**: un zapato dura varias manos del mismo jugador, como en una mesa real. Al abrirse toma **un** `nonce` del par de semillas y se guarda en `BLACKJACK_SHOES` solo su posición (`next_card`). Cada mano guarda su zapato y su **desplazamiento** (`card_offset`, la posición de su primera carta) y comparte el `seed_pair_id` y el `nonce` del zapato. Al liquidarse, la mano mueve el zapato hasta su última carta; cuando pasa la **carta de corte** (la 234 de 312, el 75 %), el zapato termina y la mano siguiente abre uno nuevo, que la pantalla anuncia con la animación de barajar. Una ronda usa como máximo 59 cartas y siempre empieza antes del corte, así que nunca se queda sin cartas. Abrir el zapato, crear la mano y cobrar ocurren en la misma transacción, y un inicio rechazado no abre zapato ni gasta `nonce`. Con el zapato a la vista se pueden contar cartas, como en un casino; los créditos son ficticios.
+- **Decidir** (`POST /games/blackjack/hands/current/actions`, `{ handId, action, index }`): cada decisión es una transacción con la billetera y la mano bloqueadas (`SELECT … FOR UPDATE`) y se añade a `BETS.actions`. `index` es la posición de la decisión: repetirla devuelve el mismo estado, sin jugar dos veces. **Separar** y **doblar** cobran la apuesta inicial otra vez: la separación una sola vez por partida y el doble una vez por cada mano, cada uno con su propia clave de idempotencia. `BETS.stake` guarda el total apostado.
+- **Pago**: el premio (la suma de lo que paga cada mano) se paga con la clave `payout:<usuario>:<mano>`, la misma para el blackjack natural, la última decisión y el abandono, así que una mano **no puede pagarse dos veces**. Al liquidar se guardan las cartas en `BETS.result` para el historial (`GET /games/blackjack/hands`) y el verificador.
+- **Abandono**: tras 10 minutos sin actividad, la mano **no se da por perdida**: en la siguiente petición del jugador a Blackjack el sistema aplica *plantarse* automáticamente en cada mano pendiente y la resuelve con las reglas normales. Un fallo de infraestructura o una desconexión nunca le quita dinero al jugador.
+- **Semillas**: mientras haya una mano en curso no se puede rotar el par ni cambiar el `client_seed`, porque revelar el `server_seed` mostraría las cartas que vienen. Rotar **retira el zapato activo**: sus cartas sin repartir quedan públicas, pero ya no se reparten, y la mano siguiente sale de un zapato nuevo del par nuevo.
 
 ### 4.5 Cruza la Calle (partida por pasos)
 
@@ -355,6 +372,8 @@ Cada jugador tiene un **par de semillas** activo:
 
 El `client_seed` impide que el servidor elija de antemano una semilla favorable para un jugador concreto, y el `nonce` hace que cada apuesta sea distinta sin cambiar de semilla.
 
+En blackjack el `nonce` cuenta **zapatos**, no manos (4.4): todas las manos de un zapato comparten su `nonce`, y cada una dice en qué carta empieza (`card_offset`). Para verificar una mano se recalcula su zapato y se reparte desde ese desplazamiento. Para verificar que el servidor no se saltó cartas, las manos de un zapato, ordenadas por desplazamiento, empiezan en 0 y cada una empieza donde terminó la anterior, sin huecos; la carta de corte es fija y pública, así que el servidor tampoco elige cuándo barajar.
+
 ### 5.2 Carreras de animalitos (resultado compartido)
 
 En una carrera hay **un solo resultado para todos**, así que no puede depender del `client_seed` de un jugador:
@@ -379,13 +398,13 @@ El frontend incluye una pantalla de verificación que usa la misma función `res
 | Backend (API) | **No de negocio** | Todas las instancias son intercambiables. Solo mantiene conexiones SSE abiertas, que se pueden perder sin consecuencias porque el cliente reconecta y recupera el estado por REST. |
 | Worker | No | El estado de cada ronda está en la base de datos. |
 | PostgreSQL | **Sí** | Fuente de verdad del dinero y de todo el estado de juego. Es el principal cuello de botella al crecer. |
-| Redis | **Sí (efímero)** | Estado temporal: cuenta regresiva, caché de manos, caché, límites de tasa y pub/sub. Todo se puede reconstruir o perder sin perder dinero. |
+| Redis | **Sí (efímero)** | Estado temporal: cuenta regresiva, caché, límites de tasa y pub/sub. Todo se puede reconstruir o perder sin perder dinero. |
 
 ### Comportamiento ante fallos
 
 | Si falla... | Qué ocurre |
 |---|---|
-| **Redis** | Ruleta y tragamonedas siguen funcionando (solo usan PostgreSQL). Blackjack sigue, más lento, reconstruyendo las manos desde PostgreSQL. Animalitos pausa la apertura de nuevas carreras porque no hay difusión en vivo; las apuestas ya hechas se liquidan igual. No se pierde dinero. |
+| **Redis** | Ruleta y tragamonedas siguen funcionando (solo usan PostgreSQL). Blackjack sigue igual, porque sus manos viven en PostgreSQL. Animalitos pausa la apertura de nuevas carreras porque no hay difusión en vivo; las apuestas ya hechas se liquidan igual. No se pierde dinero. |
 | **PostgreSQL** | El sistema **no acepta apuestas** (falla cerrado). Es preferible detener el juego que arriesgar la consistencia del dinero. |
 | **Una instancia del backend** | El balanceador envía las peticiones a otra instancia. Los clientes con SSE abierto en la instancia caída reconectan por sí mismos a otra y piden el estado actual por REST. |
 | **El worker a medias** | Al reiniciar retoma las rondas no liquidadas; la idempotencia evita pagos dobles. |

@@ -1,6 +1,18 @@
 import {
   type AuthResponse,
   type BalanceResponse,
+  BLACKJACK_CUT_CARD,
+  BLACKJACK_HISTORY_DEFAULT_LIMIT,
+  BLACKJACK_HISTORY_MAX_LIMIT,
+  type BlackjackAction,
+  type BlackjackFairness,
+  type BlackjackHand,
+  type BlackjackShoe,
+  blackjackActionRequestSchema,
+  blackjackHandPayout,
+  blackjackPayout,
+  blackjackStartRequestSchema,
+  blackjackWagerCount,
   CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT,
   CHICKEN_ROAD_HISTORY_MAX_LIMIT,
   type ChickenRoadGame,
@@ -14,11 +26,15 @@ import {
   createRng,
   type DepositRequest,
   type DepositResponse,
+  describeCard,
   type Fairness,
+  handValue,
   hashServerSeed,
   LANE_COUNT,
   type LoginRequest,
+  legalActions,
   parseAmount,
+  playHand,
   type RaceBetRequest,
   type RaceBetResponse,
   type RaceEvent,
@@ -30,7 +46,10 @@ import {
   racePayout,
   resolveRace,
   roulette,
+  roundCardCount,
+  SHOE_SIZE,
   selectionKey,
+  shuffleShoe,
   spinPayouts,
   type Transaction,
   type TransactionHistoryQueryInput,
@@ -167,6 +186,65 @@ function chickenView(game: MockChickenGame): ChickenRoadGame {
   return { status: "cashed_out", ...base, lanesCrossed: game.lanes, payout: toAmount(game.payout) };
 }
 
+/** A Blackjack hand as the mock stores it; the shoe stays inside the mock. */
+type MockBlackjackHand = {
+  handId: string;
+  key: string;
+  /** The initial stake; a double charges it again. */
+  stake: bigint;
+  fairness: BlackjackFairness;
+  /** The hand's cards, from its first one: its shoe from `fairness.cardOffset` on. */
+  shoe: number[];
+  actions: BlackjackAction[];
+  payout: bigint | null;
+};
+
+/**
+ * The hand as the backend shows it (`backend/games/blackjack/view.ts`): in progress it carries
+ * only the dealer's up card, never the hole card or the shoe.
+ */
+function blackjackView(hand: MockBlackjackHand): BlackjackHand {
+  const state = playHand(hand.shoe, hand.actions);
+  const base = { handId: hand.handId, stake: toAmount(hand.stake), fairness: hand.fairness };
+  const cardsAndTotal = (cards: number[]) => ({
+    cards: cards.map(describeCard),
+    total: handValue(cards),
+  });
+  if (!state.finished) {
+    const legal = legalActions(state);
+    return {
+      status: "player_turn",
+      ...base,
+      playerHands: state.playerHands.map((h) => ({
+        ...cardsAndTotal(h.cards),
+        doubled: h.doubled,
+      })),
+      activeHand: state.active,
+      dealerUpCard: describeCard(state.dealerCards[0] as number),
+      actionCount: hand.actions.length,
+      canDouble: legal.includes("double"),
+      canSplit: legal.includes("split"),
+    };
+  }
+  return {
+    status: "settled",
+    ...base,
+    playerHands: state.playerHands.map((h) => {
+      const outcome = h.outcome ?? "lose";
+      return {
+        ...cardsAndTotal(h.cards),
+        doubled: h.doubled,
+        outcome,
+        payout: toAmount(blackjackHandPayout(hand.stake, { doubled: h.doubled, outcome })),
+      };
+    }),
+    dealerCards: state.dealerCards.map(describeCard),
+    dealerTotal: handValue(state.dealerCards),
+    totalStake: toAmount(hand.stake * blackjackWagerCount(hand.actions)),
+    payout: toAmount(hand.payout ?? 0n),
+  };
+}
+
 /**
  * In-memory `ApiClient` for developing screens without a backend. Roulette spins run the shared
  * rules (`validateSpin`, `roulette.resolve`, `spinPayouts`) over a fixed mock seed pair, so payouts match
@@ -179,12 +257,25 @@ function chickenView(game: MockChickenGame): ChickenRoadGame {
  *
  * `chickenRoads` lets tests fix the road: the hit lane (or `null` for none) of each next game, in
  * order. Once it runs out, the seed decides again.
+ *
+ * Blackjack mirrors the backend (#63, #65): one round in progress, the shoe from `shuffleShoe` over
+ * the same mock seed pair, replayed starts and actions by `index`, a split and each double charged
+ * once, a natural settled at the start, and a single payout over the hands. It has no abandonment timer. `blackjackShoes` lets
+ * tests and screens fix the deal: the stacked shoe of each next hand (player, dealer, player,
+ * dealer, then the draws), in order.
+ *
+ * Like the backend (#66), one shoe lasts across hands until the cut card: it takes one nonce,
+ * each hand starts where the one before stopped, and the hand that passes the cut finishes it.
+ * Stacked shoes still deal the next hands; their cards count as dealt from the shoe.
+ * `blackjackShoeDealt` starts the first shoe with that many cards dealt, to reach the cut quickly.
  */
 export function createMockApiClient(
   options: {
     delayMs?: number;
     startingBalance?: bigint;
     chickenRoads?: (number | null)[];
+    blackjackShoes?: number[][];
+    blackjackShoeDealt?: number;
     race?: MockRaceOptions;
   } = {},
 ): ApiClient {
@@ -195,6 +286,7 @@ export function createMockApiClient(
   const startDelayMs = options.race?.startDelayMs ?? 0;
   let balance = options.startingBalance ?? STARTING_BALANCE;
   const fixedRoads = [...(options.chickenRoads ?? [])];
+  const fixedShoes = [...(options.blackjackShoes ?? [])];
   const transactions: Transaction[] = [];
   const deposits = new Map<string, DepositResponse>();
   const bets = new Map<string, { request: RouletteBetRequest; response: RouletteBetResponse }>();
@@ -224,6 +316,83 @@ export function createMockApiClient(
   const chickenResponse = (game: MockChickenGame) => ({
     game: chickenView(game),
     balance: toAmount(balance),
+  });
+
+  // Blackjack hands in the order they started, drawn from the same seed pair.
+  const blackjackHands: MockBlackjackHand[] = [];
+  // The player's shoe: its cards stay in the mock, like the backend's never leave the server.
+  let blackjackShoe: {
+    id: string;
+    nonce: number;
+    cards: number[];
+    next: number;
+    finished: boolean;
+  } | null = null;
+  let firstShoeDealt = options.blackjackShoeDealt ?? 0;
+
+  /** The active shoe, or a new one from the next nonce once there is none or it is finished. */
+  async function takeShoe() {
+    if (blackjackShoe && !blackjackShoe.finished) return blackjackShoe;
+    const nonce = seedPair.nextNonce++;
+    const seed = { serverSeed: seedPair.serverSeed, clientSeed: MOCK_CLIENT_SEED, nonce };
+    blackjackShoe = {
+      id: crypto.randomUUID(),
+      nonce,
+      cards: shuffleShoe(createRng(await computeOutcome(seed))),
+      // Below the cut: a hand always starts before it.
+      next: Math.min(firstShoeDealt, BLACKJACK_CUT_CARD - 1),
+      finished: false,
+    };
+    firstShoeDealt = 0;
+    return blackjackShoe;
+  }
+
+  /** How much of the hand's shoe is dealt, as the backend answers it (`shoeOfHand`). */
+  function shoeOfHand(hand: MockBlackjackHand): BlackjackShoe | null {
+    const shoe = blackjackShoe;
+    if (!shoe || shoe.id !== hand.fairness.shoeId) return null;
+    const state = playHand(hand.shoe, hand.actions);
+    const progress = { shoeId: shoe.id, size: SHOE_SIZE, cutCard: BLACKJACK_CUT_CARD } as const;
+    if (!state.finished) {
+      return {
+        ...progress,
+        cardsDealt: hand.fairness.cardOffset + roundCardCount(state),
+        reshuffle: false,
+      };
+    }
+    return { ...progress, cardsDealt: shoe.next, reshuffle: shoe.finished };
+  }
+
+  function findBlackjackHand(handId: string): MockBlackjackHand {
+    const hand = blackjackHands.find((h) => h.handId === handId);
+    if (!hand) throw new ApiError("not_found", "Blackjack hand not found", 404);
+    return hand;
+  }
+
+  /** Settles a finished hand once; a positive payout goes to the balance as one `payout`. */
+  function settleBlackjackIfOver(hand: MockBlackjackHand): void {
+    const state = playHand(hand.shoe, hand.actions);
+    if (!state.finished || hand.payout !== null) return;
+    const playerHands = state.playerHands.map((h) => ({
+      doubled: h.doubled,
+      outcome: h.outcome ?? "lose",
+    }));
+    hand.payout = blackjackPayout(hand.stake, { playerHands });
+    // The shoe moves past the round; passing the cut card finishes it.
+    if (blackjackShoe && blackjackShoe.id === hand.fairness.shoeId) {
+      blackjackShoe.next = hand.fairness.cardOffset + roundCardCount(state);
+      if (blackjackShoe.next >= BLACKJACK_CUT_CARD) blackjackShoe.finished = true;
+    }
+    if (hand.payout > 0n) {
+      balance += hand.payout;
+      record("payout", hand.payout, hand.handId);
+    }
+  }
+
+  const blackjackResponse = (hand: MockBlackjackHand) => ({
+    hand: blackjackView(hand),
+    balance: toAmount(balance),
+    shoe: shoeOfHand(hand),
   });
 
   const session = (id: string, email: string): AuthResponse => ({
@@ -653,6 +822,111 @@ export function createMockApiClient(
         .map(chickenView)
         .flatMap((game) => (game.status === "in_progress" ? [] : [game]));
       return { games };
+    },
+    async startBlackjackHand(body, idempotencyKey) {
+      await sleep(delayMs);
+      const parsed = blackjackStartRequestSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new ApiError("invalid_request", "Stake must be between 10 and 500 credits", 400);
+      }
+      const stake = parseAmount(parsed.data.stake);
+
+      // A retry returns the hand as it is now, in either state, like the backend.
+      const previous = blackjackHands.find((h) => h.key === idempotencyKey);
+      if (previous) {
+        if (previous.stake !== stake) {
+          throw conflict("Idempotency-Key was already used for a different stake");
+        }
+        return blackjackResponse(previous);
+      }
+      if (blackjackHands.some((h) => h.payout === null)) {
+        throw conflict("A Blackjack hand is already in progress");
+      }
+      if (stake > balance) throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+
+      const shoe = await takeShoe();
+      const hand: MockBlackjackHand = {
+        handId: crypto.randomUUID(),
+        key: idempotencyKey,
+        stake,
+        fairness: {
+          seedPairId: seedPair.id,
+          serverSeedHash: await hashServerSeed(seedPair.serverSeed),
+          clientSeed: MOCK_CLIENT_SEED,
+          nonce: shoe.nonce,
+          shoeId: shoe.id,
+          cardOffset: shoe.next,
+        },
+        shoe: fixedShoes.shift() ?? shoe.cards.slice(shoe.next),
+        actions: [],
+        payout: null,
+      };
+      blackjackHands.push(hand);
+      balance -= stake;
+      record("bet", -stake, hand.handId);
+      settleBlackjackIfOver(hand);
+      return blackjackResponse(hand);
+    },
+    async playBlackjackAction(body) {
+      await sleep(delayMs);
+      const parsed = blackjackActionRequestSchema.safeParse(body);
+      if (!parsed.success) throw new ApiError("invalid_request", "Invalid action", 400);
+      const { handId, action, index } = parsed.data;
+      const hand = findBlackjackHand(handId);
+
+      // An index already played replays the hand, if it names the same action.
+      const played = hand.actions[index];
+      if (played) {
+        if (played !== action) throw conflict(`Action ${index} was already played as "${played}"`);
+        return blackjackResponse(hand);
+      }
+      if (hand.payout !== null) throw conflict("This Blackjack hand already finished");
+      if (index !== hand.actions.length) {
+        throw conflict(`The next action is number ${hand.actions.length}`);
+      }
+      if (!legalActions(playHand(hand.shoe, hand.actions)).includes(action)) {
+        throw conflict(`"${action}" is not allowed in this hand now`);
+      }
+      // A split and each double put the initial stake on the table again.
+      if (action === "split" || action === "double") {
+        if (hand.stake > balance)
+          throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+        balance -= hand.stake;
+        record("bet", -hand.stake, hand.handId);
+      }
+      hand.actions.push(action);
+      settleBlackjackIfOver(hand);
+      return blackjackResponse(hand);
+    },
+    async getCurrentBlackjackHand() {
+      await sleep(delayMs);
+      const hand = blackjackHands.find((h) => h.payout === null);
+      const view = hand ? blackjackView(hand) : null;
+      const active = blackjackShoe && !blackjackShoe.finished ? blackjackShoe : null;
+      const shoe: BlackjackShoe | null = hand
+        ? shoeOfHand(hand)
+        : active && {
+            shoeId: active.id,
+            size: SHOE_SIZE,
+            cutCard: BLACKJACK_CUT_CARD,
+            cardsDealt: active.next,
+            reshuffle: false,
+          };
+      return { hand: view?.status === "player_turn" ? view : null, shoe };
+    },
+    async listBlackjackHistory(query = {}) {
+      await sleep(delayMs);
+      const limit = query.limit ?? BLACKJACK_HISTORY_DEFAULT_LIMIT;
+      if (!Number.isInteger(limit) || limit < 1 || limit > BLACKJACK_HISTORY_MAX_LIMIT) {
+        throw new ApiError("invalid_request", "Invalid history limit", 400);
+      }
+      const hands = [...blackjackHands]
+        .reverse()
+        .filter((h) => h.payout !== null)
+        .slice(0, limit)
+        .map(blackjackView)
+        .flatMap((hand) => (hand.status === "settled" ? [hand] : []));
+      return { hands };
     },
   };
 }

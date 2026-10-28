@@ -45,7 +45,7 @@ describe("LobbyPage", () => {
     );
   });
 
-  it("links only the live games and marks the rest as coming soon", () => {
+  it("links every game, Blackjack included, with no coming-soon card left", () => {
     renderLobby();
     const list = screen.getByRole("list", { name: "Juegos" });
     const links = within(list).getAllByRole("link");
@@ -53,9 +53,10 @@ describe("LobbyPage", () => {
       "/games/roulette",
       "/games/races",
       "/games/mini",
+      "/games/blackjack",
     ]);
     for (const link of links) expect(within(link).getByText("¡Jugar!")).toBeTruthy();
-    expect(within(list).getAllByText("¡Pronto!")).toHaveLength(1);
+    expect(within(list).queryAllByText("¡Pronto!")).toHaveLength(0);
   });
 
   it("replaces slots with the mini games card, tagged as new", () => {

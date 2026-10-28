@@ -1,6 +1,12 @@
 import type {
   AuthResponse,
   BalanceResponse,
+  BlackjackActionRequest,
+  BlackjackActionResponse,
+  BlackjackCurrentResponse,
+  BlackjackHistoryResponse,
+  BlackjackStartRequest,
+  BlackjackStartResponse,
   ChickenRoadCashoutRequest,
   ChickenRoadCashoutResponse,
   ChickenRoadCurrentResponse,
@@ -72,4 +78,14 @@ export interface ApiClient {
   getCurrentChickenRoadGame(): Promise<ChickenRoadCurrentResponse>;
   /** Latest finished games, newest first; the server defaults `limit` to 5 (max 20). */
   listChickenRoadHistory(query?: { limit?: number }): Promise<ChickenRoadHistoryResponse>;
+  /** Starts a hand; a natural on either side answers it already settled. */
+  startBlackjackHand(
+    body: BlackjackStartRequest,
+    idempotencyKey: string,
+  ): Promise<BlackjackStartResponse>;
+  /** Plays one action at its `index`; repeating an index replays it. */
+  playBlackjackAction(body: BlackjackActionRequest): Promise<BlackjackActionResponse>;
+  getCurrentBlackjackHand(): Promise<BlackjackCurrentResponse>;
+  /** Latest settled hands, newest first; the server defaults `limit` to 5 (max 20). */
+  listBlackjackHistory(query?: { limit?: number }): Promise<BlackjackHistoryResponse>;
 }

@@ -3,6 +3,10 @@ import {
   apiPaths,
   authResponseSchema,
   balanceResponseSchema,
+  blackjackActionResponseSchema,
+  blackjackCurrentResponseSchema,
+  blackjackHistoryResponseSchema,
+  blackjackStartResponseSchema,
   chickenRoadCashoutResponseSchema,
   chickenRoadCurrentResponseSchema,
   chickenRoadHistoryResponseSchema,
@@ -272,6 +276,32 @@ export function createHttpApiClient(options: HttpApiClientOptions): ApiClient {
           query.limit === undefined
             ? apiPaths.chickenRoadGames
             : `${apiPaths.chickenRoadGames}?limit=${query.limit}`,
+      }),
+    startBlackjackHand: (body, idempotencyKey) =>
+      request(blackjackStartResponseSchema, {
+        method: "POST",
+        path: apiPaths.blackjackHands,
+        body,
+        idempotencyKey,
+      }),
+    playBlackjackAction: (body) =>
+      request(blackjackActionResponseSchema, {
+        method: "POST",
+        path: apiPaths.blackjackActions,
+        body,
+      }),
+    getCurrentBlackjackHand: () =>
+      request(blackjackCurrentResponseSchema, {
+        method: "GET",
+        path: apiPaths.blackjackCurrent,
+      }),
+    listBlackjackHistory: (query = {}) =>
+      request(blackjackHistoryResponseSchema, {
+        method: "GET",
+        path:
+          query.limit === undefined
+            ? apiPaths.blackjackHands
+            : `${apiPaths.blackjackHands}?limit=${query.limit}`,
       }),
   };
 }
