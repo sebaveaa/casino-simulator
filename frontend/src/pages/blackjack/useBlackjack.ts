@@ -6,6 +6,7 @@ import {
   type BlackjackHand,
   type BlackjackInProgressHand,
   type BlackjackSettledHand,
+  type BlackjackShoe,
   type BlackjackStartResponse,
   type SeedPairResponse,
 } from "@casino/shared";
@@ -71,6 +72,8 @@ export function useBlackjack() {
   const [history, setHistory] = useState<BlackjackSettledHand[]>([]);
   const [seedPair, setSeedPair] = useState<SeedPairResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // How much of the player's shoe is dealt (#66); `null` before the first hand of a new shoe.
+  const [shoe, setShoe] = useState<BlackjackShoe | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -112,6 +115,7 @@ export function useBlackjack() {
         loadSeedPair(),
       ]);
       if (!active) return;
+      if (current.status === "fulfilled") setShoe(current.value.shoe);
       if (current.status === "fulfilled" && current.value.hand) {
         setView({ kind: "playing", hand: current.value.hand });
       } else if (current.status === "rejected") {
@@ -159,7 +163,8 @@ export function useBlackjack() {
    * really is (for example after another tab played it); a settled one shows its real result.
    */
   async function resyncHand(handId: string) {
-    const { hand: current } = await api.getCurrentBlackjackHand();
+    const { hand: current, shoe: currentShoe } = await api.getCurrentBlackjackHand();
+    setShoe(currentShoe);
     if (current) {
       setView({ kind: "playing", hand: current });
       return;
@@ -177,7 +182,8 @@ export function useBlackjack() {
 
   /** A start answered 409: a hand is already in progress, or this key's hand already finished. */
   async function resyncStart() {
-    const { hand: current } = await api.getCurrentBlackjackHand();
+    const { hand: current, shoe: currentShoe } = await api.getCurrentBlackjackHand();
+    setShoe(currentShoe);
     if (current) {
       setView({ kind: "playing", hand: current });
       setMessage(ALREADY_IN_PROGRESS);
@@ -194,6 +200,8 @@ export function useBlackjack() {
    */
   async function land(res: BlackjackStartResponse | BlackjackActionResponse) {
     await sleep(setView(viewOf(res.hand)));
+    // The shoe sinks once the cards have landed, like the balance.
+    setShoe(res.shoe);
     applyBalance(res.balance);
     if (res.hand.status === "settled") {
       playResultSound(roundSummary(res.hand).tone);
@@ -237,6 +245,9 @@ export function useBlackjack() {
     );
   }
 
+  /** The shuffle played: the next hand opens a new shoe, so the pile shows it full. */
+  const shoeShuffled = useCallback(() => setShoe(null), []);
+
   /** Back to the bet form, to change the stake. */
   function changeBet() {
     if (busy.current) return;
@@ -266,5 +277,7 @@ export function useBlackjack() {
     act,
     changeBet,
     repeat,
+    shoe,
+    shoeShuffled,
   };
 }

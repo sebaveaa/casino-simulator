@@ -47,8 +47,13 @@ function client(
   shoes: number[][] = [],
   overrides: (base: ApiClient) => Partial<ApiClient> = () => ({}),
   startingBalance?: bigint,
+  shoeDealt?: number,
 ): ApiClient {
-  const base = createMockApiClient({ blackjackShoes: shoes, startingBalance });
+  const base = createMockApiClient({
+    blackjackShoes: shoes,
+    startingBalance,
+    blackjackShoeDealt: shoeDealt,
+  });
   return { ...base, ...overrides(base) };
 }
 
@@ -77,6 +82,10 @@ const historyPills = () =>
     for (const hidden of copy.querySelectorAll(".roulette-sr-only")) hidden.remove();
     return copy.textContent;
   });
+
+/** The shoe's meter on the felt, and how many cards it says are left. */
+const shoeMeter = () => table().querySelector("meter") as HTMLMeterElement;
+const shoeLeft = () => Number(shoeMeter().getAttribute("value"));
 
 /** Waits for the panel to finish loading or its request; generous, for a loaded full-suite run. */
 function settled() {
@@ -168,15 +177,42 @@ describe("BlackjackPage bet form", () => {
     expect(localStorage.getItem("casino.blackjack.deck")).toBe("lila");
   });
 
-  it("plays the shuffle from the shoe, holding the table meanwhile", async () => {
-    await renderPage(client());
-    fireEvent.click(within(table()).getByRole("button", { name: "Barajar" }));
+  it("shows how much of the shoe is dealt, with the cut card, and no button to shuffle", async () => {
+    await renderPage(client([OPEN]));
+    expect(shoeLeft()).toBe(312);
+    await deal();
+    // Two cards each, the hole card counted.
+    expect(shoeLeft()).toBe(308);
+    expect(within(table()).queryByRole("button", { name: "Barajar" })).toBeNull();
+  });
+
+  it("shuffles once the cut card is out, when the result closes, holding the table meanwhile", async () => {
+    // The shoe starts on the last card before the cut: this hand passes it.
+    await renderPage(client([STAND_WINS], undefined, undefined, 233));
+    await deal();
+    await press("Plantarse");
+    expect(shoeMeter().getAttribute("aria-label")).toMatch(/salió la carta de corte/);
+    fireEvent.click(within(result()).getByRole("button", { name: "Ver la mesa" }));
     expect(within(table()).getByRole("status").textContent).toBe("Barajando el zapato…");
-    expect((inPanel(/^Repartir/) as HTMLButtonElement).disabled).toBe(true);
+    expect((inPanel(/^Repetir apuesta/) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(screen.queryByText("Barajando el zapato…")).toBeNull(), {
       timeout: 3000,
     });
-    expect((inPanel(/^Repartir/) as HTMLButtonElement).disabled).toBe(false);
+    // A new shoe: full again, and the table is free.
+    expect(shoeLeft()).toBe(312);
+    expect((inPanel(/^Repetir apuesta/) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("shuffles before dealing again when Repetir apuesta follows the cut", async () => {
+    await renderPage(client([STAND_WINS, OPEN], undefined, undefined, 233));
+    await deal();
+    await press("Plantarse");
+    fireEvent.click(within(result()).getByRole("button", { name: /^Repetir apuesta/ }));
+    expect(within(table()).getByRole("status").textContent).toBe("Barajando el zapato…");
+    expect(
+      await within(panel()).findByRole("button", { name: "Pedir" }, { timeout: 4000 }),
+    ).toBeTruthy();
+    expect(shoeLeft()).toBe(308);
   });
 
   it("keeps the bet within 500 credits and the balance", async () => {

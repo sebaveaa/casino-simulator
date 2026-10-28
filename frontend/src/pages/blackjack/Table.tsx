@@ -1,4 +1,4 @@
-import type { BlackjackCard } from "@casino/shared";
+import type { BlackjackCard, BlackjackShoe } from "@casino/shared";
 import { type ReactNode, useId } from "react";
 import { ChipPiles } from "./Chips";
 import { MiniBack } from "./DeckPicker";
@@ -6,6 +6,7 @@ import { cardsOf, type DealPlan } from "./deal";
 import { FeltArc } from "./FeltArc";
 import { type ChipValue, totalLabel } from "./format";
 import { PlayingCard } from "./PlayingCard";
+import { ShoeMeter } from "./ShoeMeter";
 import type { BlackjackView } from "./useBlackjack";
 
 type Total = { total: number; soft: boolean };
@@ -80,24 +81,6 @@ function Hand({
   );
 }
 
-/** The dealing shoe in the dealer's corner; a click plays the shuffle. */
-function Shoe({ onShuffle, disabled }: { onShuffle: () => void; disabled: boolean }) {
-  return (
-    <button
-      type="button"
-      className="bj-shoe"
-      title="Animación de barajado"
-      disabled={disabled}
-      onClick={onShuffle}
-    >
-      <span className="bj-shoe-box" aria-hidden="true">
-        <span className="bj-shoe-cards" />
-      </span>
-      Barajar
-    </button>
-  );
-}
-
 /** Opens the card-back designs; it shows the back in use. */
 function DecksButton({
   deck,
@@ -125,7 +108,8 @@ function DecksButton({
 const DEALER_WAITING = { suits: ["♠", "♥"], text: "La banca espera" } as const;
 
 /**
- * The felt: the dealer's hand on top with the card designs and the shoe, the player's below with the chips of the bet,
+ * The felt: the dealer's hand on top with the card designs and the shoe's meter, the player's below
+ * with the chips of the bet,
  * two hands side by side after a split with the one being played highlighted (a doubled hand
  * shows its stake twice). On the player's turn the dealer shows the up card and the hole card
  * face down; once the round is settled the hole card turns over and the dealer's draws land, in
@@ -137,8 +121,7 @@ export function Table({
   dealing,
   chips,
   onTakeChip,
-  onShuffle,
-  canShuffle,
+  shoe,
   deck,
   onDecks,
   canPickDeck,
@@ -151,8 +134,8 @@ export function Table({
   chips: readonly ChipValue[];
   /** Before the deal, takes back the chip on top; absent while the felt is busy. */
   onTakeChip?: () => void;
-  onShuffle: () => void;
-  canShuffle: boolean;
+  /** How much of the shoe is dealt; `null` for a new one. */
+  shoe: BlackjackShoe | null;
   /** The card-back design in use, and opening the designs. */
   deck: string;
   onDecks: () => void;
@@ -166,7 +149,7 @@ export function Table({
   const tools = (
     <span className="bj-table-tools">
       <DecksButton deck={deck} onOpen={onDecks} disabled={!canPickDeck} />
-      <Shoe onShuffle={onShuffle} disabled={!canShuffle} />
+      <ShoeMeter shoe={shoe} />
     </span>
   );
   return (
