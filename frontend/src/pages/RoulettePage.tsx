@@ -7,6 +7,7 @@ import {
 } from "@casino/shared";
 import { useRef, useState } from "react";
 import { ApiError, useApi } from "../api";
+import { newUuid } from "../api/uuid";
 import {
   BALANCE_LOADING,
   useApplyBalance,
@@ -107,7 +108,7 @@ export function RoulettePage() {
     const request = toRequest(activeBets);
     const signature = JSON.stringify(request);
     if (pendingKey.current?.signature !== signature) {
-      pendingKey.current = { signature, key: crypto.randomUUID() };
+      pendingKey.current = { signature, key: newUuid() };
     }
     const { key } = pendingKey.current;
 

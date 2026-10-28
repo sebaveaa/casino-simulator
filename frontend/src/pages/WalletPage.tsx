@@ -1,6 +1,7 @@
 import { formatCredits, parseAmount, type Transaction, type TransactionType } from "@casino/shared";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, useApi } from "../api";
+import { newUuid } from "../api/uuid";
 import { BALANCE_LOADING, useBalance, useRefreshBalance } from "../app/useBalance";
 import { creditsToAmount } from "./creditsInput";
 
@@ -111,7 +112,7 @@ export function WalletPage() {
     setStatus(null);
 
     if (pendingKey.current?.amount !== amount) {
-      pendingKey.current = { amount, key: crypto.randomUUID() };
+      pendingKey.current = { amount, key: newUuid() };
     }
     const { key } = pendingKey.current;
 
