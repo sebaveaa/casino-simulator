@@ -16,13 +16,32 @@ import {
   CHICKEN_ROAD_HISTORY_DEFAULT_LIMIT,
   CHICKEN_ROAD_HISTORY_MAX_LIMIT,
   type ChickenRoadGame,
+  CRASH_BETTING_WINDOW_MS,
+  CRASH_HISTORY_DEFAULT_LIMIT,
+  CRASH_HISTORY_MAX_LIMIT,
+  CRASH_INTERMISSION_MS,
+  CRASH_MAX_STAKE,
+  CRASH_MIN_STAKE,
+  type CrashBetRequest,
+  type CrashBetResponse,
+  type CrashCashoutResponse,
+  type CrashCurrentResponse,
+  type CrashEvent,
+  type CrashGame,
+  type CrashHistoryResponse,
+  type CrashPlayerBet,
+  type CrashResult,
+  type CrashRound,
   type CurrentRaceResponse,
+  canCashOut,
   chickenRoad,
   chickenRoadPayout,
   chickenRoadStartRequestSchema,
   chickenRoadStepRequestSchema,
   computeOutcome,
   computeRoundOutcome,
+  crashPayout,
+  crashResultFromOutcome,
   createRng,
   type DepositRequest,
   type DepositResponse,
@@ -30,9 +49,12 @@ import {
   type Fairness,
   handValue,
   hashServerSeed,
+  impactAtMs,
   LANE_COUNT,
   type LoginRequest,
   legalActions,
+  MAX_MULTIPLIER_HUNDREDTHS,
+  multiplierAtHundredths,
   parseAmount,
   playHand,
   type RaceBetRequest,
@@ -336,7 +358,7 @@ export function createMockApiClient(
     const nonce = seedPair.nextNonce++;
     const seed = { serverSeed: seedPair.serverSeed, clientSeed: MOCK_CLIENT_SEED, nonce };
     blackjackShoe = {
-      id: crypto.randomUUID(),
+      id: newUuid(),
       nonce,
       cards: shuffleShoe(createRng(await computeOutcome(seed))),
       // Below the cut: a hand always starts before it.
@@ -512,6 +534,165 @@ export function createMockApiClient(
     raceStarted = true;
     if (startDelayMs > 0) schedule(openRound, startDelayMs);
     else raceReady = openRound();
+  }
+
+  // Crash: one round state machine per game (dino-crash, aviator), driven by timers, each with the
+  // real derivation and rules of `shared`, so the screen works with no backend. Nothing runs until
+  // the game's first crash call.
+  interface MockCrashRound {
+    id: string;
+    status: CrashRound["status"];
+    opensAt: number;
+    closesAt: number;
+    serverSeed: string;
+    serverSeedHash: string;
+    /** Set at takeoff; exposed to the view only once the round is resolved. */
+    result: CrashResult | null;
+  }
+  interface MockCrashBet {
+    betId: string;
+    stake: bigint;
+    status: "pending" | "settled";
+    cashoutHundredths: number | null;
+    payout: bigint | null;
+  }
+  interface MockCrashGameState {
+    started: boolean;
+    round: MockCrashRound | null;
+    myBet: MockCrashBet | null;
+    history: MockCrashRound[];
+    listeners: Set<(event: CrashEvent) => void>;
+    ready: Promise<void>;
+    betKeys: Map<string, CrashBetResponse>;
+  }
+
+  const crashStates = new Map<CrashGame, MockCrashGameState>();
+  const crashState = (game: CrashGame): MockCrashGameState => {
+    let state = crashStates.get(game);
+    if (!state) {
+      state = {
+        started: false,
+        round: null,
+        myBet: null,
+        history: [],
+        listeners: new Set(),
+        ready: Promise.resolve(),
+        betKeys: new Map(),
+      };
+      crashStates.set(game, state);
+    }
+    return state;
+  };
+
+  const crashEmit = (game: CrashGame, event: CrashEvent) => {
+    for (const listener of [...crashState(game).listeners]) listener(event);
+  };
+  const crashSchedule = (game: CrashGame, fn: () => Promise<void> | void, ms: number) =>
+    setTimeout(() => {
+      crashState(game).ready = Promise.resolve(fn());
+    }, ms);
+
+  function crashViewOf(r: MockCrashRound): CrashRound {
+    const base = {
+      id: r.id,
+      opensAt: new Date(r.opensAt).toISOString(),
+      closesAt: new Date(r.closesAt).toISOString(),
+      serverSeedHash: r.serverSeedHash,
+    };
+    if ((r.status === "resolved" || r.status === "settled") && r.result) {
+      return { ...base, status: r.status, result: r.result, serverSeed: r.serverSeed };
+    }
+    return { ...base, status: r.status };
+  }
+
+  const crashBetView = (b: MockCrashBet): CrashPlayerBet => ({
+    betId: b.betId,
+    stake: toAmount(b.stake),
+    status: b.status,
+    cashoutHundredths: b.cashoutHundredths,
+    payout: b.payout === null ? null : toAmount(b.payout),
+  });
+
+  async function openCrashRound(game: CrashGame) {
+    const state = crashState(game);
+    const now = Date.now();
+    const serverSeed = randomHex(32);
+    const next: MockCrashRound = {
+      id: newUuid(),
+      status: "open",
+      opensAt: now,
+      closesAt: now + CRASH_BETTING_WINDOW_MS,
+      serverSeed,
+      serverSeedHash: await hashServerSeed(serverSeed),
+      result: null,
+    };
+    state.round = next;
+    state.myBet = null;
+    crashEmit(game, { type: "opened", round: crashViewOf(next) });
+    crashSchedule(game, () => takeoffCrash(game), CRASH_BETTING_WINDOW_MS);
+  }
+
+  async function takeoffCrash(game: CrashGame) {
+    const state = crashState(game);
+    const current = state.round;
+    if (!current) return;
+    current.status = "closed";
+    // The impact point is fixed at takeoff from the seed, kept secret until it is reached.
+    current.result = crashResultFromOutcome(
+      await computeRoundOutcome(current.serverSeed, current.id),
+    );
+    crashEmit(game, {
+      type: "takeoff",
+      roundId: current.id,
+      startedAt: new Date(current.closesAt).toISOString(),
+    });
+    crashSchedule(game, () => resolveCrashRound(game), impactAtMs(current.result.crashHundredths));
+  }
+
+  function resolveCrashRound(game: CrashGame) {
+    const state = crashState(game);
+    const current = state.round;
+    if (!current?.result) return;
+    current.status = "resolved";
+    crashEmit(game, {
+      type: "impact",
+      roundId: current.id,
+      result: current.result,
+      serverSeed: current.serverSeed,
+    });
+    crashSchedule(game, () => settleCrashRound(game), 0);
+  }
+
+  function settleCrashRound(game: CrashGame) {
+    const state = crashState(game);
+    const current = state.round;
+    if (!current?.result) return;
+    const bet = state.myBet;
+    // A bet that did not cash out loses on an impact, or is paid 20.00x when the round capped.
+    if (bet && bet.status === "pending") {
+      if (current.result.outcome === "cap") {
+        const payout = crashPayout(bet.stake, MAX_MULTIPLIER_HUNDREDTHS);
+        bet.status = "settled";
+        bet.cashoutHundredths = MAX_MULTIPLIER_HUNDREDTHS;
+        bet.payout = payout;
+        balance += payout;
+        record("payout", payout, bet.betId);
+      } else {
+        bet.status = "settled";
+        bet.payout = 0n;
+      }
+    }
+    current.status = "settled";
+    state.history.push(current);
+    crashEmit(game, { type: "settled", roundId: current.id });
+    crashSchedule(game, () => openCrashRound(game), CRASH_INTERMISSION_MS);
+  }
+
+  function ensureCrash(game: CrashGame) {
+    const state = crashState(game);
+    if (state.started) return;
+    state.started = true;
+    state.ready = openCrashRound(game);
   }
 
   return {
@@ -846,7 +1027,7 @@ export function createMockApiClient(
 
       const shoe = await takeShoe();
       const hand: MockBlackjackHand = {
-        handId: crypto.randomUUID(),
+        handId: newUuid(),
         key: idempotencyKey,
         stake,
         fairness: {
@@ -927,6 +1108,116 @@ export function createMockApiClient(
         .map(blackjackView)
         .flatMap((hand) => (hand.status === "settled" ? [hand] : []));
       return { hands };
+    },
+    async getCurrentCrash(game: CrashGame): Promise<CrashCurrentResponse> {
+      ensureCrash(game);
+      const state = crashState(game);
+      await state.ready;
+      await sleep(delayMs);
+      return {
+        round: state.round ? crashViewOf(state.round) : null,
+        myBet: state.myBet ? crashBetView(state.myBet) : null,
+        now: new Date().toISOString(),
+        limits: { minStake: toAmount(CRASH_MIN_STAKE), maxStake: toAmount(CRASH_MAX_STAKE) },
+      };
+    },
+    async placeCrashBet(
+      game: CrashGame,
+      body: CrashBetRequest,
+      idempotencyKey: string,
+    ): Promise<CrashBetResponse> {
+      ensureCrash(game);
+      const state = crashState(game);
+      await state.ready;
+      await sleep(delayMs);
+      const previous = state.betKeys.get(idempotencyKey);
+      if (previous) {
+        if (previous.roundId !== body.roundId || previous.stake !== body.stake) {
+          throw conflict("Idempotency-Key was already used for a different bet");
+        }
+        return { ...previous, balance: toAmount(balance) };
+      }
+      const stake = stakeAmount(body.stake);
+      if (stake === null || stake < CRASH_MIN_STAKE || stake > CRASH_MAX_STAKE) {
+        throw new ApiError("invalid_request", "Invalid crash bet", 400);
+      }
+      const round = state.round;
+      if (
+        !round ||
+        round.id !== body.roundId ||
+        round.status !== "open" ||
+        Date.now() >= round.closesAt
+      ) {
+        throw new ApiError("invalid_request", "The round is not open for bets", 400);
+      }
+      if (state.myBet) throw conflict("You already placed a bet in this round");
+      if (stake > balance) throw new ApiError("insufficient_funds", "Insufficient funds", 422);
+
+      const betId = newUuid();
+      balance -= stake;
+      record("bet", -stake, betId);
+      state.myBet = { betId, stake, status: "pending", cashoutHundredths: null, payout: null };
+      const response: CrashBetResponse = {
+        betId,
+        roundId: round.id,
+        stake: toAmount(stake),
+        balance: toAmount(balance),
+      };
+      state.betKeys.set(idempotencyKey, response);
+      return response;
+    },
+    async cashOutCrash(game: CrashGame, betId: string): Promise<CrashCashoutResponse> {
+      ensureCrash(game);
+      const state = crashState(game);
+      await state.ready;
+      await sleep(delayMs);
+      const bet = state.myBet;
+      if (!bet || bet.betId !== betId) throw new ApiError("not_found", "Bet not found", 404);
+      if (bet.status === "settled") {
+        if (bet.cashoutHundredths !== null && bet.payout !== null && bet.payout > 0n) {
+          return {
+            betId,
+            cashoutHundredths: bet.cashoutHundredths,
+            payout: toAmount(bet.payout),
+            balance: toAmount(balance),
+          };
+        }
+        throw new ApiError("invalid_request", "The round already crashed", 400);
+      }
+      const round = state.round;
+      if (!round?.result || round.status === "open") {
+        throw new ApiError("invalid_request", "The round has not taken off yet", 400);
+      }
+      const elapsedMs = Date.now() - round.closesAt;
+      if (!canCashOut(elapsedMs, round.result.crashHundredths)) {
+        throw new ApiError("invalid_request", "The round already crashed", 400);
+      }
+      const cashoutHundredths = multiplierAtHundredths(elapsedMs);
+      const payout = crashPayout(bet.stake, cashoutHundredths);
+      bet.status = "settled";
+      bet.cashoutHundredths = cashoutHundredths;
+      bet.payout = payout;
+      balance += payout;
+      record("payout", payout, betId);
+      return { betId, cashoutHundredths, payout: toAmount(payout), balance: toAmount(balance) };
+    },
+    watchCrash(game: CrashGame, onEvent, onStatus) {
+      const state = crashState(game);
+      state.listeners.add(onEvent);
+      ensureCrash(game);
+      onStatus?.("connected");
+      return () => {
+        state.listeners.delete(onEvent);
+      };
+    },
+    async listCrashHistory(game: CrashGame, query = {}): Promise<CrashHistoryResponse> {
+      await sleep(delayMs);
+      const limit = query.limit ?? CRASH_HISTORY_DEFAULT_LIMIT;
+      if (!Number.isInteger(limit) || limit < 1 || limit > CRASH_HISTORY_MAX_LIMIT) {
+        throw new ApiError("invalid_request", "Invalid history limit", 400);
+      }
+      const rounds = [...crashState(game).history].reverse().slice(0, limit).map(crashViewOf);
+      return { rounds };
     },
   };
 }

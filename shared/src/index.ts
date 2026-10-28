@@ -1,6 +1,7 @@
 export * from "./api";
 export * from "./games/blackjack";
 export * from "./games/chicken-road";
+export * from "./games/crash";
 export * from "./games/game";
 export * from "./games/races";
 export * from "./games/roulette";
