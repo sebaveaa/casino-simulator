@@ -3227,22 +3227,57 @@ button.bj-piles:hover:not(:disabled) .bj-pile:last-child .bj-pile-chip:last-chil
   cursor: not-allowed;
 }
 
-.bj-shoe-box {
+/* The shoe's meter (#66) on the felt, beside Mazos: the dealt cards fill the bar in the chosen
+   card back, and the cut card is a red line at 75 % (#d62839, the loss red of the races). It has
+   no chip border, so it does not read as a second button. */
+.bj-shoe-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--chalk);
+}
+
+.bj-shoe-track {
   position: relative;
-  width: 30px;
-  height: 22px;
+  width: 88px;
+  height: 16px;
   border: 2px solid var(--ink);
-  border-radius: 4px 10px 4px 4px;
-  background: var(--ink);
-  transform: skewX(-12deg);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.85);
+  box-shadow: 2px 2px 0 var(--ink);
   overflow: hidden;
 }
 
-.bj-shoe-cards {
+.bj-shoe-fill {
   position: absolute;
-  inset: 3px 3px 5px 8px;
-  border-radius: 2px;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--dealt);
   background: var(--back-pattern);
+  transition: width 500ms ease;
+}
+
+.bj-shoe-cut {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--cut);
+  width: 3px;
+  margin-left: -1.5px;
+  background: #d62839;
+}
+
+.bj-shoe-meter.is-cut .bj-shoe-track {
+  outline: 2px solid #d62839;
+  outline-offset: 1px;
+}
+
+.bj-shoe-left {
+  min-width: 3ch;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: right;
 }
 
 /* The shuffle over the felt: two halves riffle into one pile three times (in, apart, in). Each
@@ -3718,6 +3753,10 @@ button.bj-piles:hover:not(:disabled) .bj-pile:last-child .bj-pile-chip:last-chil
     height: 94px;
   }
 
+  .bj-shoe-left {
+    display: none;
+  }
+
   .bj-card-pip {
     font-size: 1.8rem;
   }
@@ -3737,7 +3776,8 @@ button.bj-piles:hover:not(:disabled) .bj-pile:last-child .bj-pile-chip:last-chil
     animation: none;
   }
 
-  .bj-card-inner {
+  .bj-card-inner,
+  .bj-shoe-fill {
     transition: none;
   }
 }

@@ -338,7 +338,8 @@ export function createMockApiClient(
       id: crypto.randomUUID(),
       nonce,
       cards: shuffleShoe(createRng(await computeOutcome(seed))),
-      next: firstShoeDealt,
+      // Below the cut: a hand always starts before it.
+      next: Math.min(firstShoeDealt, BLACKJACK_CUT_CARD - 1),
       finished: false,
     };
     firstShoeDealt = 0;

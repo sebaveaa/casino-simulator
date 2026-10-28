@@ -1,5 +1,5 @@
 import { parseAmount } from "@casino/shared";
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useBalanceAmount } from "../app/useBalance";
 import { BetPanel } from "./blackjack/BetPanel";
@@ -33,6 +33,8 @@ export function BlackjackPage() {
     act,
     changeBet,
     repeat,
+    shoe,
+    shoeShuffled,
   } = useBlackjack();
   const balance = useBalanceAmount();
   // The chips on the bet; they stay between rounds, like on a real table.
@@ -46,8 +48,25 @@ export function BlackjackPage() {
     setChips((placed) => (balanceCovers(balance, placed) ? placed : []));
   }, [view.kind, balance]);
   const takeBackChip = useCallback(() => setChips((placed) => placed.slice(0, -1)), []);
+  // The shoe is shuffled once the cut card is out (#66): when the player leaves that hand's result,
+  // before whatever they chose next (look at the table, change the bet, or deal again).
   const [shuffling, setShuffling] = useState(false);
-  const endShuffle = useCallback(() => setShuffling(false), []);
+  const afterShuffle = useRef<(() => void) | null>(null);
+  const endShuffle = useCallback(() => {
+    setShuffling(false);
+    shoeShuffled();
+    const next = afterShuffle.current;
+    afterShuffle.current = null;
+    next?.();
+  }, [shoeShuffled]);
+  const withShuffle = (action: () => void) => {
+    if (!shoe?.reshuffle) {
+      action();
+      return;
+    }
+    afterShuffle.current = action;
+    setShuffling(true);
+  };
   // The design on the back of the cards, kept in this browser, and whether its picker is open.
   const [deck, setDeck] = useState(loadDeck);
   const [picking, setPicking] = useState(false);
@@ -112,8 +131,7 @@ export function BlackjackPage() {
               dealing={pending}
               chips={tableChips}
               onTakeChip={view.kind === "bet" && !disabled ? takeBackChip : undefined}
-              onShuffle={() => setShuffling(true)}
-              canShuffle={!disabled && !picking && view.kind !== "playing"}
+              shoe={shoe}
               deck={deck}
               onDecks={() => setPicking(true)}
               canPickDeck={!shuffling && !picking}
@@ -133,9 +151,12 @@ export function BlackjackPage() {
               <ResultDialog
                 hand={view.hand}
                 canRepeat={covers(view.hand.stake)}
-                onRepeat={() => repeatBet(view.hand.stake)}
-                onChangeBet={changeBet}
-                onClose={() => setClosedHandId(view.hand.handId)}
+                onRepeat={() => withShuffle(() => repeatBet(view.hand.stake))}
+                onChangeBet={() => withShuffle(changeBet)}
+                onClose={() => {
+                  const { handId } = view.hand;
+                  withShuffle(() => setClosedHandId(handId));
+                }}
               />
             )}
           </div>
@@ -166,8 +187,8 @@ export function BlackjackPage() {
             <ResultPanel
               hand={view.hand}
               canRepeat={covers(view.hand.stake)}
-              onRepeat={() => repeatBet(view.hand.stake)}
-              onChangeBet={changeBet}
+              onRepeat={() => withShuffle(() => repeatBet(view.hand.stake))}
+              onChangeBet={() => withShuffle(changeBet)}
               disabled={disabled}
             />
           )}
