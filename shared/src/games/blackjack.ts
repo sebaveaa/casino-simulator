@@ -69,6 +69,19 @@ export const BLACKJACK_MAX_HAND_CARDS = 21;
  */
 export const BLACKJACK_MAX_ACTIONS = 1 + 2 * 19;
 
+/**
+ * The cut card (README §4.4): a shoe lasts across a player's hands, and once a round has dealt
+ * past this card (234 of 312, 75 % of the shoe) the next hand is dealt from a new shoe.
+ */
+export const BLACKJACK_CUT_CARD = 234;
+
+/**
+ * Most cards one round can take from the shoe: two hands of `BLACKJACK_MAX_HAND_CARDS` after a
+ * split, plus the dealer's, who draws while the total is 16 or less and every card adds at least
+ * 1, so at most 17. A round always starts before the cut card, so it always fits in the shoe.
+ */
+export const BLACKJACK_MAX_ROUND_CARDS = BLACKJACK_MAX_HANDS * BLACKJACK_MAX_HAND_CARDS + 17;
+
 /** A card as an integer from 0 to 51 (see `BLACKJACK_RANKS` and `BLACKJACK_SUITS`). */
 const cardSchema = z
   .number()
@@ -108,8 +121,29 @@ export type BlackjackHandState = {
   finished: boolean;
 };
 
-/** A round as one bet: `stake` is the initial stake, `actions` the player's decisions in order. */
-export type BlackjackBet = Wager & { actions: readonly BlackjackAction[] };
+/**
+ * A round as one bet: `stake` is the initial stake, `actions` the player's decisions in order,
+ * and `cardOffset` the place in the shoe where the round's first card is (0 when absent, as for a
+ * round dealt from its own shoe).
+ */
+export type BlackjackBet = Wager & { actions: readonly BlackjackAction[]; cardOffset?: number };
+
+/** How many cards a round has taken from the shoe: every card on the table, both sides. */
+export function roundCardCount(round: {
+  playerHands: readonly { cards: readonly number[] }[];
+  dealerCards: readonly number[];
+}): number {
+  return (
+    round.playerHands.reduce((sum, hand) => sum + hand.cards.length, 0) + round.dealerCards.length
+  );
+}
+
+/** A round starts before the cut card, so `cardOffset` is a whole number below it. */
+function isValidCardOffset(offset: number | undefined): boolean {
+  return (
+    offset === undefined || (Number.isInteger(offset) && offset >= 0 && offset < BLACKJACK_CUT_CARD)
+  );
+}
 
 export function describeCard(card: number): { rank: BlackjackRank; suit: BlackjackSuit } {
   const rank = BLACKJACK_RANKS[card % 13];
@@ -318,15 +352,20 @@ export const blackjack: Game<BlackjackBet, BlackjackResult> & { readonly id: "bl
   id: "blackjack",
 
   validateBet(bet) {
-    return isValidBlackjackStake(bet.stake) && isValidActionShape(bet.actions);
+    return (
+      isValidBlackjackStake(bet.stake) &&
+      isValidActionShape(bet.actions) &&
+      isValidCardOffset(bet.cardOffset)
+    );
   },
 
   /**
-   * Shuffles the shoe and replays the actions. When they leave a hand open, the player stands on
-   * it, as an abandoned round does (README §4.4), so the result is always a finished round.
+   * Shuffles the shoe and replays the actions from the round's place in it (`cardOffset`). When
+   * they leave a hand open, the player stands on it, as an abandoned round does (README §4.4), so
+   * the result is always a finished round.
    */
   resolve(bet, rng) {
-    const shoe = shuffleShoe(rng);
+    const shoe = shuffleShoe(rng).slice(bet.cardOffset ?? 0);
     const actions = [...bet.actions];
     let state = playHand(shoe, actions);
     while (!state.finished) {
