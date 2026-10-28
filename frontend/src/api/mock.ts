@@ -203,7 +203,7 @@ export function createMockApiClient(
   const users = new Map<string, { id: string; password: string }>();
 
   // The one Chicken Road seed pair, and the games in the order they started.
-  const seedPair = { id: crypto.randomUUID(), serverSeed: crypto.randomUUID(), nextNonce: 0 };
+  const seedPair = { id: newUuid(), serverSeed: newUuid(), nextNonce: 0 };
   const chickenGames: MockChickenGame[] = [];
 
   function findChickenGame(gameId: string): MockChickenGame {
@@ -577,7 +577,7 @@ export function createMockApiClient(
         createRng(await computeOutcome(seed)),
       );
       const game: MockChickenGame = {
-        gameId: crypto.randomUUID(),
+        gameId: newUuid(),
         key: idempotencyKey,
         stake,
         fairness: {
